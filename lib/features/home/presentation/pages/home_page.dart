@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/domain/entities/backend_user_entity.dart';
 
 class HomePage extends StatelessWidget {
-  final UserEntity? user;
+  final BackendUserEntity? user;
 
   const HomePage({super.key, this.user});
 
@@ -27,17 +26,17 @@ class HomePage extends StatelessWidget {
                   Center(
                     child: Column(
                       children: [
-                        if (user!.photoUrl != null)
+                        if (user!.avatarUrl != null)
                           CircleAvatar(
                             radius: 50,
-                            backgroundImage: NetworkImage(user!.photoUrl!),
+                            backgroundImage: NetworkImage(user!.avatarUrl!),
                           )
                         else
                           CircleAvatar(
                             radius: 50,
                             backgroundColor: Theme.of(context).primaryColor,
                             child: Text(
-                              user!.displayName?.substring(0, 1).toUpperCase() ?? 'U',
+                              user!.firstName.substring(0, 1).toUpperCase(),
                               style: const TextStyle(
                                 fontSize: 40,
                                 color: Colors.white,
@@ -54,7 +53,7 @@ class HomePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          user!.displayName ?? 'Usuario',
+                          user!.fullName,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 4),
@@ -92,66 +91,39 @@ class HomePage extends StatelessWidget {
                   _buildInfoCard(
                     context,
                     'Nombre',
-                    user!.displayName ?? 'No disponible',
+                    user!.firstName,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInfoCard(
+                    context,
+                    'Apellido',
+                    user!.lastName ?? 'No disponible',
                   ),
                   const SizedBox(height: 24),
                   const Divider(),
                   const SizedBox(height: 16),
-                  Text(
-                    'ID Token (para backend)',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Este token debe ser enviado a tu backend para autenticación',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey.shade600,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
+                  Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                user!.idToken ?? 'No disponible',
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 12,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
+                        Icon(
+                          Icons.check_circle,
+                          size: 64,
+                          color: Colors.green.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '¡Autenticación exitosa!',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.copy),
-                              onPressed: () {
-                                if (user!.idToken != null) {
-                                  Clipboard.setData(
-                                    ClipboardData(text: user!.idToken!),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Token copiado al portapapeles'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Estos datos provienen de tu backend',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.grey.shade600,
+                              ),
                         ),
                       ],
                     ),

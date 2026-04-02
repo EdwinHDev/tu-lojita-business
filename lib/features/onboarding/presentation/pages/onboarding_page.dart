@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../domain/usecases/get_onboarding_items.dart';
 import '../../../auth/domain/usecases/sign_in_with_google.dart';
+import '../../../auth/domain/usecases/authenticate_with_backend.dart';
 import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/domain/entities/auth_response_entity.dart';
 import '../widgets/onboarding_carousel.dart';
 
 class OnboardingPage extends StatefulWidget {
   final GetOnboardingItems getOnboardingItems;
   final SignInWithGoogle signInWithGoogle;
+  final AuthenticateWithBackend authenticateWithBackend;
 
   const OnboardingPage({
     super.key,
     required this.getOnboardingItems,
     required this.signInWithGoogle,
+    required this.authenticateWithBackend,
   });
 
   @override
@@ -28,17 +32,29 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
 
     try {
-      final UserEntity? user = await widget.signInWithGoogle();
+      final UserEntity? googleUser = await widget.signInWithGoogle();
       
-      if (user != null && mounted) {
-        context.go('/home', extra: user);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Inicio de sesión cancelado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+      if (googleUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Inicio de sesión cancelado'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (googleUser.idToken == null) {
+        throw Exception('No se pudo obtener el token de Google');
+      }
+
+      final AuthResponseEntity authResponse = 
+          await widget.authenticateWithBackend(googleUser.idToken!);
+      
+      if (mounted) {
+        context.go('/home', extra: authResponse.user);
       }
     } catch (e) {
       if (mounted) {
