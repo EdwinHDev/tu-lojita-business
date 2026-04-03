@@ -12,12 +12,26 @@ class AppTheme {
       ),
       useMaterial3: true,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       appBarTheme: const AppBarTheme(
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: Color(0xFF1F2937),
         elevation: 0,
-        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Color(0x1A000000),
+        titleTextStyle: TextStyle(
+          color: Color(0xFF1F2937),
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        color: Colors.white,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -34,25 +48,25 @@ class AppTheme {
         headlineLarge: TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.bold,
-          color: Colors.black87,
+          color: Color(0xFF1F2937),
         ),
         headlineMedium: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.bold,
-          color: Colors.black87,
+          color: Color(0xFF1F2937),
         ),
         headlineSmall: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: Colors.black87,
+          color: Color(0xFF374151),
         ),
         bodyLarge: TextStyle(
           fontSize: 16,
-          color: Colors.black87,
+          color: Color(0xFF4B5563),
         ),
         bodyMedium: TextStyle(
           fontSize: 14,
-          color: Colors.black87,
+          color: Color(0xFF6B7280),
         ),
       ),
     );
@@ -67,12 +81,26 @@ class AppTheme {
       ),
       useMaterial3: true,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: const Color(0xFF121212),
+      scaffoldBackgroundColor: const Color(0xFF0F0F0F),
       appBarTheme: const AppBarTheme(
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Color(0xFF1A1A1A),
+        foregroundColor: Color(0xFFE5E7EB),
         elevation: 0,
-        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Color(0x33000000),
+        titleTextStyle: TextStyle(
+          color: Color(0xFFE5E7EB),
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: Color(0xFF2A2A2A), width: 1),
+        ),
+        color: Color(0xFF1A1A1A),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -83,6 +111,31 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: 2,
+        ),
+      ),
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFFE5E7EB),
+        ),
+        headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFFE5E7EB),
+        ),
+        headlineSmall: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFD1D5DB),
+        ),
+        bodyLarge: TextStyle(
+          fontSize: 16,
+          color: Color(0xFF9CA3AF),
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 14,
+          color: Color(0xFF6B7280),
         ),
       ),
     );

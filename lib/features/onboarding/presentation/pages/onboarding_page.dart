@@ -4,7 +4,6 @@ import '../../domain/usecases/get_onboarding_items.dart';
 import '../../../auth/domain/usecases/sign_in_with_google.dart';
 import '../../../auth/domain/usecases/authenticate_with_backend.dart';
 import '../../../auth/domain/entities/user_entity.dart';
-import '../../../auth/domain/entities/auth_response_entity.dart';
 import '../widgets/onboarding_carousel.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -50,11 +49,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
         throw Exception('No se pudo obtener el token de Google');
       }
 
-      final AuthResponseEntity authResponse = 
-          await widget.authenticateWithBackend(googleUser.idToken!);
+      await widget.authenticateWithBackend(googleUser.idToken!);
       
       if (mounted) {
-        context.go('/home', extra: authResponse.user);
+        context.go('/home');
       }
     } catch (e) {
       if (mounted) {

@@ -10,6 +10,12 @@ class EnvConfig {
   static String get apiBaseUrl =>
       dotenv.env['API_BASE_URL'] ?? '';
 
+  static String get apiBaseUrlImages =>
+      dotenv.env['API_BASE_URL_IMAGES'] ?? '';
+
+  static String get apiKeyImages =>
+      dotenv.env['API_KEY_IMAGES'] ?? '';
+
   static String get appName =>
       dotenv.env['APP_NAME'] ?? 'Tu Lojita';
 }

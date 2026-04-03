@@ -1,4 +1,5 @@
 import '../../domain/entities/auth_response_entity.dart';
+import '../../domain/entities/backend_user_entity.dart';
 import '../../domain/repositories/backend_auth_repository.dart';
 import '../datasources/backend_auth_datasource.dart';
 import '../../../../core/services/token_storage_service.dart';
@@ -53,5 +54,42 @@ class BackendAuthRepositoryImpl implements BackendAuthRepository {
   @override
   Future<void> clearTokens() async {
     await tokenStorage.deleteTokens();
+  }
+
+  @override
+  Future<BackendUserEntity?> checkAuthStatus() async {
+    try {
+      // Intentar obtener el accessToken
+      final accessToken = await getAccessToken();
+      if (accessToken == null) {
+        return null;
+      }
+
+      // Verificar si el accessToken es válido
+      final user = await dataSource.checkAuthStatus(accessToken);
+      if (user != null) {
+        return user;
+      }
+
+      // Si el accessToken no es válido, intentar refrescar con refreshToken
+      final refreshToken = await getRefreshToken();
+      if (refreshToken == null) {
+        await clearTokens();
+        return null;
+      }
+
+      // Refrescar tokens
+      try {
+        final authResponse = await refreshTokens(refreshToken);
+        return authResponse.user;
+      } catch (e) {
+        // Si falla el refresh, limpiar tokens
+        await clearTokens();
+        return null;
+      }
+    } catch (e) {
+      await clearTokens();
+      return null;
+    }
   }
 }

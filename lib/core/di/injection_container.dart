@@ -14,6 +14,8 @@ import '../../features/auth/domain/repositories/backend_auth_repository.dart';
 import '../../features/auth/domain/usecases/sign_in_with_google.dart';
 import '../../features/auth/domain/usecases/authenticate_with_backend.dart';
 import '../../features/auth/domain/usecases/sign_out.dart';
+import '../../features/auth/domain/usecases/check_auth_status.dart';
+import '../../features/auth/domain/usecases/refresh_tokens.dart';
 import '../config/env_config.dart';
 import '../services/token_storage_service.dart';
 
@@ -78,6 +80,14 @@ Future<void> initializeDependencies() async {
   );
 
   _services[AuthenticateWithBackend] = AuthenticateWithBackend(
+    repository: sl<BackendAuthRepository>(),
+  );
+
+  _services[CheckAuthStatus] = CheckAuthStatus(
+    repository: sl<BackendAuthRepository>(),
+  );
+
+  _services[RefreshTokens] = RefreshTokens(
     repository: sl<BackendAuthRepository>(),
   );
 }
