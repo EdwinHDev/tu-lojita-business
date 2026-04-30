@@ -1,111 +1,136 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/onboarding/presentation/pages/onboarding_page.dart';
-import '../../features/auth/domain/usecases/check_auth_status.dart';
-import '../../features/company/presentation/pages/create_company_page.dart';
-import '../../features/company/data/services/company_service.dart';
-import '../navigation/main_navigation.dart';
-import '../di/injection_container.dart';
-import '../services/token_storage_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/auth/presentation/screens/onboarding_screen.dart';
+import 'package:tu_lojita_business/features/company_onboarding/presentation/screens/company_onboarding_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/company_settings_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/notifications_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_creation_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_details_screen.dart';
 
-class AppRouter {
-  static GoRouter router = GoRouter(
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/category_list_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/create_category_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/item_list_screen.dart';
+import 'package:tu_lojita_business/features/items/presentation/screens/item_form_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
     initialLocation: '/onboarding',
-    redirect: (context, state) async {
-      final checkAuthStatus = sl<CheckAuthStatus>();
-      final user = await checkAuthStatus();
-      
-      final isOnboarding = state.matchedLocation == '/onboarding';
-      final isCreateCompany = state.matchedLocation == '/create-company';
-      final isHome = state.matchedLocation == '/home';
-      
-      // Si el usuario no está autenticado
-      if (user == null) {
-        // Redirigir a onboarding si no está ya ahí
-        if (!isOnboarding) {
-          return '/onboarding';
-        }
-        return null;
-      }
-      
-      // Si el usuario está autenticado
-      // Verificar si tiene empresa
-      final tokenStorage = sl<TokenStorageService>();
-      final token = await tokenStorage.getAccessToken();
-      
-      if (token == null) {
-        // Sin token, redirigir a onboarding
-        return '/onboarding';
-      }
-      
-      final companyService = CompanyService();
-      try {
-        final companyCheck = await companyService.checkHasCompany(token);
-        
-        print('🔍 Company check: hasCompany=${companyCheck.hasCompany}, isHome=$isHome, isCreateCompany=$isCreateCompany');
-        
-        // Si tiene empresa
-        if (companyCheck.hasCompany) {
-          // Si no está en home, redirigir a home
-          if (!isHome) {
-            print('✅ User has company, redirecting to /home');
-            return '/home';
-          }
-          // Ya está en home, no redirigir
-          return null;
-        }
-        
-        // Si NO tiene empresa
-        if (!companyCheck.hasCompany) {
-          // Si no está en create-company, redirigir a create-company
-          if (!isCreateCompany) {
-            print('❌ User has NO company, redirecting to /create-company');
-            // Verificar si tiene tienda para autocompletar RIF
-            try {
-              final storeCheck = await companyService.checkHasStore(token);
-              if (storeCheck.hasStore && storeCheck.storeId != null) {
-                final storeDetails = await companyService.getStoreDetails(storeCheck.storeId!, token);
-                print('🏪 User has store, auto-filling RIF: ${storeDetails.rif}');
-                return '/create-company?rif=${storeDetails.rif}';
-              }
-            } catch (e) {
-              print('⚠️ Error checking store: $e');
-            }
-            return '/create-company';
-          }
-          // Ya está en create-company, no redirigir
-          return null;
-        }
-      } catch (e) {
-        print('❌ Error checking company status: $e');
-        // Si hay error verificando, redirigir a create-company por seguridad
-        if (!isCreateCompany) {
-          return '/create-company';
-        }
-      }
-      
-      // No redirigir
-      return null;
-    },
+    refreshListenable: _AuthListenable(ref),
     routes: [
       GoRoute(
         path: '/onboarding',
-        builder: (context, state) => OnboardingPage(
-          getOnboardingItems: sl(),
-          signInWithGoogle: sl(),
-          authenticateWithBackend: sl(),
-        ),
+        builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
-        path: '/create-company',
-        builder: (context, state) {
-          final initialRif = state.uri.queryParameters['rif'];
-          return CreateCompanyPage(initialRif: initialRif);
-        },
+        path: '/onboarding/company',
+        builder: (context, state) => const CompanyOnboardingScreen(),
       ),
       GoRoute(
-        path: '/home',
-        builder: (context, state) => const MainNavigation(),
+        path: '/dashboard',
+        builder: (context, state) => const DashboardScreen(),
+        routes: [
+          GoRoute(
+            path: 'notifications',
+            builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: 'settings',
+            builder: (context, state) => const SettingsScreen(),
+            routes: [
+              GoRoute(
+                path: 'company',
+                builder: (context, state) => const CompanySettingsScreen(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'stores/create',
+            builder: (context, state) => const StoreCreationScreen(),
+          ),
+          GoRoute(
+            path: 'stores/:storeId',
+            builder: (context, state) {
+              final storeId = state.pathParameters['storeId']!;
+              return StoreDetailsScreen(storeId: storeId);
+            },
+            routes: [
+              GoRoute(
+                path: 'settings',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return StoreSettingsScreen(storeId: storeId);
+                },
+              ),
+              GoRoute(
+                path: 'categories',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return CategoryListScreen(storeId: storeId);
+                },
+                routes: [
+                  GoRoute(
+                    path: 'new',
+                    builder: (context, state) {
+                      final storeId = state.pathParameters['storeId']!;
+                      return CreateCategoryScreen(storeId: storeId);
+                    },
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: 'items',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return ItemListScreen(storeId: storeId);
+                },
+                routes: [
+                  GoRoute(
+                    path: 'new',
+                    builder: (context, state) {
+                      final storeId = state.pathParameters['storeId']!;
+                      return ItemFormScreen(storeId: storeId);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
     ],
+    redirect: (context, state) {
+      final authState = ref.read(authProvider);
+      final isLoggingIn = state.matchedLocation == '/onboarding';
+      final isOnboardingCompany = state.matchedLocation == '/onboarding/company';
+
+      if (authState is! Authenticated) {
+        return (isLoggingIn || isOnboardingCompany) ? null : '/onboarding';
+      }
+
+      // If authenticated, check if has company
+      final user = authState.user;
+      
+      if (!user.hasCompany && user.role != 'ADMIN') {
+        return isOnboardingCompany ? null : '/onboarding/company';
+      }
+
+      if (isLoggingIn || isOnboardingCompany) {
+        return '/dashboard';
+      }
+
+      return null;
+    },
   );
+});
+
+class _AuthListenable extends ChangeNotifier {
+  _AuthListenable(Ref ref) {
+    ref.listen(authProvider, (_, next) => notifyListeners());
+  }
 }
