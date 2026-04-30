@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/envs.dart';
 import '../../domain/entities/store.dart';
 import '../providers/store_details_notifier.dart';
-import '../providers/store_details_state.dart';
-import '../../domain/entities/store_category.dart';
-import '../../../items/domain/entities/item.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 
@@ -20,7 +17,6 @@ class StoreDetailsScreen extends ConsumerStatefulWidget {
 
 class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
-  final Map<String, GlobalKey> _categoryKeys = {};
 
   String _resolveImageUrl(String? path, {int? width, int? height}) {
     if (path == null || path.isEmpty) return '';
@@ -41,16 +37,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
     super.dispose();
   }
 
-  void _scrollToCategory(String categoryId) {
-    final key = _categoryKeys[categoryId];
-    if (key?.currentContext != null) {
-      Scrollable.ensureVisible(
-        key!.currentContext!,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -113,27 +100,8 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
             if (state.dashboard != null)
               SliverToBoxAdapter(child: _buildInsightsSection(state)),
 
-            // Search Bar
-            SliverToBoxAdapter(child: _buildSearchBar()),
-
-            // Sticky Category Navigation
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _CategoryHeaderDelegate(
-                categories: state.categories,
-                onCategorySelected: _scrollToCategory,
-              ),
-            ),
-
-            // Inventory List
-            SliverPadding(
-              padding: const EdgeInsets.only(bottom: 32),
-              sliver: state.isLoading && state.store == null
-                  ? const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  : _buildUnifiedInventoryList(state),
-            ),
+            // Spacer for better layout after removal
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -435,202 +403,4 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Buscar productos...',
-          prefixIcon: const Icon(Icons.search, color: Color(0xFF6B7280)),
-          filled: true,
-          fillColor: const Color(0xFFF3F4F6),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUnifiedInventoryList(StoreDetailsData state) {
-    if (state.categories.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Text("No hay productos aún."),
-          ),
-        ),
-      );
-    }
-
-    final List<Widget> slivers = [];
-    for (var category in state.categories) {
-      final categoryItems = state.items
-          .where((i) => i.categoryId == category.id)
-          .toList();
-      if (categoryItems.isEmpty) continue;
-
-      final key = _categoryKeys.putIfAbsent(category.id, () => GlobalKey());
-
-      slivers.add(
-        SliverToBoxAdapter(
-          key: key,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-            child: Text(
-              category.name,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      slivers.add(
-        SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            return _buildProductItem(categoryItems[index]);
-          }, childCount: categoryItems.length),
-        ),
-      );
-    }
-
-    return SliverMainAxisGroup(slivers: slivers);
-  }
-
-  Widget _buildProductItem(Item item) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(12),
-              image: item.mainImage.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(_resolveImageUrl(item.mainImage, width: 200, height: 200)),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: item.mainImage.isEmpty
-                ? const Icon(Icons.image, color: Colors.grey)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                if (item.description.isNotEmpty)
-                  Text(
-                    item.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 13,
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text(
-                  "\$${item.price.toStringAsFixed(2)}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Color(0xFF4F46E5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _CategoryHeaderDelegate({
-    required this.categories,
-    required this.onCategorySelected,
-  });
-
-  final List<StoreCategory> categories;
-  final Function(String) onCategorySelected;
-
-  @override
-  double get minExtent => 60;
-  @override
-  double get maxExtent => 60;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade100, width: 1),
-        ),
-      ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(
-                category.name,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-              selected: false,
-              showCheckmark: false,
-              backgroundColor: const Color(0xFFF3F4F6),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              onSelected: (_) => onCategorySelected(category.id),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _CategoryHeaderDelegate oldDelegate) => true;
 }

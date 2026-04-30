@@ -2,12 +2,15 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 
 class ItemFormState {
   final List<File> selectedImages;
   final int primaryImageIndex;
   final Map<String, dynamic> attributes;
+  final List<PropertyTemplate> availableTemplates;
   final bool isLoading;
+  final bool isLoadingTemplates;
   final String? errorMessage;
   final bool isSuccess;
 
@@ -28,7 +31,9 @@ class ItemFormState {
     this.selectedImages = const [],
     this.primaryImageIndex = 0,
     this.attributes = const {},
+    this.availableTemplates = const [],
     this.isLoading = false,
+    this.isLoadingTemplates = false,
     this.errorMessage,
     this.isSuccess = false,
     this.title = '',
@@ -48,7 +53,9 @@ class ItemFormState {
     List<File>? selectedImages,
     int? primaryImageIndex,
     Map<String, dynamic>? attributes,
+    List<PropertyTemplate>? availableTemplates,
     bool? isLoading,
+    bool? isLoadingTemplates,
     String? errorMessage,
     bool? isSuccess,
     String? title,
@@ -67,7 +74,9 @@ class ItemFormState {
       selectedImages: selectedImages ?? this.selectedImages,
       primaryImageIndex: primaryImageIndex ?? this.primaryImageIndex,
       attributes: attributes ?? this.attributes,
+      availableTemplates: availableTemplates ?? this.availableTemplates,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingTemplates: isLoadingTemplates ?? this.isLoadingTemplates,
       errorMessage: errorMessage,
       isSuccess: isSuccess ?? this.isSuccess,
       title: title ?? this.title,
@@ -101,10 +110,35 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onTrackInventoryChanged(bool value) => state = state.copyWith(trackInventory: value);
   void onStockQuantityChanged(double? value) => state = state.copyWith(stockQuantity: value);
   void onRequiresBookingChanged(bool value) => state = state.copyWith(requiresBooking: value);
-  void onCategoryIdChanged(String? value) => state = state.copyWith(categoryId: value);
+  
+  void onCategoryIdChanged(String? value) {
+    state = state.copyWith(categoryId: value, attributes: {});
+    if (value != null) {
+      loadCategoryTemplates(value);
+    } else {
+      state = state.copyWith(availableTemplates: []);
+    }
+  }
+
+  Future<void> loadCategoryTemplates(String categoryId) async {
+    state = state.copyWith(isLoadingTemplates: true);
+    try {
+      final repository = ref.read(itemRepositoryProvider);
+      final templates = await repository.getCategoryTemplates(categoryId);
+      state = state.copyWith(availableTemplates: templates, isLoadingTemplates: false);
+    } catch (e) {
+      state = state.copyWith(isLoadingTemplates: false);
+      // TODO: Log error to a monitoring service
+    }
+  }
+
+  void onAttributeChanged(String key, dynamic value) {
+    final newAttributes = {...state.attributes};
+    newAttributes[key] = value;
+    state = state.copyWith(attributes: newAttributes);
+  }
 
   void addImages(List<File> images) {
-    // Robust selection: Filter out already selected files if needed, but here we just append
     state = state.copyWith(selectedImages: [...state.selectedImages, ...images]);
   }
 
@@ -127,11 +161,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     state = state.copyWith(primaryImageIndex: index);
   }
 
-  void addAttribute(String key, dynamic value) {
-    final newAttributes = {...state.attributes};
-    newAttributes[key] = value;
-    state = state.copyWith(attributes: newAttributes);
-  }
+  void addAttribute(String key, dynamic value) => onAttributeChanged(key, value);
 
   void removeAttribute(String key) {
     final newAttributes = {...state.attributes};
@@ -155,6 +185,16 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     try {
       final repository = ref.read(itemRepositoryProvider);
       
+      final properties = state.attributes.entries.map((e) {
+        final template = state.availableTemplates.firstWhere((t) => t.name == e.key, orElse: () => PropertyTemplate(id: '', name: e.key, type: PropertyType.text, isRequired: false));
+        return {
+          'templateId': template.id.isEmpty ? null : template.id,
+          'key': e.key,
+          'type': template.type.name.toUpperCase(),
+          'value': e.value,
+        };
+      }).toList();
+
       final itemData = {
         'storeId': storeId,
         'title': state.title,
@@ -168,7 +208,9 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         'stockQuantity': state.trackInventory ? state.stockQuantity : null,
         'requiresBooking': state.requiresBooking,
         'categoryId': state.categoryId,
-        'attributes': state.attributes,
+        'attributes': {
+          'properties': properties,
+        },
       };
 
       await repository.createItem(

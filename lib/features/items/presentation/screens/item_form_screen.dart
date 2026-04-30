@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import '../../domain/entities/item.dart';
+import '../../domain/entities/property_template.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../providers/item_form_provider.dart';
 import '../../../dashboard/presentation/providers/store_details_notifier.dart';
@@ -20,9 +21,10 @@ class ItemFormScreen extends ConsumerStatefulWidget {
 class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // Auxiliary controllers for attributes (as they are dynamic/modal)
   final _attrKeyController = TextEditingController();
   final _attrValueController = TextEditingController();
+
+  bool _showManualProperties = false;
   
   @override
   void initState() {
@@ -293,9 +295,8 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
               const SizedBox(height: 24),
               _buildSectionTitle('Propiedades Adicionales'),
               const SizedBox(height: 12),
-              _buildAttributesEditor(state),
-
-              const SizedBox(height: 40),
+              _buildAttributesSection(state),
+              const SizedBox(height: 100), // Space for FAB
               _buildSubmitButton(state),
               const SizedBox(height: 20),
             ],
@@ -442,52 +443,265 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     );
   }
 
-  Widget _buildAttributesEditor(ItemFormState state) {
+  Widget _buildAttributesSection(ItemFormState state) {
+    if (state.isLoadingTemplates) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (state.categoryId == null) {
+      return _buildCard([
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              'Selecciona una categoría para añadir propiedades específicas',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+            ),
+          ),
+        ),
+      ]);
+    }
+
     return _buildCard([
-      Row(
-        children: [
-          Expanded(
-            child: _buildTextField(
-              controller: _attrKeyController,
-              label: 'Propiedad',
-              hint: 'Ej. Marca',
-            ),
+      if (state.availableTemplates.isNotEmpty) ...[
+        ...state.availableTemplates.map((template) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: _buildDynamicInput(template, state),
+          );
+        }),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Expanded(child: Divider()),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text('PROPIEDADES EXTRA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+              ),
+              Expanded(child: Divider()),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildTextField(
-              controller: _attrValueController,
-              label: 'Valor',
-              hint: 'Ej. Nike',
-            ),
-          ),
-          const SizedBox(width: 12),
-          IconButton.filled(
-            onPressed: _addAttribute,
-            style: IconButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      if (state.attributes.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: state.attributes.entries.map((entry) {
-            return Chip(
-              label: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 12)),
-              backgroundColor: const Color(0xFFF1F5F9),
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              onDeleted: () => ref.read(itemFormProvider.notifier).removeAttribute(entry.key),
-              deleteIcon: const Icon(Icons.close, size: 14),
-            );
-          }).toList(),
         ),
       ],
+      _buildManualAttributeEntry(state),
     ]);
   }
+
+  Widget _buildDynamicInput(PropertyTemplate template, ItemFormState state) {
+    final value = state.attributes[template.name];
+
+    switch (template.type) {
+      case PropertyType.boolean:
+        return SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: Text(template.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          value: value ?? false,
+          activeThumbColor: const Color(0xFF4F46E5),
+          onChanged: (v) => ref.read(itemFormProvider.notifier).onAttributeChanged(template.name, v),
+        );
+
+      case PropertyType.list:
+      case PropertyType.colorList:
+        final List<String> list = List<String>.from(value ?? []);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(template.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF475569))),
+            const SizedBox(height: 8),
+            _buildListEditor(
+              template.name, 
+              list, 
+              isColor: template.type == PropertyType.colorList,
+            ),
+          ],
+        );
+
+      case PropertyType.number:
+        return _buildTextField(
+          initialValue: value?.toString() ?? '',
+          label: template.name,
+          hint: template.config?['unit'] ?? '0.00',
+          keyboardType: TextInputType.number,
+          onChanged: (v) => ref.read(itemFormProvider.notifier).onAttributeChanged(template.name, double.tryParse(v) ?? 0),
+        );
+
+      case PropertyType.dropdown:
+        final List<String> options = List<String>.from(template.config?['options'] ?? []);
+        return DropdownButtonFormField<String>(
+          initialValue: value,
+          decoration: _inputDecoration(template.name),
+          items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+          onChanged: (v) => ref.read(itemFormProvider.notifier).onAttributeChanged(template.name, v),
+        );
+
+      default:
+        return _buildTextField(
+          initialValue: value?.toString() ?? '',
+          label: template.name,
+          hint: 'Escribe aquí...',
+          onChanged: (v) => ref.read(itemFormProvider.notifier).onAttributeChanged(template.name, v),
+        );
+    }
+  }
+
+  Widget _buildListEditor(String key, List<String> currentList, {bool isColor = false}) {
+    final controller = TextEditingController();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: controller,
+                decoration: _inputDecoration(isColor ? 'Código Hex (ej: #FF0000)' : 'Añadir elemento...').copyWith(
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Color(0xFF4F46E5)),
+                    onPressed: () {
+                      if (controller.text.isEmpty) return;
+                      final newList = [...currentList, controller.text.trim()];
+                      ref.read(itemFormProvider.notifier).onAttributeChanged(key, newList);
+                      controller.clear();
+                    },
+                  ),
+                ),
+                onFieldSubmitted: (v) {
+                  if (v.isEmpty) return;
+                  final newList = [...currentList, v.trim()];
+                  ref.read(itemFormProvider.notifier).onAttributeChanged(key, newList);
+                  controller.clear();
+                },
+              ),
+            ),
+          ],
+        ),
+        if (currentList.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: currentList.map((item) {
+              return Chip(
+                avatar: isColor ? Container(width: 12, height: 12, decoration: BoxDecoration(color: _parseHexColor(item), shape: BoxShape.circle)) : null,
+                label: Text(item, style: const TextStyle(fontSize: 12)),
+                backgroundColor: const Color(0xFFF1F5F9),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                onDeleted: () {
+                  final newList = currentList.where((element) => element != item).toList();
+                  ref.read(itemFormProvider.notifier).onAttributeChanged(key, newList);
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Color _parseHexColor(String hex) {
+    try {
+      final buffer = StringBuffer();
+      if (hex.length == 6 || hex.length == 7) buffer.write('ff');
+      buffer.write(hex.replaceFirst('#', ''));
+      return Color(int.parse(buffer.toString(), radix: 16));
+    } catch (_) {
+      return Colors.grey;
+    }
+  }
+
+  Widget _buildManualAttributeEntry(ItemFormState state) {
+    // Filter out attributes that belong to templates to show only "extra" ones
+    final extraAttributes = state.attributes.entries.where((e) => !state.availableTemplates.any((t) => t.name == e.key));
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (state.availableTemplates.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 12),
+        ],
+        
+        if (!_showManualProperties)
+          Center(
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showManualProperties = true),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Añadir propiedad personalizada'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF64748B),
+                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
+        else ...[
+          Row(
+            children: [
+              const Text('Propiedad personalizada', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => setState(() => _showManualProperties = false),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _attrKeyController,
+                  label: 'Nombre',
+                  hint: 'Ej. Marca',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTextField(
+                  controller: _attrValueController,
+                  label: 'Valor',
+                  hint: 'Ej. Nike',
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton.filled(
+                onPressed: _addAttribute,
+                style: IconButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+        ],
+
+        if (extraAttributes.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: extraAttributes.map((entry) {
+              return Chip(
+                label: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 12)),
+                backgroundColor: const Color(0xFFF1F5F9),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                onDeleted: () => ref.read(itemFormProvider.notifier).removeAttribute(entry.key),
+                deleteIcon: const Icon(Icons.close, size: 14),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
 
 
   

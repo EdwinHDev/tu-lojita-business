@@ -25,6 +25,7 @@ class StoreCategoryNotifier extends Notifier<StoreCategoryState> {
     required String storeId,
     required String name,
     required String description,
+    List<Map<String, dynamic>>? propertyTemplates,
   }) async {
     state = state.copyWith(isCreating: true, errorMessage: null, successMessage: null);
     try {
@@ -32,6 +33,7 @@ class StoreCategoryNotifier extends Notifier<StoreCategoryState> {
         'storeId': storeId,
         'name': name,
         'description': description,
+        if (propertyTemplates != null) 'propertyTemplates': propertyTemplates,
       });
       state = state.copyWith(
         categories: [...state.categories, newCategory],

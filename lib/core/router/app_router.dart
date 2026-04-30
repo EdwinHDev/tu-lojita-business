@@ -16,6 +16,8 @@ import 'package:tu_lojita_business/features/dashboard/presentation/screens/categ
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/create_category_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/item_list_screen.dart';
 import 'package:tu_lojita_business/features/items/presentation/screens/item_form_screen.dart';
+import 'package:tu_lojita_business/features/items/presentation/screens/item_detail_screen.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -95,6 +97,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) {
                       final storeId = state.pathParameters['storeId']!;
                       return ItemFormScreen(storeId: storeId);
+                    },
+                  ),
+                  GoRoute(
+                    path: 'detail',
+                    builder: (context, state) {
+                      final item = state.extra as Item;
+                      return ItemDetailScreen(item: item);
                     },
                   ),
                 ],

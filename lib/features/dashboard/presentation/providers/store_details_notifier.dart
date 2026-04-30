@@ -1,13 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/repositories/store_dashboard_repository.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/repositories/store_category_repository.dart';
-import 'package:tu_lojita_business/features/items/domain/repositories/item_repository.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/repositories/stores_repository.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store_dashboard.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store_category.dart';
-import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'dashboard_providers.dart';
+export 'store_details_state.dart';
 import 'store_details_state.dart';
 
 class StoreDetailsNotifier extends Notifier<StoreDetailsState> {
@@ -17,7 +16,6 @@ class StoreDetailsNotifier extends Notifier<StoreDetailsState> {
   }
 
   StoreDashboardRepository get _dashboardRepo => ref.read(storeDashboardRepositoryProvider);
-  ItemRepository get _itemRepo => ref.read(itemRepositoryProvider);
   StoreCategoryRepository get _categoryRepo => ref.read(storeCategoryRepositoryProvider);
   StoresRepository get _storesRepo => ref.read(storesRepositoryProvider);
 
@@ -33,16 +31,15 @@ class StoreDetailsNotifier extends Notifier<StoreDetailsState> {
     try {
       final results = await Future.wait([
         _dashboardRepo.getStoreDashboard(storeId),
-        _itemRepo.getItemsByStore(storeId),
         _categoryRepo.getCategoriesByStore(storeId),
         _storesRepo.getStoreById(storeId),
       ]);
 
       _updateStoreData(storeId, StoreDetailsData(
         dashboard: results[0] as StoreDashboard,
-        items: results[1] as List<Item>,
-        categories: results[2] as List<StoreCategory>,
-        store: results[3] as Store,
+        items: const [], // No longer showing items in home
+        categories: results[1] as List<StoreCategory>,
+        store: results[2] as Store,
         isLoading: false,
       ));
     } catch (e) {

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../domain/entities/item.dart';
+import '../../domain/entities/property_template.dart';
 import '../../domain/repositories/item_repository.dart';
 import '../models/item_model.dart';
 import '../../../../core/config/envs.dart';
@@ -16,6 +17,54 @@ class ItemRepositoryImpl implements ItemRepository {
       final response = await _dio.get('/items/store/$storeId');
       final data = response.data['data'] as List;
       return data.map((json) => ItemModel.fromJson(json)).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<({List<Item> items, int total})> getItemsPaginated({
+    required String storeId,
+    int limit = 50,
+    int offset = 0,
+    String? searchQuery,
+    String? categoryId,
+    String? sortBy,
+    String? order,
+    bool? onlyInStock,
+  }) async {
+    try {
+      final Map<String, dynamic> queryParameters = {
+        'limit': limit,
+        'offset': offset,
+        'storeId': storeId,
+      };
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        queryParameters['q'] = searchQuery;
+      }
+      if (categoryId != null) {
+        queryParameters['storeCategoryId'] = categoryId;
+      }
+      if (sortBy != null) {
+        queryParameters['sort'] = sortBy;
+      }
+      if (order != null) {
+        queryParameters['order'] = order;
+      }
+      if (onlyInStock != null) {
+        queryParameters['onlyInStock'] = onlyInStock;
+      }
+
+      final response = await _dio.get('/items', queryParameters: queryParameters);
+      
+      final List data = response.data['data'];
+      final int total = response.data['total'];
+      
+      return (
+        items: data.map((json) => ItemModel.fromJson(json)).toList(),
+        total: total,
+      );
     } catch (e) {
       rethrow;
     }
@@ -82,6 +131,17 @@ class ItemRepositoryImpl implements ItemRepository {
     }
   }
 
+  @override
+  Future<List<PropertyTemplate>> getCategoryTemplates(String categoryId) async {
+    try {
+      final response = await _dio.get('/store-categories/$categoryId/templates');
+      final data = response.data as List;
+      return data.map((json) => PropertyTemplate.fromJson(json)).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _uploadImagesBulk(List<File> images, int primaryIndex) async {
     final dioImages = Dio(BaseOptions(
       baseUrl: Envs.apiBaseUrlImages,
@@ -121,8 +181,7 @@ class ItemRepositoryImpl implements ItemRepository {
 
       await dioImages.post('/img/bulk-delete', data: {'ids': ids});
     } catch (e) {
-      // Just log it, rollback failure shouldn't stop the main error flow
-      print('Error during image rollback: $e');
+      // Image rollback failed - silent fail as the main error is already being propagated
     }
   }
 }
