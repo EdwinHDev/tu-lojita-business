@@ -21,6 +21,31 @@ class StoreCategoryRepositoryImpl implements StoreCategoryRepository {
   }
 
   @override
+  Future<({List<StoreCategory> categories, int total})> getCategoriesPaginated({
+    required String storeId,
+    int limit = 50,
+    int offset = 0,
+    String? q,
+  }) async {
+    try {
+      final Map<String, dynamic> queryParameters = {
+        'limit': limit,
+        'offset': offset,
+      };
+      if (q != null && q.isNotEmpty) {
+        queryParameters['q'] = q;
+      }
+      final response = await _dio.get('/store-categories/store/$storeId/paginated', queryParameters: queryParameters);
+      final data = response.data['data'] as List;
+      final total = response.data['total'] as int;
+      final categories = data.map((json) => StoreCategoryModel.fromJson(json)).toList();
+      return (categories: categories, total: total);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
   Future<StoreCategory> createCategory(Map<String, dynamic> categoryData) async {
     try {
       final response = await _dio.post('/store-categories', data: categoryData);

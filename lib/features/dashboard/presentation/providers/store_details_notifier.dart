@@ -35,6 +35,8 @@ class StoreDetailsNotifier extends Notifier<StoreDetailsState> {
         _storesRepo.getStoreById(storeId),
       ]);
 
+      if (!ref.mounted) return;
+
       _updateStoreData(storeId, StoreDetailsData(
         dashboard: results[0] as StoreDashboard,
         items: const [], // No longer showing items in home
@@ -43,6 +45,7 @@ class StoreDetailsNotifier extends Notifier<StoreDetailsState> {
         isLoading: false,
       ));
     } catch (e) {
+      if (!ref.mounted) return;
       _updateStoreData(storeId, storeData.copyWith(
         isLoading: false,
         errorMessage: e.toString(),

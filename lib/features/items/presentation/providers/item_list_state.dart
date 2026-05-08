@@ -31,6 +31,7 @@ class ItemListData extends Equatable {
   final bool hasMore;
   final int offset;
   final int limit;
+  final int total;
   final String searchQuery;
   final String? selectedCategoryId;
   final String sortBy;
@@ -45,6 +46,7 @@ class ItemListData extends Equatable {
     this.hasMore = true,
     this.offset = 0,
     this.limit = 50,
+    this.total = 0,
     this.searchQuery = '',
     this.selectedCategoryId,
     this.sortBy = 'createdAt',
@@ -60,8 +62,10 @@ class ItemListData extends Equatable {
     bool? hasMore,
     int? offset,
     int? limit,
+    int? total,
     String? searchQuery,
     String? selectedCategoryId,
+    bool clearCategoryId = false,
     String? sortBy,
     String? order,
     bool? onlyInStock,
@@ -74,8 +78,9 @@ class ItemListData extends Equatable {
       hasMore: hasMore ?? this.hasMore,
       offset: offset ?? this.offset,
       limit: limit ?? this.limit,
+      total: total ?? this.total,
       searchQuery: searchQuery ?? this.searchQuery,
-      selectedCategoryId: selectedCategoryId ?? this.selectedCategoryId,
+      selectedCategoryId: clearCategoryId ? null : (selectedCategoryId ?? this.selectedCategoryId),
       sortBy: sortBy ?? this.sortBy,
       order: order ?? this.order,
       onlyInStock: onlyInStock ?? this.onlyInStock,
@@ -91,6 +96,7 @@ class ItemListData extends Equatable {
         hasMore,
         offset,
         limit,
+        total,
         searchQuery,
         selectedCategoryId,
         sortBy,

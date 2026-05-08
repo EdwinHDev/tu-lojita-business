@@ -23,6 +23,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final store = await _repository.getStoreById(storeId);
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         store: store,
@@ -32,6 +33,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         maxInstallments: store.maxInstallments,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -72,6 +74,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       // 1. Upload banner if changed
       if (state.bannerFile != null) {
         coverImageUrl = await _imageDataSource.uploadImage(state.bannerFile!);
+        if (!ref.mounted) return true;
       }
 
       // 2. Update store in backend
@@ -85,6 +88,8 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
 
       final updatedStore = await _repository.updateStore(storeId, updateData);
       
+      if (!ref.mounted) return true;
+      
       // Sync with StoreDetails dashboard
       ref.read(storeDetailsProvider.notifier).refresh(storeId);
       
@@ -96,6 +101,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       );
       return true;
     } catch (e) {
+      if (!ref.mounted) return false;
       state = state.copyWith(isSaving: false, error: e.toString());
       return false;
     }

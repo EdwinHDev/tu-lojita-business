@@ -19,6 +19,8 @@ import 'package:tu_lojita_business/features/items/presentation/screens/item_form
 import 'package:tu_lojita_business/features/items/presentation/screens/item_detail_screen.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
+import 'package:tu_lojita_business/features/orders/presentation/screens/order_list_screen.dart';
+import 'package:tu_lojita_business/features/orders/presentation/screens/order_details_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -40,6 +42,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: 'orders/:orderId',
+            builder: (context, state) {
+              final orderId = state.pathParameters['orderId']!;
+              return OrderDetailsScreen(orderId: orderId, storeId: null);
+            },
           ),
           GoRoute(
             path: 'settings',
@@ -96,17 +105,26 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'new',
                     builder: (context, state) {
                       final storeId = state.pathParameters['storeId']!;
-                      return ItemFormScreen(storeId: storeId);
+                      final item = state.extra is Item ? state.extra as Item : null;
+                      return ItemFormScreen(storeId: storeId, item: item);
                     },
                   ),
                   GoRoute(
                     path: 'detail',
                     builder: (context, state) {
+                      final storeId = state.pathParameters['storeId']!;
                       final item = state.extra as Item;
-                      return ItemDetailScreen(item: item);
+                      return ItemDetailScreen(storeId: storeId, item: item);
                     },
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'orders',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return OrderListScreen(storeId: storeId);
+                },
               ),
             ],
           ),

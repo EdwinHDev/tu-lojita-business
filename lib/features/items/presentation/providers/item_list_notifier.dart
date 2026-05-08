@@ -44,6 +44,8 @@ class ItemListNotifier extends Notifier<ItemListState> {
         order: storeData.order,
         onlyInStock: storeData.onlyInStock,
       );
+      
+      if (!ref.mounted) return;
 
       final newItems = isLoadMore ? [...storeData.items, ...result.items] : result.items;
       final hasMore = newItems.length < result.total;
@@ -54,6 +56,7 @@ class ItemListNotifier extends Notifier<ItemListState> {
         isLoadMoreLoading: false,
         hasMore: hasMore,
         offset: storeData.offset + result.items.length,
+        total: result.total,
       ));
     } catch (e) {
       _updateStoreData(storeId, storeData.copyWith(
@@ -73,8 +76,17 @@ class ItemListNotifier extends Notifier<ItemListState> {
 
   void setCategory(String storeId, String? categoryId) {
     final storeData = state.forStore(storeId);
-    if (storeData.selectedCategoryId == categoryId) return;
-    _updateStoreData(storeId, storeData.copyWith(selectedCategoryId: categoryId));
+    // Toggle: deselect if the same category is clicked again
+    if (storeData.selectedCategoryId == categoryId) {
+      _updateStoreData(storeId, storeData.copyWith(clearCategoryId: true));
+      loadInitial(storeId);
+      return;
+    }
+    if (categoryId == null) {
+      _updateStoreData(storeId, storeData.copyWith(clearCategoryId: true));
+    } else {
+      _updateStoreData(storeId, storeData.copyWith(selectedCategoryId: categoryId));
+    }
     loadInitial(storeId);
   }
 
@@ -95,6 +107,16 @@ class ItemListNotifier extends Notifier<ItemListState> {
   void resetFilters(String storeId) {
     _updateStoreData(storeId, const ItemListData());
     loadInitial(storeId);
+  }
+
+  Future<void> deleteItem(String storeId, String itemId) async {
+    try {
+      await _repository.deleteItem(itemId);
+      if (!ref.mounted) return;
+      await loadInitial(storeId);
+    } catch (e) {
+      rethrow;
+    }
   }
 
   void _updateStoreData(String storeId, ItemListData data) {

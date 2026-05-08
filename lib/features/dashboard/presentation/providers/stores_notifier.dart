@@ -33,12 +33,15 @@ class StoresNotifier extends Notifier<StoresState> {
         _repository.getDashboardStats(companyId),
       ]);
 
+      if (!ref.mounted) return;
+
       state = state.copyWith(
         stores: results[0] as List<Store>,
         stats: results[1] as DashboardStats,
         isLoading: false,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.toString(),
@@ -79,9 +82,13 @@ class StoresNotifier extends Notifier<StoresState> {
       };
 
       await _repository.createStore(newStoreData);
+      
+      if (!ref.mounted) return false;
+
       await loadData(); // Refresh list
       return true;
     } on DioException catch (e) {
+      if (!ref.mounted) return false;
       String message = e.toString();
       if (e.response != null && e.response?.data != null) {
         final data = e.response?.data;
@@ -93,6 +100,7 @@ class StoresNotifier extends Notifier<StoresState> {
       state = state.copyWith(errorMessage: message);
       return false;
     } catch (e) {
+      if (!ref.mounted) return false;
       state = state.copyWith(errorMessage: e.toString());
       return false;
     }

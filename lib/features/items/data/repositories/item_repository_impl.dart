@@ -107,12 +107,25 @@ class ItemRepositoryImpl implements ItemRepository {
     int mainImageIndex = 0,
   }) async {
     try {
+      final List<String> existingImages = 
+          itemData.containsKey('existingImages') ? List<String>.from(itemData['existingImages']) : [];
+      itemData.remove('existingImages');
+
+      List<String> allImages = [...existingImages];
+
       if (newImages != null && newImages.isNotEmpty) {
         final uploadResults = await _uploadImagesBulk(newImages, mainImageIndex);
         final imageUrls = uploadResults.map((e) => e['url'] as String).toList();
-        
-        itemData['mainImage'] = imageUrls[mainImageIndex];
-        itemData['images'] = imageUrls;
+        allImages.addAll(imageUrls);
+      }
+
+      if (allImages.isNotEmpty) {
+        itemData['images'] = allImages;
+        if (mainImageIndex < allImages.length) {
+          itemData['mainImage'] = allImages[mainImageIndex];
+        } else {
+          itemData['mainImage'] = allImages.first;
+        }
       }
 
       final response = await _dio.patch('/items/$id', data: itemData);
@@ -154,10 +167,12 @@ class ItemRepositoryImpl implements ItemRepository {
     formData.fields.add(MapEntry('primaryIndex', primaryIndex.toString()));
     
     for (var file in images) {
-      formData.files.add(MapEntry(
-        'files',
-        await MultipartFile.fromFile(file.path),
-      ));
+      if (file.existsSync()) {
+        formData.files.add(MapEntry(
+          'files',
+          await MultipartFile.fromFile(file.path),
+        ));
+      }
     }
 
     final response = await dioImages.post('/upload/bulk', data: formData);

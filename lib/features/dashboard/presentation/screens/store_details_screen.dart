@@ -158,6 +158,28 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedShoppingBag01,
+                    color: Color(0xFF4F46E5),
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Gestionar Órdenes',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  context.pop();
+                  context.push('/dashboard/stores/${widget.storeId}/orders');
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const HugeIcon(
                     icon: HugeIcons.strokeRoundedTag01,
                     color: Color(0xFF4F46E5),
                     size: 20,

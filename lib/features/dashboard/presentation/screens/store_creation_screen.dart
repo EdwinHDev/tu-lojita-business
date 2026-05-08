@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/utils/app_notification.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
@@ -48,18 +49,7 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
     // Listen for errors
     ref.listen(storeCreationProvider.select((s) => s.errorMessage), (prev, next) {
       if (next != null && next.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'OK',
-              textColor: Colors.white,
-              onPressed: () => notifier.clearError(),
-            ),
-          ),
-        );
+        AppNotification.showError(context, next);
         // We don't clear it here automatically because the SnackBar has an action,
         // but it's good practice to clear it so it doesn't trigger again on rebuild if not careful.
         // Actually, Riverpod's listen only triggers on change, so it's fine.
@@ -140,12 +130,7 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
       if (success) {
         if (context.mounted) {
           context.pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sucursal creada con éxito'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          AppNotification.showSuccess(context, 'Sucursal creada con éxito');
         }
       } else {
         final error = ref.read(storesProvider).errorMessage;

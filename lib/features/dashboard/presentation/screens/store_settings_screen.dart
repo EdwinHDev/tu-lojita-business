@@ -5,6 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import '../../../../core/config/envs.dart';
 import '../providers/store_settings_notifier.dart';
 import '../providers/store_settings_state.dart';
+import '../../../payment_methods/presentation/screens/payment_methods_list_screen.dart';
 
 class StoreSettingsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -108,6 +109,10 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                   _buildSectionTitle('Políticas de Pago'),
                   const SizedBox(height: 16),
                   _buildPartialPaymentsSection(state),
+                  const SizedBox(height: 32),
+                  _buildSectionTitle('Configuración Financiera'),
+                  const SizedBox(height: 12),
+                  _buildPaymentMethodsTile(),
                   const SizedBox(height: 40),
                   _buildSaveButton(state),
                 ],
@@ -295,6 +300,46 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPaymentMethodsTile() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: ListTile(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => PaymentMethodsListScreen(storeId: widget.storeId)),
+        ),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const HugeIcon(
+            icon: HugeIcons.strokeRoundedCreditCard,
+            color: Color(0xFF4F46E5),
+            size: 24,
+          ),
+        ),
+        title: const Text(
+          'Métodos de Pago',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+        subtitle: const Text(
+          'Configura tus datos de transferencia, pago móvil, etc.',
+          style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+        ),
+        trailing: const Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
+      ),
     );
   }
 

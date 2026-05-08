@@ -61,6 +61,7 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final status = await _checkStatusUseCase.execute();
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         hasStore: status.hasStore,
@@ -89,6 +90,8 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
         existingLogoUrl: state.detectedStoreLogo,
       );
       
+      if (!ref.mounted) return true;
+      
       // Si había una tienda detectada, pasamos al paso de nombre de sucursal
       if (state.hasStore && state.detectedStoreId != null) {
         state = state.copyWith(isLoading: false, isNamingBranch: true);
@@ -113,6 +116,7 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
         storeId: state.detectedStoreId!,
         branchName: branchName,
       );
+      if (!ref.mounted) return true;
       state = state.copyWith(isLoading: false, isNamingBranch: false);
       return true;
     } catch (e) {
@@ -132,6 +136,7 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
         companyId: companyId,
         name: newName,
       );
+      if (!ref.mounted) return true;
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {

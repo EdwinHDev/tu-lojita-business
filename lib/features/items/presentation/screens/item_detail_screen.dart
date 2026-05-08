@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../domain/entities/item.dart';
 import '../../../../core/config/envs.dart';
+import '../providers/item_list_notifier.dart';
 
-class ItemDetailScreen extends StatelessWidget {
+class ItemDetailScreen extends ConsumerWidget {
+  final String storeId;
   final Item item;
 
-  const ItemDetailScreen({super.key, required this.item});
+  const ItemDetailScreen({super.key, required this.storeId, required this.item});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: CustomScrollView(
         slivers: [
-          _buildAppBar(context),
+          _buildAppBar(context, ref),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -35,6 +39,79 @@ class ItemDetailScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     _buildPropertiesGrid(List<Map<String, dynamic>>.from(item.attributes!['properties'])),
                   ],
+                  if (item.customizationGroups.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    _buildSectionTitle('Personalizaciones y Opciones'),
+                    const SizedBox(height: 16),
+                    ...item.customizationGroups.map((group) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  group.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                if (group.minSelect > 0 || group.maxSelect > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${group.minSelect > 0 ? "Mín: ${group.minSelect}" : ""} ${group.maxSelect > 0 ? "Máx: ${group.maxSelect}" : ""}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...group.options.map((opt) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      opt.name,
+                                      style: const TextStyle(fontSize: 14, color: Color(0xFF475569)),
+                                    ),
+                                    Text(
+                                      opt.price > 0 ? '+\$${opt.price.toStringAsFixed(2)}' : 'Incluido',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: opt.price > 0 ? const Color(0xFF4F46E5) : const Color(0xFF10B981),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
                   const SizedBox(height: 40),
                 ],
               ),
@@ -45,7 +122,7 @@ class ItemDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
+  Widget _buildAppBar(BuildContext context, WidgetRef ref) {
     final imageUrl = _resolveImageUrl(item.mainImage);
     return SliverAppBar(
       expandedHeight: 300,
@@ -79,6 +156,54 @@ class ItemDetailScreen extends StatelessWidget {
           ],
         ),
       ),
+      actions: [
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          onSelected: (value) async {
+            if (value == 'edit') {
+              final result = await context.push('/dashboard/stores/$storeId/items/new', extra: item);
+              if (result == true && context.mounted) {
+                ref.read(itemListProvider.notifier).loadInitial(storeId);
+                context.pop();
+              }
+            } else if (value == 'delete') {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Eliminar artículo'),
+                  content: const Text('¿Estás seguro de que deseas eliminar este artículo? Esta acción no se puede deshacer.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true), 
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('Eliminar'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true && context.mounted) {
+                try {
+                  await ref.read(itemListProvider.notifier).deleteItem(storeId, item.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Artículo eliminado exitosamente'), backgroundColor: Colors.green));
+                    context.pop();
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red));
+                  }
+                }
+              }
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 'edit', child: Text('Editar')),
+            const PopupMenuItem(value: 'delete', child: Text('Eliminar', style: TextStyle(color: Colors.red))),
+          ],
+        ),
+      ],
     );
   }
 

@@ -61,9 +61,19 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Gestionar Artículos',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Gestionar Artículos',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (listState.total > 0)
+              Text(
+                '${listState.total} artículos existentes',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.normal),
+              ),
+          ],
         ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111827),
@@ -82,6 +92,7 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                         ? _buildEmptyState(context)
                         : ListView.separated(
                             controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.all(20),
                             itemCount: items.length + (listState.isLoadMoreLoading ? 1 : 0),
                             separatorBuilder: (context, index) => const SizedBox(height: 16),
@@ -255,39 +266,47 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3F4F6),
-              shape: BoxShape.circle,
-            ),
-            child: const HugeIcon(
-              icon: HugeIcons.strokeRoundedPackage01,
-              color: Colors.grey,
-              size: 48,
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3F4F6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedPackage01,
+                    color: Colors.grey,
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'No hay artículos aún',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Comienza agregando tu primer producto o servicio.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'No hay artículos aún',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Comienza agregando tu primer producto o servicio.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF6B7280)),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -369,9 +388,49 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
               ],
             ),
           ),
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.grey),
-            onPressed: () {},
+            onSelected: (value) async {
+              if (value == 'edit') {
+                final result = await context.push('/dashboard/stores/${widget.storeId}/items/new', extra: item);
+                if (result == true && mounted) {
+                  ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+                }
+              } else if (value == 'delete') {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Eliminar artículo'),
+                    content: const Text('¿Estás seguro de que deseas eliminar este artículo? Esta acción no se puede deshacer.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true), 
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        child: const Text('Eliminar'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true && mounted) {
+                  try {
+                    await ref.read(itemListProvider.notifier).deleteItem(widget.storeId, item.id);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Artículo eliminado exitosamente'), backgroundColor: Colors.green));
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red));
+                    }
+                  }
+                }
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'edit', child: Text('Editar')),
+              const PopupMenuItem(value: 'delete', child: Text('Eliminar', style: TextStyle(color: Colors.red))),
+            ],
           ),
         ],
       ),

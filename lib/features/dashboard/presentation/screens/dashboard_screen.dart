@@ -4,6 +4,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/views/home_view.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/views/stores_view.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -23,12 +24,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
-          IconButton(
-            icon: const HugeIcon(
-              icon: HugeIcons.strokeRoundedNotification01,
-              color: Colors.indigo,
+          ref.watch(notificationsProvider).maybeWhen(
+            data: (notifications) {
+              final unreadCount = notifications.where((n) => !n.isRead).length;
+              return Badge(
+                label: Text(unreadCount.toString()),
+                isLabelVisible: unreadCount > 0,
+                child: IconButton(
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedNotification01,
+                    color: Colors.indigo,
+                  ),
+                  onPressed: () => context.go('/dashboard/notifications'),
+                ),
+              );
+            },
+            orElse: () => IconButton(
+              icon: const HugeIcon(
+                icon: HugeIcons.strokeRoundedNotification01,
+                color: Colors.indigo,
+              ),
+              onPressed: () => context.go('/dashboard/notifications'),
             ),
-            onPressed: () => context.go('/dashboard/notifications'),
           ),
           IconButton(
             icon: const HugeIcon(

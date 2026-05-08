@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/utils/app_notification.dart';
 import '../../../items/domain/entities/property_template.dart';
+import '../../domain/entities/store_category.dart';
 import '../providers/store_category_provider.dart';
 
 class CreateCategoryScreen extends ConsumerStatefulWidget {
   final String storeId;
-  const CreateCategoryScreen({super.key, required this.storeId});
+  final StoreCategory? categoryToEdit;
+
+  const CreateCategoryScreen({
+    super.key,
+    required this.storeId,
+    this.categoryToEdit,
+  });
 
   @override
   ConsumerState<CreateCategoryScreen> createState() => _CreateCategoryScreenState();
@@ -18,6 +26,25 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
   final _descriptionController = TextEditingController();
   
   final List<Map<String, dynamic>> _properties = [];
+
+  bool get _isEditing => widget.categoryToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      _nameController.text = widget.categoryToEdit!.name;
+      _descriptionController.text = widget.categoryToEdit!.description;
+      if (widget.categoryToEdit!.propertyTemplates != null) {
+        _properties.addAll(widget.categoryToEdit!.propertyTemplates!.map((t) => {
+          'id': t.id,
+          'name': t.name,
+          'type': t.type.name.toUpperCase(),
+          'isRequired': t.isRequired,
+        }));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -48,23 +75,34 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
     // Validate properties
     for (var prop in _properties) {
       if (prop['name'].toString().trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Todas las propiedades deben tener un nombre')),
-        );
+        AppNotification.showError(context, 'Todas las propiedades deben tener un nombre');
         return;
       }
     }
 
-    final success = await ref.read(storeCategoryProvider.notifier).createCategory(
-          storeId: widget.storeId,
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          propertyTemplates: _properties.map((p) => {
-            'name': p['name'].toString().trim(),
-            'type': p['type'],
-            'isRequired': p['isRequired'],
-          }).toList(),
-        );
+    final propertiesData = _properties.map((p) => {
+      if (p['id'] != null) 'id': p['id'],
+      'name': p['name'].toString().trim(),
+      'type': p['type'],
+      'isRequired': p['isRequired'],
+    }).toList();
+
+    bool success;
+    if (_isEditing) {
+      success = await ref.read(storeCategoryProvider.notifier).updateCategory(
+        categoryId: widget.categoryToEdit!.id,
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        propertyTemplates: propertiesData,
+      );
+    } else {
+      success = await ref.read(storeCategoryProvider.notifier).createCategory(
+        storeId: widget.storeId,
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        propertyTemplates: propertiesData,
+      );
+    }
 
     if (success && mounted) {
       Navigator.of(context).pop(true);
@@ -73,14 +111,21 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = ref.watch(storeCategoryProvider).isCreating;
+    final state = ref.watch(storeCategoryProvider);
+    final isLoading = _isEditing ? state.isUpdating : state.isCreating;
+
+    ref.listen(storeCategoryProvider, (prev, next) {
+      if (prev?.errorMessage != next.errorMessage && next.errorMessage != null) {
+        AppNotification.showError(context, next.errorMessage!);
+      }
+    });
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Nueva Categoría',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          _isEditing ? 'Editar Categoría' : 'Nueva Categoría',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111827),
@@ -274,7 +319,7 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
         ),
         child: isLoading
             ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('Crear Categoría', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            : Text(_isEditing ? 'Guardar Cambios' : 'Crear Categoría', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     );
   }
