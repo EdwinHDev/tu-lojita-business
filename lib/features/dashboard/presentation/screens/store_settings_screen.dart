@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
-import '../../../../core/config/envs.dart';
 import '../providers/store_settings_notifier.dart';
-import '../providers/store_settings_state.dart';
 import '../../../payment_methods/presentation/screens/payment_methods_list_screen.dart';
+import 'settings/appearance_settings_screen.dart';
+import 'settings/partial_payments_settings_screen.dart';
+import 'settings/chat_settings_screen.dart';
+import 'settings/timezone_settings_screen.dart';
 
 class StoreSettingsScreen extends ConsumerStatefulWidget {
   final String storeId;
-
   const StoreSettingsScreen({super.key, required this.storeId});
 
   @override
@@ -17,10 +18,6 @@ class StoreSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
-  final _feeController = TextEditingController();
-  final _minInitialController = TextEditingController();
-  final _installmentsController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -30,51 +27,8 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   }
 
   @override
-  void dispose() {
-    _feeController.dispose();
-    _minInitialController.dispose();
-    _installmentsController.dispose();
-    super.dispose();
-  }
-
-  String _resolveImageUrl(String? path) {
-    if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
-    final cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    // Append dimensions for banner
-    return '${Envs.apiBaseUrlImages}/$cleanPath?w=1200&h=400';
-  }
-
-  void _listenToSuccess(StoreSettingsState? previous, StoreSettingsState next) {
-    if (next.successMessage != null && previous?.successMessage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(next.successMessage!),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-    }
-    if (next.error != null && previous?.error == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(next.error!),
-          backgroundColor: const Color(0xFFEF4444),
-        ),
-      );
-    }
-
-    // Sync controllers if store is loaded
-    if (next.store != null && previous?.store == null) {
-      _feeController.text = next.feePercentage.toString();
-      _minInitialController.text = next.minInitialPercentage.toString();
-      _installmentsController.text = next.maxInstallments.toString();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final state = ref.watch(storeSettingsProvider);
-    ref.listen(storeSettingsProvider, _listenToSuccess);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -82,7 +36,11 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            color: Color(0xFF111827),
+            size: 22,
+          ),
           onPressed: () => context.pop(),
         ),
         title: const Text(
@@ -97,213 +55,69 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
       ),
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
-          : SingleChildScrollView(
+          : ListView(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('Imagen de Portada'),
-                  const SizedBox(height: 12),
-                  _buildBannerPicker(state),
-                  const SizedBox(height: 32),
-                  _buildSectionTitle('Políticas de Pago'),
-                  const SizedBox(height: 16),
-                  _buildPartialPaymentsSection(state),
-                  const SizedBox(height: 32),
-                  _buildSectionTitle('Configuración Financiera'),
-                  const SizedBox(height: 12),
-                  _buildPaymentMethodsTile(),
-                  const SizedBox(height: 40),
-                  _buildSaveButton(state),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF111827),
-      ),
-    );
-  }
-
-  Widget _buildBannerPicker(StoreSettingsState state) {
-    ImageProvider? imageProvider;
-    if (state.bannerFile != null) {
-      imageProvider = FileImage(state.bannerFile!);
-    } else if (state.store?.coverImage != null && state.store!.coverImage!.isNotEmpty) {
-      imageProvider = NetworkImage(_resolveImageUrl(state.store!.coverImage));
-    }
-
-    return GestureDetector(
-      onTap: () => ref.read(storeSettingsProvider.notifier).pickBanner(),
-      child: Container(
-        height: 150,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-          image: imageProvider != null
-              ? DecorationImage(image: imageProvider, fit: BoxFit.cover)
-              : null,
-        ),
-        child: imageProvider == null
-            ? const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  HugeIcon(
-                    icon: HugeIcons.strokeRoundedImageAdd02,
-                    color: Color(0xFF6B7280),
-                    size: 32,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Subir Banner (3:1)',
-                    style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-                  ),
-                ],
-              )
-            : Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.black.withValues(alpha: 0.2),
-                ),
-                child: const Center(
-                  child: HugeIcon(
-                    icon: HugeIcons.strokeRoundedCamera01,
-                    color: Colors.white,
-                    size: 28,
+              children: [
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedImageAdd02,
+                  title: 'Identidad Visual',
+                  subtitle: 'Banner y logo de la tienda',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => AppearanceSettingsScreen(storeId: widget.storeId)),
                   ),
                 ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildPartialPaymentsSection(StoreSettingsState state) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Permitir pagos parciales',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    Text(
-                      'Permite a los clientes pagar en cuotas',
-                      style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedCreditCard,
+                  title: 'Pagos Parciales',
+                  subtitle: 'Cuotas, recargos y frecuencias',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => PartialPaymentsSettingsScreen(storeId: widget.storeId)),
+                  ),
                 ),
-              ),
-              Switch.adaptive(
-                value: state.allowPartialPayments,
-                activeTrackColor: const Color(0xFF4F46E5),
-                onChanged: (val) => ref
-                    .read(storeSettingsProvider.notifier)
-                    .updatePartialPayments(val),
-              ),
-            ],
-          ),
-          if (state.allowPartialPayments) ...[
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 20),
-            _buildInputField(
-              label: 'Porcentaje de recargo (%)',
-              controller: _feeController,
-              onChanged: (val) => ref
-                  .read(storeSettingsProvider.notifier)
-                  .updateFeePercentage(double.tryParse(val) ?? 0),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedChat01,
+                  title: 'Configuración de Chat',
+                  subtitle: 'Habilitar o deshabilitar chat de órdenes',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ChatSettingsScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedWallet01,
+                  title: 'Métodos de Pago',
+                  subtitle: 'Cuentas bancarias y pagos móviles',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => PaymentMethodsListScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedCalendar03,
+                  title: 'Zona Horaria',
+                  subtitle: 'Huso horario para estadísticas y fechas',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => TimezoneSettingsScreen(storeId: widget.storeId)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildInputField(
-              label: 'Pago inicial mínimo (%)',
-              controller: _minInitialController,
-              onChanged: (val) => ref
-                  .read(storeSettingsProvider.notifier)
-                  .updateMinInitialPercentage(double.tryParse(val) ?? 0),
-            ),
-            const SizedBox(height: 16),
-            _buildInputField(
-              label: 'Número máximo de cuotas',
-              controller: _installmentsController,
-              keyboardType: TextInputType.number,
-              onChanged: (val) => ref
-                  .read(storeSettingsProvider.notifier)
-                  .updateMaxInstallments(int.tryParse(val) ?? 0),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
-  Widget _buildInputField({
-    required String label,
-    required TextEditingController controller,
-    required Function(String) onChanged,
-    TextInputType keyboardType = const TextInputType.numberWithOptions(decimal: true),
+  Widget _buildMenuTile({
+    required dynamic icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF374151),
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentMethodsTile() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
@@ -311,62 +125,29 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
         border: Border.all(color: Colors.grey.shade100),
       ),
       child: ListTile(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => PaymentMethodsListScreen(storeId: widget.storeId)),
-        ),
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: const HugeIcon(
-            icon: HugeIcons.strokeRoundedCreditCard,
-            color: Color(0xFF4F46E5),
+          child: HugeIcon(
+            icon: icon,
+            color: const Color(0xFF4F46E5),
             size: 24,
           ),
         ),
-        title: const Text(
-          'Métodos de Pago',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
-          ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF111827), fontSize: 15),
         ),
-        subtitle: const Text(
-          'Configura tus datos de transferencia, pago móvil, etc.',
-          style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
         ),
-        trailing: const Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton(StoreSettingsState state) {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton(
-        onPressed: state.isSaving
-            ? null
-            : () => ref.read(storeSettingsProvider.notifier).saveSettings(widget.storeId),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF4F46E5),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        child: state.isSaving
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-              )
-            : const Text(
-                'Guardar Cambios',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+        trailing: const Icon(Icons.chevron_right, color: Color(0xFF6B7280), size: 20),
       ),
     );
   }

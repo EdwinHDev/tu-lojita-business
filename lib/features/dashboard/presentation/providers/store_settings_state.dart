@@ -12,6 +12,11 @@ class StoreSettingsState {
   final double feePercentage;
   final double minInitialPercentage;
   final int maxInstallments;
+  final bool allowChat;
+  final int installmentIntervalValue;
+  final String installmentIntervalUnit;
+  final List<StoreInstallmentFrequency> installmentFrequencyOptions;
+  final String timezone;
 
   const StoreSettingsState({
     this.isLoading = false,
@@ -24,6 +29,11 @@ class StoreSettingsState {
     this.feePercentage = 0.0,
     this.minInitialPercentage = 0.0,
     this.maxInstallments = 0,
+    this.allowChat = true,
+    this.installmentIntervalValue = 7,
+    this.installmentIntervalUnit = 'DAYS',
+    this.installmentFrequencyOptions = const [],
+    this.timezone = 'America/Caracas',
   });
 
   factory StoreSettingsState.initial() => const StoreSettingsState();
@@ -35,10 +45,16 @@ class StoreSettingsState {
     String? successMessage,
     Store? store,
     File? bannerFile,
+    bool clearBannerFile = false,
     bool? allowPartialPayments,
     double? feePercentage,
     double? minInitialPercentage,
     int? maxInstallments,
+    bool? allowChat,
+    int? installmentIntervalValue,
+    String? installmentIntervalUnit,
+    List<StoreInstallmentFrequency>? installmentFrequencyOptions,
+    String? timezone,
   }) {
     return StoreSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -46,11 +62,16 @@ class StoreSettingsState {
       error: error,
       successMessage: successMessage,
       store: store ?? this.store,
-      bannerFile: bannerFile ?? this.bannerFile,
+      bannerFile: clearBannerFile ? null : (bannerFile ?? this.bannerFile),
       allowPartialPayments: allowPartialPayments ?? this.allowPartialPayments,
       feePercentage: feePercentage ?? this.feePercentage,
       minInitialPercentage: minInitialPercentage ?? this.minInitialPercentage,
       maxInstallments: maxInstallments ?? this.maxInstallments,
+      allowChat: allowChat ?? this.allowChat,
+      installmentIntervalValue: installmentIntervalValue ?? this.installmentIntervalValue,
+      installmentIntervalUnit: installmentIntervalUnit ?? this.installmentIntervalUnit,
+      installmentFrequencyOptions: installmentFrequencyOptions ?? this.installmentFrequencyOptions,
+      timezone: timezone ?? this.timezone,
     );
   }
 }

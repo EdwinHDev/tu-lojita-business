@@ -25,7 +25,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const HugeIcon(icon: HugeIcons.strokeRoundedUser, color: Colors.indigo),
             title: const Text('Mi Perfil'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () => context.push('/dashboard/settings/profile'),
           ),
           ListTile(
             leading: const HugeIcon(icon: HugeIcons.strokeRoundedStore01, color: Colors.indigo),

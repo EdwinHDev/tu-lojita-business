@@ -9,6 +9,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/screens/compa
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/notifications_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/profile_settings_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_creation_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_details_screen.dart';
 
@@ -21,6 +22,8 @@ import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
 import 'package:tu_lojita_business/features/orders/presentation/screens/order_list_screen.dart';
 import 'package:tu_lojita_business/features/orders/presentation/screens/order_details_screen.dart';
+import 'package:tu_lojita_business/features/chat/presentation/screens/order_chat_screen.dart';
+import 'package:tu_lojita_business/features/orders/presentation/screens/store_installments_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -51,12 +54,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: 'orders/:orderId/chat',
+            builder: (context, state) {
+              final orderId = state.pathParameters['orderId']!;
+              final userName = state.uri.queryParameters['userName'] ?? 'Cliente';
+              return OrderChatScreen(orderId: orderId, userName: userName);
+            },
+          ),
+          GoRoute(
             path: 'settings',
             builder: (context, state) => const SettingsScreen(),
             routes: [
               GoRoute(
                 path: 'company',
                 builder: (context, state) => const CompanySettingsScreen(),
+              ),
+              GoRoute(
+                path: 'profile',
+                builder: (context, state) => const ProfileSettingsScreen(),
               ),
             ],
           ),
@@ -124,6 +139,23 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) {
                   final storeId = state.pathParameters['storeId']!;
                   return OrderListScreen(storeId: storeId);
+                },
+                routes: [
+                  GoRoute(
+                    path: ':orderId/chat',
+                    builder: (context, state) {
+                      final orderId = state.pathParameters['orderId']!;
+                      final userName = state.uri.queryParameters['userName'] ?? 'Cliente';
+                      return OrderChatScreen(orderId: orderId, userName: userName);
+                    },
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: 'installments',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return StoreInstallmentsScreen(storeId: storeId);
                 },
               ),
             ],

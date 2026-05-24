@@ -30,11 +30,12 @@ class StoreListTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -43,11 +44,12 @@ class StoreListTile extends StatelessWidget {
         contentPadding: const EdgeInsets.all(12),
         onTap: onTap,
         leading: Container(
-          width: 50,
-          height: 50,
+          width: 52,
+          height: 52,
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: logoUrl.isNotEmpty ? Colors.white : const Color(0xFFEEF2FF),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
             image: logoUrl.isNotEmpty
                 ? DecorationImage(
                     image: NetworkImage(logoUrl),
@@ -56,9 +58,12 @@ class StoreListTile extends StatelessWidget {
                 : null,
           ),
           child: logoUrl.isEmpty
-              ? const HugeIcon(
-                  icon: HugeIcons.strokeRoundedStore01,
-                  color: Colors.grey,
+              ? const Center(
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedStore01,
+                    color: Color(0xFF4F46E5),
+                    size: 24,
+                  ),
                 )
               : null,
         ),
@@ -68,7 +73,8 @@ class StoreListTile extends StatelessWidget {
               : store.name,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 17,
+            fontSize: 16,
+            letterSpacing: -0.3,
           ),
         ),
         subtitle: Column(
@@ -80,53 +86,66 @@ class StoreListTile extends StatelessWidget {
                 child: Text(
                   'Tienda: ${store.name}',
                   style: const TextStyle(
-                    color: Colors.indigo,
+                    color: Color(0xFF4F46E5),
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),
               ),
-            if (store.address != null)
-              Text(
-                store.address!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            if (store.address != null && store.address!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  store.address!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                ),
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Row(
               children: [
                 _buildChip(
                   isActive ? 'Activa' : 'Inactiva',
-                  isActive ? Colors.green : Colors.red,
+                  isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                  isActive ? const Color(0xFF047857) : const Color(0xFFB91C1C),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Text(
                   '${store.productsCount} productos',
-                  style: const TextStyle(fontSize: 12),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ],
         ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        trailing: const HugeIcon(
+          icon: HugeIcons.strokeRoundedArrowRight01,
+          color: Colors.grey,
+          size: 20,
+        ),
       ),
     );
   }
 
-  Widget _buildChip(String label, Color color) {
+  Widget _buildChip(String label, Color bgColor, Color textColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color,
-          fontSize: 10,
+          color: textColor,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
+          letterSpacing: 0.2,
         ),
       ),
     );

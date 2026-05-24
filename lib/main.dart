@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/config/envs.dart';
@@ -6,6 +7,7 @@ import 'core/theme/app_theme.dart';
 
 import 'core/utils/notification_helper.dart';
 import 'core/network/background_service_manager.dart';
+import 'features/dashboard/presentation/providers/notifications_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,10 +40,36 @@ class _MyAppState extends ConsumerState<MyApp> {
     NotificationHelper.onNotificationClick.stream.listen((payload) {
       final router = ref.read(routerProvider);
       if (payload != null && payload.isNotEmpty) {
-        router.push('/dashboard/orders/$payload');
+        try {
+          final data = jsonDecode(payload);
+          final String orderId = data['orderId'] ?? '';
+          final String type = data['type'] ?? '';
+
+          if (type == 'CHAT_MESSAGE') {
+            router.push('/dashboard/orders/$orderId/chat');
+          } else {
+            router.push('/dashboard/orders/$orderId');
+          }
+        } catch (e) {
+          // Retrocompatibilidad
+          router.push('/dashboard/orders/$payload');
+        }
       } else {
         router.push('/dashboard/notifications');
       }
+    });
+
+    // Escuchar notificaciones de chat por socket
+    ref.read(socketServiceProvider).chatNotificationStream.listen((data) {
+      NotificationHelper.showNotification(
+        id: data['orderId'].hashCode,
+        title: data['senderName'] ?? 'Nuevo mensaje',
+        body: data['content'] ?? '',
+        payload: jsonEncode({
+          'orderId': data['orderId'],
+          'type': 'CHAT_MESSAGE',
+        }),
+      );
     });
   }
 

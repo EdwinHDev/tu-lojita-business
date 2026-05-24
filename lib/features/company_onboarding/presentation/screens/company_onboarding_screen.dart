@@ -7,6 +7,8 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_not
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_state.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/utils/rif_input_formatter.dart';
 
 class CompanyOnboardingScreen extends ConsumerStatefulWidget {
   const CompanyOnboardingScreen({super.key});
@@ -83,9 +85,7 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
     
     final state = ref.read(companyOnboardingProvider);
     if (_logoFile == null && state.detectedStoreLogo == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, selecciona un logo')),
-      );
+      NotificationService.showError(context, 'Por favor, selecciona un logo');
       return;
     }
 
@@ -115,9 +115,7 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
 
     ref.listen<CompanyOnboardingState>(companyOnboardingProvider, (previous, next) {
       if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
-        );
+        NotificationService.showError(context, next.error!);
       }
       if (next.hasStore && (previous == null || !previous.hasStore)) {
         _showStoreDetectionDialog(next.detectedStoreName!, next.detectedStoreRif);
@@ -269,8 +267,17 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
                           TextFormField(
                             controller: _rifController,
                             readOnly: state.hasStore,
+                            keyboardType: TextInputType.text,
+                            textCapitalization: TextCapitalization.characters,
+                            inputFormatters: [
+                              RifTextInputFormatter(),
+                            ],
                             decoration: InputDecoration(
                               labelText: 'RIF',
+                              hintText: 'J-12345678-9',
+                              helperText: 'Formato: J-12345678-9',
+                              helperMaxLines: 2,
+                              errorMaxLines: 2,
                               filled: state.hasStore,
                               fillColor: state.hasStore ? Colors.grey[100] : null,
                               prefixIcon: const Padding(
@@ -279,7 +286,16 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
                               ),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            validator: (value) => value == null || value.isEmpty ? 'Campo requerido' : null,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'El RIF es requerido';
+                              }
+                              final regExp = RegExp(r'^[VEJGCCP]-\d{8}-\d$');
+                              if (!regExp.hasMatch(value)) {
+                                return 'RIF inválido. Formato requerido: J-12345678-9';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 32),
                           ElevatedButton(

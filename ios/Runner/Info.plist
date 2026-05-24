@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Tu Lojita para Empresa necesita acceder a tu ubicación para posicionar tu sucursal física en el mapa.</string>
 </dict>
 </plist>

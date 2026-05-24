@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:tu_lojita_business/core/utils/app_notification.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
@@ -33,6 +36,7 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
   }
 
   void _onStepTapped(int step) {
+    FocusScope.of(context).unfocus();
     _pageController.animateToPage(
       step,
       duration: const Duration(milliseconds: 300),
@@ -56,52 +60,57 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Nueva Sucursal'),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => context.pop(),
+        appBar: AppBar(
+          title: const Text('Nueva Sucursal'),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.black),
+            onPressed: () => context.pop(),
+          ),
         ),
-      ),
-      body: Column(
-        children: [
-          const _StoreCreationHeader(),
-          _StepIndicator(
-            currentStep: state.currentStep,
-            onStepTapped: _onStepTapped,
-          ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _Step1Identity(state: state, notifier: notifier),
-                _Step2Operations(state: state, notifier: notifier),
-                _Step3Categorization(state: state, notifier: notifier),
-              ],
+        body: Column(
+          children: [
+            const _StoreCreationHeader(),
+            _StepIndicator(
+              currentStep: state.currentStep,
+              onStepTapped: _onStepTapped,
             ),
-          ),
-          _BottomActions(
-            state: state,
-            onNext: () {
-              if (state.currentStep < 2) {
-                _onStepTapped(state.currentStep + 1);
-              } else {
-                _submitForm(context, ref);
-              }
-            },
-            onBack: () {
-              if (state.currentStep > 0) {
-                _onStepTapped(state.currentStep - 1);
-              }
-            },
-          ),
-        ],
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _Step1Identity(state: state, notifier: notifier),
+                  _Step2Operations(state: state, notifier: notifier),
+                  _Step3Categorization(state: state, notifier: notifier),
+                ],
+              ),
+            ),
+            _BottomActions(
+              state: state,
+              onNext: () {
+                FocusScope.of(context).unfocus();
+                if (state.currentStep < 2) {
+                  _onStepTapped(state.currentStep + 1);
+                } else {
+                  _submitForm(context, ref);
+                }
+              },
+              onBack: () {
+                FocusScope.of(context).unfocus();
+                if (state.currentStep > 0) {
+                  _onStepTapped(state.currentStep - 1);
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -118,12 +127,13 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
         phone: state.phone,
         description: state.description,
         subCategoryId: state.subCategoryId!,
+        latitude: state.latitude,
+        longitude: state.longitude,
+        timezone: state.timezone,
         address: state.type == StoreType.physical ? {
           'street': state.street,
           'city': state.city,
           'state': state.addressState,
-          'country': 'Venezuela',
-          'zipCode': '1010',
         } : null,
       );
 
@@ -158,15 +168,16 @@ class _StoreCreationHeader extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.indigo.shade800, Colors.indigo.shade600],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4F46E5), Color(0xFF312E81)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.indigo.withValues(alpha: 0.3),
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -180,6 +191,7 @@ class _StoreCreationHeader extends ConsumerWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
               image: DecorationImage(
                 image: NetworkImage('${Envs.apiBaseUrlImages}${company.logo}'),
                 fit: BoxFit.cover,
@@ -199,21 +211,23 @@ class _StoreCreationHeader extends ConsumerWidget {
                     fontSize: 16,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   'RIF: ${company.rif}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Text(
               'HEREDADO',
@@ -242,20 +256,20 @@ class PremiumInputDecoration {
       hintText: hint,
       prefixIcon: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: HugeIcon(icon: icon, color: Colors.indigo, size: 22),
+        child: HugeIcon(icon: icon, color: const Color(0xFF4F46E5), size: 22),
       ),
       labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-      floatingLabelStyle: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold),
+      floatingLabelStyle: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
       filled: true,
-      fillColor: Colors.grey.shade50,
+      fillColor: const Color(0xFFF8FAFC),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(20),
-        borderSide: BorderSide(color: Colors.grey.shade200),
+        borderSide: const BorderSide(color: Color(0xFFF1F5F9), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(20),
-        borderSide: const BorderSide(color: Colors.indigo, width: 2),
+        borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(20),
@@ -297,11 +311,11 @@ class _StepIndicator extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 12,
-            backgroundColor: isActive ? Colors.indigo : Colors.grey.shade200,
+            backgroundColor: isActive ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
             child: Text(
               '${index + 1}',
               style: TextStyle(
-                color: isActive ? Colors.white : Colors.grey,
+                color: isActive ? Colors.white : Colors.grey.shade600,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -311,9 +325,9 @@ class _StepIndicator extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: isActive ? Colors.indigo : Colors.grey,
+              color: isActive ? const Color(0xFF4F46E5) : Colors.grey.shade500,
               fontSize: 12,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
             ),
           ),
         ],
@@ -326,7 +340,7 @@ class _StepIndicator extends StatelessWidget {
       width: 40,
       height: 2,
       margin: const EdgeInsets.only(bottom: 20),
-      color: isActive ? Colors.indigo : Colors.grey.shade200,
+      color: isActive ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
     );
   }
 }
@@ -388,11 +402,62 @@ class _Step1Identity extends StatelessWidget {
   }
 }
 
-class _Step2Operations extends StatelessWidget {
+class _Step2Operations extends StatefulWidget {
   final StoreCreationState state;
   final StoreCreationNotifier notifier;
 
   const _Step2Operations({required this.state, required this.notifier});
+
+  @override
+  State<_Step2Operations> createState() => _Step2OperationsState();
+}
+
+class _Step2OperationsState extends State<_Step2Operations> {
+  late final MapController _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor activa el servicio de ubicación')),
+        );
+      }
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      final newCenter = LatLng(position.latitude, position.longitude);
+      _mapController.move(newCenter, 15.0);
+      widget.notifier.updateCoordinates(position.latitude, position.longitude);
+    } catch (e) {
+      debugPrint('Error obteniendo ubicación: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -413,8 +478,8 @@ class _Step2Operations extends StatelessWidget {
                 title: 'Física',
                 description: 'Venta presencial en sede',
                 icon: HugeIcons.strokeRoundedStore01,
-                isSelected: state.type == StoreType.physical,
-                onTap: () => notifier.updateType(StoreType.physical),
+                isSelected: widget.state.type == StoreType.physical,
+                onTap: () => widget.notifier.updateType(StoreType.physical),
               ),
             ),
             const SizedBox(width: 16),
@@ -423,13 +488,33 @@ class _Step2Operations extends StatelessWidget {
                 title: 'Virtual',
                 description: 'Solo entregas a domicilio',
                 icon: HugeIcons.strokeRoundedGlobal,
-                isSelected: state.type == StoreType.virtual,
-                onTap: () => notifier.updateType(StoreType.virtual),
+                isSelected: widget.state.type == StoreType.virtual,
+                onTap: () => widget.notifier.updateType(StoreType.virtual),
               ),
             ),
           ],
         ),
-        if (state.type == StoreType.physical) ...[
+        const SizedBox(height: 32),
+        DropdownButtonFormField<String>(
+          initialValue: widget.state.timezone,
+          onChanged: (val) {
+            if (val != null) {
+              widget.notifier.updateTimezone(val);
+            }
+          },
+          decoration: PremiumInputDecoration.get(
+            label: 'Zona Horaria',
+            hint: 'Selecciona la zona horaria de la sucursal',
+            icon: HugeIcons.strokeRoundedCalendar03,
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: 'America/Caracas',
+              child: Text('Venezuela (UTC-4)'),
+            ),
+          ],
+        ),
+        if (widget.state.type == StoreType.physical) ...[
           const SizedBox(height: 40),
           Text(
             'Ubicación Física',
@@ -437,8 +522,8 @@ class _Step2Operations extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           TextFormField(
-            initialValue: state.street,
-            onChanged: notifier.updateStreet,
+            initialValue: widget.state.street,
+            onChanged: widget.notifier.updateStreet,
             decoration: PremiumInputDecoration.get(
               label: 'Calle / Avenida / Edificio',
               hint: 'Ej: Av. Principal de las Mercedes...',
@@ -450,8 +535,8 @@ class _Step2Operations extends StatelessWidget {
             children: [
               Expanded(
                 child: TextFormField(
-                  initialValue: state.city,
-                  onChanged: notifier.updateCity,
+                  initialValue: widget.state.city,
+                  onChanged: widget.notifier.updateCity,
                   decoration: PremiumInputDecoration.get(
                     label: 'Ciudad',
                     hint: 'Ej: Caracas',
@@ -462,8 +547,8 @@ class _Step2Operations extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
-                  initialValue: state.addressState,
-                  onChanged: notifier.updateState,
+                  initialValue: widget.state.addressState,
+                  onChanged: widget.notifier.updateState,
                   decoration: PremiumInputDecoration.get(
                     label: 'Estado',
                     hint: 'Ej: Miranda',
@@ -472,6 +557,90 @@ class _Step2Operations extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Selecciona la ubicación exacta en el mapa:',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.shade200, width: 2),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: LatLng(widget.state.latitude, widget.state.longitude),
+                    initialZoom: 15.0,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
+                    onPositionChanged: (position, hasGesture) {
+                      if (hasGesture) {
+                        widget.notifier.updateCoordinates(
+                          position.center.latitude,
+                          position.center.longitude,
+                        );
+                      }
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.tulojita.business',
+                    ),
+                  ],
+                ),
+                // Static Pin in center
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 40.0),
+                    child: HugeIcon(
+                      icon: HugeIcons.strokeRoundedLocation01,
+                      color: Color(0xFF4f46e5),
+                      size: 40,
+                    ),
+                  ),
+                ),
+                // GPS Button on bottom right
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: FloatingActionButton.small(
+                    heroTag: 'gps_btn_business',
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.indigo,
+                    onPressed: _determinePosition,
+                    child: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedGps01,
+                      color: Colors.indigo,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              'Coordenadas: ${widget.state.latitude.toStringAsFixed(6)}, ${widget.state.longitude.toStringAsFixed(6)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+                fontFamily: 'monospace',
+              ),
+            ),
           ),
         ],
       ],
@@ -700,18 +869,20 @@ class _TypeCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           border: Border.all(
-            color: isSelected ? Colors.indigo : Colors.grey.shade200,
-            width: 2,
+            color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+            width: 1.5,
           ),
           borderRadius: BorderRadius.circular(20),
-          color: isSelected ? Colors.indigo.withValues(alpha: 0.05) : Colors.white,
-          boxShadow: isSelected ? [
+          color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
+          boxShadow: [
             BoxShadow(
-              color: Colors.indigo.withValues(alpha: 0.1),
-              blurRadius: 10,
+              color: isSelected 
+                  ? const Color(0xFF4F46E5).withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.02),
+              blurRadius: 12,
               offset: const Offset(0, 4),
             )
-          ] : [],
+          ],
         ),
         child: Column(
           children: [
@@ -720,11 +891,11 @@ class _TypeCard extends StatelessWidget {
               children: [
                 HugeIcon(
                   icon: icon,
-                  color: isSelected ? Colors.indigo : Colors.grey.shade400,
+                  color: isSelected ? const Color(0xFF4F46E5) : Colors.grey.shade400,
                   size: 24,
                 ),
                 if (isSelected)
-                  const Icon(Icons.check_circle, color: Colors.indigo, size: 20),
+                  const Icon(Icons.check_circle, color: Color(0xFF4F46E5), size: 20),
               ],
             ),
             const SizedBox(height: 16),
@@ -733,7 +904,7 @@ class _TypeCard extends StatelessWidget {
               child: Text(
                 title,
                 style: TextStyle(
-                  color: isSelected ? Colors.indigo : Colors.black87,
+                  color: isSelected ? const Color(0xFF4F46E5) : Colors.black87,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
@@ -783,15 +954,17 @@ class _CategoryCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? Colors.indigo : Colors.grey.shade200,
-              width: 2,
+              color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+              width: 1.5,
             ),
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: isSelected ? Colors.indigo.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.03),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
+                color: isSelected 
+                    ? const Color(0xFF4F46E5).withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.02),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -825,7 +998,7 @@ class _CategoryCard extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: const BoxDecoration(
-                              color: Colors.indigo,
+                              color: Color(0xFF4F46E5),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.check, color: Colors.white, size: 16),
@@ -848,7 +1021,7 @@ class _CategoryCard extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
-                        color: isSelected ? Colors.indigo : Colors.black87,
+                        color: isSelected ? const Color(0xFF4F46E5) : Colors.black87,
                       ),
                     ),
                   ),
@@ -898,12 +1071,12 @@ class _Breadcrumb extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -917,12 +1090,16 @@ class _Breadcrumb extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.grid_view_rounded, size: 16, color: Colors.indigo),
+                    const HugeIcon(
+                      icon: HugeIcons.strokeRoundedGridView,
+                      color: Color(0xFF4F46E5),
+                      size: 16,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Categorías',
                       style: TextStyle(
-                        color: Colors.indigo.shade700,
+                        color: const Color(0xFF4F46E5),
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -975,11 +1152,14 @@ class _BottomActions extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: const Border(
+          top: BorderSide(color: Color(0xFFF1F5F9), width: 1.5),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
-            offset: const Offset(0, -5),
+            offset: const Offset(0, -4),
           ),
         ],
       ),
@@ -992,9 +1172,11 @@ class _BottomActions extends StatelessWidget {
                   onPressed: state.isLoading ? null : onBack,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
+                    foregroundColor: Colors.grey.shade700,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Atrás'),
+                  child: const Text('Atrás', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             if (state.currentStep > 0) const SizedBox(width: 16),
@@ -1003,14 +1185,21 @@ class _BottomActions extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: (isNextEnabled && !state.isLoading) ? onNext : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: const Color(0xFF4F46E5),
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                  disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: state.isLoading 
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(state.currentStep == 2 ? 'Crear Sucursal' : 'Siguiente'),
+                  : Text(
+                      state.currentStep == 2 ? 'Crear Sucursal' : 'Siguiente',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
               ),
             ),
           ],

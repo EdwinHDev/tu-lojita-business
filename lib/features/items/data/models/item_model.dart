@@ -19,6 +19,8 @@ class ItemModel extends Item {
     super.attributes,
     super.categoryId,
     super.customizationGroups = const [],
+    super.allowInstallments = true,
+    super.lateFeePercentage = 0,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,8 @@ class ItemModel extends Item {
       attributes: _parseAttributes(json['attributes']),
       categoryId: _parseCategoryId(json['category']),
       customizationGroups: _extractCustomizationGroups(json),
+      allowInstallments: json['allowInstallments'] == true,
+      lateFeePercentage: _parseDouble(json['lateFeePercentage']),
     );
   }
 

@@ -1,24 +1,42 @@
 import 'bank.dart';
 
 enum PaymentMethodType {
-  PAGO_MOVIL,
-  TRANSFER,
-  BINANCE,
-  ZELLE,
-  OTHER;
+  pagoMovil,
+  transfer,
+  binance;
 
   String get displayName {
     switch (this) {
-      case PaymentMethodType.PAGO_MOVIL:
+      case PaymentMethodType.pagoMovil:
         return 'Pago Móvil';
-      case PaymentMethodType.TRANSFER:
+      case PaymentMethodType.transfer:
         return 'Transferencia Bancaria';
-      case PaymentMethodType.BINANCE:
+      case PaymentMethodType.binance:
         return 'Binance Pay';
-      case PaymentMethodType.ZELLE:
-        return 'Zelle';
-      case PaymentMethodType.OTHER:
-        return 'Otro';
+    }
+  }
+
+  String toJsonValue() {
+    switch (this) {
+      case PaymentMethodType.pagoMovil:
+        return 'PAGO_MOVIL';
+      case PaymentMethodType.transfer:
+        return 'TRANSFER';
+      case PaymentMethodType.binance:
+        return 'BINANCE';
+    }
+  }
+
+  static PaymentMethodType fromJsonValue(String? value) {
+    switch (value) {
+      case 'PAGO_MOVIL':
+        return PaymentMethodType.pagoMovil;
+      case 'TRANSFER':
+        return PaymentMethodType.transfer;
+      case 'BINANCE':
+        return PaymentMethodType.binance;
+      default:
+        return PaymentMethodType.pagoMovil;
     }
   }
 }
@@ -55,10 +73,7 @@ class StorePaymentMethod {
   factory StorePaymentMethod.fromJson(Map<String, dynamic> json) {
     return StorePaymentMethod(
       id: json['id'],
-      type: PaymentMethodType.values.firstWhere(
-        (e) => e.name == json['type'],
-        orElse: () => PaymentMethodType.OTHER,
-      ),
+      type: PaymentMethodType.fromJsonValue(json['type']),
       title: json['title'],
       accountHolder: json['accountHolder'],
       idNumber: json['idNumber'],
@@ -75,7 +90,7 @@ class StorePaymentMethod {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'type': type.name,
+      'type': type.toJsonValue(),
       'title': title,
       'accountHolder': accountHolder,
       'idNumber': idNumber,

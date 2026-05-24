@@ -111,7 +111,16 @@ class ItemListNotifier extends Notifier<ItemListState> {
 
   Future<void> deleteItem(String storeId, String itemId) async {
     try {
+      final storeData = state.forStore(storeId);
+      final itemIndex = storeData.items.indexWhere((i) => i.id == itemId);
+      final List<String> images = itemIndex != -1 ? storeData.items[itemIndex].images : const [];
+
       await _repository.deleteItem(itemId);
+
+      if (images.isNotEmpty) {
+        _repository.deleteImages(images);
+      }
+
       if (!ref.mounted) return;
       await loadInitial(storeId);
     } catch (e) {

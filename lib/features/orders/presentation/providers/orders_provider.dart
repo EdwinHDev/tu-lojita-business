@@ -140,3 +140,8 @@ final orderByIdProvider = FutureProvider.family<Order, String>((ref, orderId) as
   final repo = ref.read(ordersRepositoryProvider);
   return repo.getOrderById(orderId);
 });
+
+final storeInstallmentsProvider = FutureProvider.family<List<Installment>, String>((ref, storeId) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  return repo.getStoreInstallments(storeId);
+});

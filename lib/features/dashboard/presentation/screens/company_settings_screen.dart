@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/company_onboarding/domain/entities/company.dart';
@@ -11,7 +12,8 @@ class CompanySettingsScreen extends ConsumerStatefulWidget {
   const CompanySettingsScreen({super.key});
 
   @override
-  ConsumerState<CompanySettingsScreen> createState() => _CompanySettingsScreenState();
+  ConsumerState<CompanySettingsScreen> createState() =>
+      _CompanySettingsScreenState();
 }
 
 class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
@@ -50,7 +52,9 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
     final authState = ref.read(authProvider);
     if (authState is! Authenticated || authState.user.company == null) return;
 
-    final success = await ref.read(companyOnboardingProvider.notifier).updateCompanyName(
+    final success = await ref
+        .read(companyOnboardingProvider.notifier)
+        .updateCompanyName(
           companyId: authState.user.company!.id,
           newName: _nameController.text,
         );
@@ -58,14 +62,12 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
     if (success) {
       _initialName = _nameController.text;
       _checkDirty();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Empresa actualizada correctamente'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+      if (mounted) {
+        NotificationService.showSuccess(
+          context,
+          'Empresa actualizada correctamente',
+        );
+      }
       // Actualizar el estado global del usuario de forma silenciosa para evitar redirecciones
       await ref.read(authProvider.notifier).silentRefresh();
     }
@@ -84,6 +86,14 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mi Empresa'),
+        leading: IconButton(
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            color: Color(0xFF111827),
+            size: 22,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -109,17 +119,18 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                   ),
                   child: ClipOval(
                     child: Image.network(
-                      company!.logo.startsWith('http') 
-                        ? company.logo 
-                        : '${Envs.apiBaseUrlImages}/${company.logo.startsWith('/') ? company.logo.substring(1) : company.logo}',
+                      company!.logo.startsWith('http')
+                          ? company.logo
+                          : '${Envs.apiBaseUrlImages}/${company.logo.startsWith('/') ? company.logo.substring(1) : company.logo}',
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Center(
-                        child: HugeIcon(
-                          icon: HugeIcons.strokeRoundedStore01,
-                          size: 60,
-                          color: Colors.indigo,
-                        ),
-                      ),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Center(
+                            child: HugeIcon(
+                              icon: HugeIcons.strokeRoundedStore01,
+                              size: 60,
+                              color: Colors.indigo,
+                            ),
+                          ),
                     ),
                   ),
                 ),
@@ -128,7 +139,9 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
             Card(
               elevation: 0,
               color: Colors.indigo.withValues(alpha: 0.05),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -136,11 +149,19 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                   children: [
                     const Row(
                       children: [
-                        HugeIcon(icon: HugeIcons.strokeRoundedInformationCircle, color: Colors.indigo, size: 20),
+                        HugeIcon(
+                          icon: HugeIcons.strokeRoundedInformationCircle,
+                          color: Colors.indigo,
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           'Información de Identidad',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.indigo),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo,
+                          ),
                         ),
                       ],
                     ),
@@ -152,7 +173,11 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                         hintText: 'Ej. Inversiones El Éxito',
                         prefixIcon: const Padding(
                           padding: EdgeInsets.all(12),
-                          child: HugeIcon(icon: HugeIcons.strokeRoundedStore01, color: Colors.indigo, size: 20),
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedStore01,
+                            color: Colors.indigo,
+                            size: 20,
+                          ),
                         ),
                         filled: true,
                         fillColor: Colors.white,
@@ -164,13 +189,19 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: TextEditingController(text: company?.rif ?? ''),
+                      controller: TextEditingController(
+                        text: company?.rif ?? '',
+                      ),
                       enabled: false,
                       decoration: InputDecoration(
                         labelText: 'RIF (Lectura)',
                         prefixIcon: const Padding(
                           padding: EdgeInsets.all(12),
-                          child: HugeIcon(icon: HugeIcons.strokeRoundedInformationCircle, color: Colors.grey, size: 20),
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedInformationCircle,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
                         ),
                         filled: true,
                         fillColor: Colors.grey.shade100,
@@ -189,7 +220,11 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(
                 'Nota: El RIF y el Logo son parte de tu identidad fiscal y no pueden ser modificados desde aquí por seguridad.',
-                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
             const SizedBox(height: 40),
@@ -199,16 +234,27 @@ class _CompanySettingsScreenState extends ConsumerState<CompanySettingsScreen> {
                 backgroundColor: Colors.indigo,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
                 elevation: 2,
               ),
               child: state.isLoading
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
                     )
-                  : const Text('Guardar Cambios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  : const Text(
+                      'Guardar Cambios',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ],
         ),

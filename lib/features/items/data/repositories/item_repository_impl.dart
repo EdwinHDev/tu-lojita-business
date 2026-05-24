@@ -145,6 +145,17 @@ class ItemRepositoryImpl implements ItemRepository {
   }
 
   @override
+  Future<void> deleteImages(List<String> imageUrls) async {
+    if (imageUrls.isEmpty) return;
+    try {
+      final ids = imageUrls.map((url) => url.split('/').last).toList();
+      await _deleteImagesBulk(ids);
+    } catch (_) {
+      // Fail silently to avoid interrupting the main thread
+    }
+  }
+
+  @override
   Future<List<PropertyTemplate>> getCategoryTemplates(String categoryId) async {
     try {
       final response = await _dio.get('/store-categories/$categoryId/templates');

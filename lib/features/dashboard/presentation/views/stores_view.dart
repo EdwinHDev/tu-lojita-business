@@ -21,18 +21,54 @@ class StoresView extends ConsumerWidget {
 
     if (storesState.errorMessage != null && storesState.stores.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('Error: ${storesState.errorMessage}'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => ref.read(storesProvider.notifier).loadData(),
-              child: const Text('Reintentar'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEF2F2),
+                  shape: BoxShape.circle,
+                ),
+                child: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedAlertCircle,
+                  color: Color(0xFFB91C1C),
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Ocurrió un error',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                storesState.errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => ref.read(storesProvider.notifier).loadData(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Reintentar', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -47,8 +83,13 @@ class StoresView extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/dashboard/stores/create'),
-        backgroundColor: Colors.indigo,
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: const Color(0xFF4F46E5),
+        elevation: 4,
+        child: const HugeIcon(
+          icon: HugeIcons.strokeRoundedAdd01,
+          color: Colors.white,
+          size: 24,
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.read(storesProvider.notifier).loadData(),
@@ -62,25 +103,31 @@ class StoresView extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Text(
-                      'Resumen',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      'Resumen de hoy',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                        color: Colors.grey.shade900,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   _buildMetrics(storesState),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Text(
-                      'Mis Tiendas',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      'Mis Sucursales',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                        color: Colors.grey.shade900,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                 ],
               ),
             ),
@@ -114,6 +161,7 @@ class StoresView extends ConsumerWidget {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Row(
@@ -131,7 +179,7 @@ class StoresView extends ConsumerWidget {
               value: '${stats.totalStores.count}',
               icon: HugeIcons.strokeRoundedStore01,
               color: Colors.blue,
-              subtitle: '+${stats.totalStores.increment} mes',
+              subtitle: stats.totalStores.increment > 0 ? '+${stats.totalStores.increment} mes' : null,
             ),
             const SizedBox(width: 12),
             StoreMetricCard(
@@ -139,7 +187,7 @@ class StoresView extends ConsumerWidget {
               value: '${stats.totalProducts.count}',
               icon: HugeIcons.strokeRoundedPackage,
               color: Colors.orange,
-              subtitle: '+${stats.totalProducts.increment} sem',
+              subtitle: stats.totalProducts.increment > 0 ? '+${stats.totalProducts.increment} sem' : null,
             ),
           ],
         ),

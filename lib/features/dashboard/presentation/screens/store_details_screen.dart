@@ -67,7 +67,11 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
             shape: BoxShape.circle,
           ),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              color: Colors.white,
+              size: 20,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -170,6 +174,28 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                 onTap: () {
                   context.pop();
                   context.push('/dashboard/stores/${widget.storeId}/orders');
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedInvoice01,
+                    color: Color(0xFF10B981),
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Cuotas y Deudas',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  context.pop();
+                  context.push('/dashboard/stores/${widget.storeId}/installments');
                 },
               ),
               ListTile(
@@ -365,7 +391,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
           ),
           child: CircleAvatar(
             radius: 40,
-            backgroundColor: const Color(0xFFF3F4F6),
+            backgroundColor: Colors.white,
             backgroundImage: logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
             child: logoUrl.isEmpty
                 ? const Icon(Icons.store, size: 40, color: Colors.grey)

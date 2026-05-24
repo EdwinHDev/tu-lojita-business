@@ -28,5 +28,6 @@ abstract class ItemRepository {
     int mainImageIndex = 0,
   });
   Future<void> deleteItem(String id);
+  Future<void> deleteImages(List<String> imageUrls);
   Future<List<PropertyTemplate>> getCategoryTemplates(String categoryId);
 }

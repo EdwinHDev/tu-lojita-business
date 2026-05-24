@@ -12,6 +12,8 @@ class UserModel extends User {
     super.hasCompany = false,
     super.avatarUrl,
     super.company,
+    super.identification,
+    super.phone,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -23,10 +25,15 @@ class UserModel extends User {
       role: json['role'] as String? ?? 'USER',
       hasCompany: json['hasCompany'] as bool? ?? (json['company'] != null),
       avatarUrl: json['avatarUrl'] as String?,
-      company: json['company'] != null ? CompanyModel.fromJson(json['company'] as Map<String, dynamic>) : null,
+      company: json['company'] != null
+          ? CompanyModel.fromJson(json['company'] as Map<String, dynamic>)
+          : null,
+      identification: json['identification'] as String?,
+      phone: json['phone'] as String?,
     );
   }
 
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -37,6 +44,8 @@ class UserModel extends User {
       'hasCompany': hasCompany,
       'avatarUrl': avatarUrl,
       'company': company != null ? (company as CompanyModel).toJson() : null,
+      'identification': identification,
+      'phone': phone,
     };
   }
 
@@ -50,6 +59,8 @@ class UserModel extends User {
     String? role,
     bool? hasCompany,
     Company? company,
+    String? identification,
+    String? phone,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -60,6 +71,8 @@ class UserModel extends User {
       role: role ?? this.role,
       hasCompany: hasCompany ?? this.hasCompany,
       company: company ?? this.company,
+      identification: identification ?? this.identification,
+      phone: phone ?? this.phone,
     );
   }
 }

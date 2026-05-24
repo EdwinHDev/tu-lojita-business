@@ -79,4 +79,12 @@ class AuthRepositoryImpl implements AuthRepository {
       return null;
     }
   }
+
+  @override
+  Future<User> updateProfile(String? identification, String? phone) async {
+    final data = await _remoteDataSource.updateProfile(identification, phone);
+    final user = UserModel.fromJson(data);
+    await _localDataSource.saveUser(user);
+    return user;
+  }
 }

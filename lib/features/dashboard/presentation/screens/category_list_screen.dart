@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:tu_lojita_business/core/utils/app_notification.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/store_details_notifier.dart';
 import '../providers/store_category_provider.dart';
 import '../providers/dashboard_providers.dart';
@@ -31,6 +31,7 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   int _offset = 0;
   int _total = 0;
   String _query = '';
+  bool _isSearchingLocal = false;
 
   @override
   void initState() {
@@ -57,13 +58,22 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   }
 
   void _onSearchChanged(String value) {
+    setState(() {
+      _isSearchingLocal = true;
+    });
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         setState(() {
           _query = value;
         });
-        _fetchNextPage(isRefresh: true);
+        _fetchNextPage(isRefresh: true).then((_) {
+          if (mounted) {
+            setState(() {
+              _isSearchingLocal = false;
+            });
+          }
+        });
       }
     });
   }
@@ -110,8 +120,9 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         setState(() {
           _isLoading = false;
           _isLoadingMore = false;
+          _isSearchingLocal = false;
         });
-        AppNotification.showError(context, e.toString());
+        NotificationService.showError(context, e.toString());
       }
     }
   }
@@ -119,43 +130,60 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: Text(
           _total > 0 ? 'Gestionar Categorías ($_total)' : 'Gestionar Categorías',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF111827)),
         ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF111827),
         elevation: 0,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(70),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 child: TextField(
                   controller: _searchController,
                   onChanged: _onSearchChanged,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
                   decoration: InputDecoration(
                     hintText: 'Buscar categorías...',
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF6B7280)),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Color(0xFF6B7280)),
-                            onPressed: () {
-                              _searchController.clear();
-                              _onSearchChanged('');
-                            },
+                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 20),
+                    suffixIcon: _isSearchingLocal
+                        ? const UnconstrainedBox(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF4F46E5),
+                              ),
+                            ),
                           )
-                        : null,
+                        : _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Color(0xFF6B7280), size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _onSearchChanged('');
+                                },
+                              )
+                            : null,
                     filled: true,
                     fillColor: const Color(0xFFF3F4F6),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFE0E7FF), width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                   ),
                 ),
               ),
@@ -165,214 +193,468 @@ class _CategoryListScreenState extends ConsumerState<CategoryListScreen> {
         ),
       ),
       body: _isLoading && _categories.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                await _fetchNextPage(isRefresh: true);
-              },
-              child: _categories.isEmpty
-                  ? _buildEmptyState(context, _query.isNotEmpty)
-                  : ListView.separated(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _categories.length + (_hasMore ? 1 : 0),
-                      separatorBuilder: (context, index) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        if (index == _categories.length) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-                        final category = _categories[index];
-                        return _buildCategoryCard(context, ref, category);
-                      },
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
+          : _categories.isEmpty
+              ? RefreshIndicator(
+                  color: const Color(0xFF4F46E5),
+                  onRefresh: () async {
+                    await _fetchNextPage(isRefresh: true);
+                  },
+                  child: _buildEmptyState(context, _query.isNotEmpty),
+                )
+              : Column(
+                  children: [
+                    Expanded(
+                      child: RefreshIndicator(
+                        color: const Color(0xFF4F46E5),
+                        onRefresh: () async {
+                          await _fetchNextPage(isRefresh: true);
+                        },
+                        child: ListView.separated(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _categories.length + (_hasMore ? 1 : 0),
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            if (index == _categories.length) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+                                ),
+                              );
+                            }
+                            final category = _categories[index];
+                            return _buildCategoryCard(context, ref, category);
+                          },
+                        ),
+                      ),
                     ),
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await context.push('/dashboard/stores/${widget.storeId}/categories/new');
-          if (result == true && context.mounted) {
-            AppNotification.showSuccess(context, 'Categoría creada exitosamente');
-            ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
-            _fetchNextPage(isRefresh: true);
-          }
-        },
-        backgroundColor: const Color(0xFF4F46E5),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Nueva Categoría', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final result = await context.push('/dashboard/stores/${widget.storeId}/categories/new');
+                              if (result == true && context.mounted) {
+                                NotificationService.showSuccess(context, 'Categoría creada exitosamente');
+                                ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+                                _fetchNextPage(isRefresh: true);
+                              }
+                            },
+                            icon: const HugeIcon(
+                              icon: HugeIcons.strokeRoundedAdd01,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            label: const Text(
+                              'Nueva Categoría',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context, bool hasQuery) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3F4F6),
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: const HugeIcon(
+                icon: HugeIcons.strokeRoundedTag01,
+                color: Color(0xFF4F46E5),
+                size: 44,
+              ),
             ),
-            child: const HugeIcon(
-              icon: HugeIcons.strokeRoundedTag01,
-              color: Colors.grey,
-              size: 48,
+            const SizedBox(height: 24),
+            Text(
+              hasQuery ? 'No se encontraron resultados' : 'No hay categorías aún',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF111827),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            hasQuery ? 'No se encontraron resultados' : 'No hay categorías aún',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
+            const SizedBox(height: 8),
+            Text(
+              hasQuery
+                  ? 'Prueba con una búsqueda diferente para encontrar lo que necesitas.'
+                  : 'Crea tu primera categoría para organizar tus productos y mejorar la experiencia de compra.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF6B7280), height: 1.4, fontSize: 14),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasQuery
-                ? 'Prueba con una búsqueda diferente.'
-                : 'Crea tu primera categoría para organizar\ntus productos.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF6B7280)),
-          ),
-        ],
+            if (!hasQuery) ...[
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final result = await context.push('/dashboard/stores/${widget.storeId}/categories/new');
+                  if (result == true && context.mounted) {
+                    NotificationService.showSuccess(context, 'Categoría creada exitosamente');
+                    ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+                    _fetchNextPage(isRefresh: true);
+                  }
+                },
+                icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                label: const Text('Crear Categoría', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCategoryCard(BuildContext context, WidgetRef ref, dynamic category) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCategoryActions(context, category),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const HugeIcon(
-              icon: HugeIcons.strokeRoundedTag01,
-              color: Color(0xFF4F46E5),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  category.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                if (category.description.isNotEmpty)
-                  Text(
-                    category.description,
-                    style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.grey),
-            onSelected: (value) async {
-              if (value == 'edit') {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CreateCategoryScreen(
-                      storeId: widget.storeId,
-                      categoryToEdit: category,
-                    ),
-                  ),
-                );
-                if (result == true && context.mounted) {
-                  AppNotification.showSuccess(context, 'Categoría actualizada exitosamente');
-                  ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
-                  _fetchNextPage(isRefresh: true);
-                }
-              } else if (value == 'delete') {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Eliminar Categoría'),
-                    content: const Text('¿Estás seguro de eliminar esta categoría? Se eliminará la configuración de plantillas de propiedades para la misma.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, true), 
-                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-                
-                if (confirm == true && context.mounted) {
-                  final success = await ref.read(storeCategoryProvider.notifier).deleteCategory(category.id);
-                  if (success && context.mounted) {
-                    AppNotification.showSuccess(context, 'Categoría eliminada exitosamente');
-                    ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
-                    _fetchNextPage(isRefresh: true);
-                  } else if (context.mounted) {
-                    final error = ref.read(storeCategoryProvider).errorMessage;
-                    if (error != null) {
-                      AppNotification.showError(context, error);
-                    }
-                  }
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_outlined, size: 20),
-                    SizedBox(width: 8),
-                    Text('Editar'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Eliminar', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.015),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-        ],
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedTag01,
+                  color: Color(0xFF4F46E5),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    if (category.description.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        category.description,
+                        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
+                onPressed: () => _showCategoryActions(context, category),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
+
+  void _showCategoryActions(BuildContext context, dynamic category) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  category.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (category.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    category.description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 24),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.edit_outlined, color: Color(0xFF4F46E5), size: 20),
+                  ),
+                  title: const Text(
+                    'Editar categoría',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _editCategory(category);
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
+                  ),
+                  title: Text(
+                    'Eliminar categoría',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Colors.red.shade600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _confirmDeleteCategory(category);
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editCategory(dynamic category) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateCategoryScreen(
+          storeId: widget.storeId,
+          categoryToEdit: category,
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      NotificationService.showSuccess(context, 'Categoría actualizada exitosamente');
+      ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+      _fetchNextPage(isRefresh: true);
+    }
+  }
+
+  Future<void> _confirmDeleteCategory(dynamic category) async {
+    final confirm = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Confirmar Eliminación',
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              contentPadding: const EdgeInsets.all(24),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red.shade600,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '¿Eliminar Categoría?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '¿Estás seguro de eliminar "${category.name}"? Se eliminará la configuración de plantillas de propiedades para la misma.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.grey.shade200),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            'Cancelar',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade600,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            'Eliminar',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirm == true && mounted) {
+      final success = await ref.read(storeCategoryProvider.notifier).deleteCategory(category.id);
+      if (success && mounted) {
+        NotificationService.showSuccess(context, 'Categoría eliminada exitosamente');
+        ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+        _fetchNextPage(isRefresh: true);
+      } else if (mounted) {
+        final error = ref.read(storeCategoryProvider).errorMessage;
+        if (error != null) {
+          NotificationService.showError(context, error);
+        }
+      }
+    }
+  }
 }
+

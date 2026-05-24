@@ -8,6 +8,7 @@ import 'package:tu_lojita_business/features/items/domain/entities/property_templ
 class ItemFormState {
   final List<File> selectedImages;
   final List<String> existingImages;
+  final List<String> deletedImages;
   final int primaryImageIndex;
   final Map<String, dynamic> attributes;
   final List<PropertyTemplate> availableTemplates;
@@ -30,10 +31,13 @@ class ItemFormState {
   final bool requiresBooking;
   final String? categoryId;
   final List<CustomizationGroup> customizationGroups;
+  final bool allowInstallments;
+  final double lateFeePercentage;
 
   const ItemFormState({
     this.selectedImages = const [],
     this.existingImages = const [],
+    this.deletedImages = const [],
     this.primaryImageIndex = 0,
     this.attributes = const {},
     this.availableTemplates = const [],
@@ -54,11 +58,14 @@ class ItemFormState {
     this.requiresBooking = false,
     this.categoryId,
     this.customizationGroups = const [],
+    this.allowInstallments = true,
+    this.lateFeePercentage = 0,
   });
 
   ItemFormState copyWith({
     List<File>? selectedImages,
     List<String>? existingImages,
+    List<String>? deletedImages,
     int? primaryImageIndex,
     Map<String, dynamic>? attributes,
     List<PropertyTemplate>? availableTemplates,
@@ -79,10 +86,13 @@ class ItemFormState {
     bool? requiresBooking,
     String? categoryId,
     List<CustomizationGroup>? customizationGroups,
+    bool? allowInstallments,
+    double? lateFeePercentage,
   }) {
     return ItemFormState(
       selectedImages: selectedImages ?? this.selectedImages,
       existingImages: existingImages ?? this.existingImages,
+      deletedImages: deletedImages ?? this.deletedImages,
       primaryImageIndex: primaryImageIndex ?? this.primaryImageIndex,
       attributes: attributes ?? this.attributes,
       availableTemplates: availableTemplates ?? this.availableTemplates,
@@ -103,6 +113,8 @@ class ItemFormState {
       requiresBooking: requiresBooking ?? this.requiresBooking,
       categoryId: categoryId ?? this.categoryId,
       customizationGroups: customizationGroups ?? this.customizationGroups,
+      allowInstallments: allowInstallments ?? this.allowInstallments,
+      lateFeePercentage: lateFeePercentage ?? this.lateFeePercentage,
     );
   }
 }
@@ -138,6 +150,8 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       existingImages: item.images,
       attributes: mappedAttributes,
       customizationGroups: item.customizationGroups,
+      allowInstallments: item.allowInstallments,
+      lateFeePercentage: item.lateFeePercentage,
     );
     if (item.categoryId != null) {
       loadCategoryTemplates(item.categoryId!);
@@ -154,6 +168,8 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onTrackInventoryChanged(bool value) => state = state.copyWith(trackInventory: value);
   void onStockQuantityChanged(double? value) => state = state.copyWith(stockQuantity: value);
   void onRequiresBookingChanged(bool value) => state = state.copyWith(requiresBooking: value);
+  void onAllowInstallmentsChanged(bool value) => state = state.copyWith(allowInstallments: value);
+  void onLateFeePercentageChanged(double value) => state = state.copyWith(lateFeePercentage: value);
   
   void onCategoryIdChanged(String? value) {
     state = state.copyWith(categoryId: value, attributes: {});
@@ -189,9 +205,13 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
 
   void removeImage(int index, {bool isExisting = false}) {
     if (isExisting) {
+      final imageUrl = state.existingImages[index];
       final newList = [...state.existingImages];
       newList.removeAt(index);
-      state = state.copyWith(existingImages: newList);
+      state = state.copyWith(
+        existingImages: newList,
+        deletedImages: [...state.deletedImages, imageUrl],
+      );
     } else {
       final newList = [...state.selectedImages];
       newList.removeAt(index);
@@ -268,6 +288,8 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
           'properties': properties,
         },
         'customizationGroups': state.customizationGroups.map((c) => c.toJson()).toList(),
+        'allowInstallments': state.allowInstallments,
+        'lateFeePercentage': state.lateFeePercentage,
         if (state.existingImages.isNotEmpty) 'existingImages': state.existingImages,
       };
 
@@ -278,6 +300,9 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
           newImages: validImages.isNotEmpty ? validImages : null,
           mainImageIndex: state.primaryImageIndex,
         );
+        if (state.deletedImages.isNotEmpty) {
+          repository.deleteImages(state.deletedImages);
+        }
       } else {
         await repository.createItem(
           itemData, 

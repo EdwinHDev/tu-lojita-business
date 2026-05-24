@@ -8,6 +8,7 @@ class Payment {
   final String paymentMethod;
   final String? reference;
   final String? receiptImage;
+  final DateTime createdAt;
 
   Payment({
     required this.id,
@@ -17,6 +18,7 @@ class Payment {
     required this.paymentMethod,
     this.reference,
     this.receiptImage,
+    required this.createdAt,
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) {
@@ -28,7 +30,27 @@ class Payment {
       paymentMethod: json['paymentMethod'] ?? '',
       reference: json['reference'] as String?,
       receiptImage: json['receiptImage'] as String?,
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
     );
+  }
+}
+
+extension PaymentX on Payment {
+  String get displayLabel {
+    switch (paymentMethod) {
+      case 'PAGO_MOVIL':
+        return 'Pago Móvil';
+      case 'TRANSFER':
+        return 'Transferencia Bancaria';
+      case 'BINANCE':
+        return 'Binance Pay';
+      case 'ZELLE':
+        return 'Zelle';
+      case 'CASH':
+        return 'Efectivo';
+      default:
+        return paymentMethod;
+    }
   }
 }
 
@@ -42,7 +64,9 @@ class Order {
   final List<OrderItem> orderItems;
   final Map<String, dynamic>? user;
   final List<Payment> payments;
-  final String? storeId; // Nuevo campo
+  final String? storeId;
+  final String? rejectionReason;
+  final List<Installment> installments;
 
   Order({
     required this.id,
@@ -56,6 +80,7 @@ class Order {
     this.payments = const [],
     this.storeId,
     this.rejectionReason,
+    this.installments = const [],
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -79,8 +104,36 @@ class Order {
           [],
       storeId: json['storeId'] ?? json['store']?['id'],
       rejectionReason: json['rejectionReason'] as String?,
+      installments: (json['installments'] as List<dynamic>?)
+              ?.map((e) => Installment.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
+}
 
-  final String? rejectionReason;
+class Installment {
+  final String id;
+  final double amount;
+  final DateTime dueDate;
+  final String status;
+  final Order? order;
+
+  Installment({
+    required this.id,
+    required this.amount,
+    required this.dueDate,
+    required this.status,
+    this.order,
+  });
+
+  factory Installment.fromJson(Map<String, dynamic> json) {
+    return Installment(
+      id: json['id'] ?? '',
+      amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : DateTime.now(),
+      status: json['status'] ?? 'PENDING',
+      order: json['order'] != null ? Order.fromJson(json['order']) : null,
+    );
+  }
 }

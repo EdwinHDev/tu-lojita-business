@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/features/auth/domain/repositories/auth_repository.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 
 class AuthNotifier extends Notifier<AuthState> {
   @override
@@ -20,11 +21,13 @@ class AuthNotifier extends Notifier<AuthState> {
       final user = await _repository.checkAuthStatus();
       if (user != null) {
         state = Authenticated(user);
+        ref.read(socketServiceProvider).init();
       } else {
         // Si falla el backend (ej: offline), intentamos con la sesión local
         final localUser = await _repository.getSession();
         if (localUser != null) {
           state = Authenticated(localUser);
+          ref.read(socketServiceProvider).init();
         } else {
           state = const Unauthenticated();
         }

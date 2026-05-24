@@ -54,6 +54,9 @@ class StoresNotifier extends Notifier<StoresState> {
     required String phone,
     required String description,
     required String subCategoryId,
+    required double latitude,
+    required double longitude,
+    required String timezone,
     Map<String, dynamic>? address,
   }) async {
     final authState = ref.read(authProvider);
@@ -69,6 +72,17 @@ class StoresNotifier extends Notifier<StoresState> {
     }
 
     try {
+      Map<String, dynamic>? mappedAddress;
+      if (address != null) {
+        mappedAddress = {
+          'address': address['street'] ?? address['address'] ?? '',
+          'city': address['city'] ?? '',
+          'state': address['state'] ?? '',
+          'latitude': latitude,
+          'longitude': longitude,
+        };
+      }
+
       final newStoreData = {
         'companyId': company.id,
         'name': branchName, // Primary name required by DTO
@@ -78,7 +92,8 @@ class StoresNotifier extends Notifier<StoresState> {
         'logo': company.logo, // Mandatory @MinLength(1)
         'description': description,
         'subCategoryId': subCategoryId,
-        'mainAddress': ?address,
+        'mainAddress': mappedAddress,
+        'timezone': timezone,
       };
 
       await _repository.createStore(newStoreData);

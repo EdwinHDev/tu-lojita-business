@@ -10,6 +10,7 @@ import '../providers/item_form_provider.dart';
 import '../providers/item_list_notifier.dart';
 import '../../../dashboard/presentation/providers/store_details_notifier.dart';
 import '../../../../core/config/envs.dart';
+import '../../../../core/utils/notification_service.dart';
 
 class ItemFormScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -114,23 +115,11 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
         ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
         context.pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Item guardado exitosamente'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        NotificationService.showSuccess(context, 'Item guardado exitosamente');
       }
       final error = next.errorMessage;
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        NotificationService.showError(context, error);
       }
     });
 
@@ -300,6 +289,31 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   activeThumbColor: const Color(0xFF4F46E5),
                   onChanged: (v) => notifier.onRequiresBookingChanged(v),
                 ),
+              ]),
+
+              const SizedBox(height: 24),
+              _buildSectionTitle('Pagos Parcelados'),
+              const SizedBox(height: 12),
+              _buildCard([
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Permitir pagos en cuotas', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text('El cliente podrá pagar este producto en partes', style: TextStyle(fontSize: 12)),
+                  value: state.allowInstallments,
+                  activeThumbColor: const Color(0xFF10B981),
+                  onChanged: (v) => notifier.onAllowInstallmentsChanged(v),
+                ),
+                if (state.allowInstallments) ...[
+                  const Divider(height: 24),
+                  _buildTextField(
+                    initialValue: state.lateFeePercentage == 0 ? '' : state.lateFeePercentage.toString(),
+                    label: 'Porcentaje de multa por retraso',
+                    hint: 'Ej. 5.0',
+                    keyboardType: TextInputType.number,
+                    prefix: const Icon(Icons.percent, size: 16, color: Color(0xFF64748B)),
+                    onChanged: (v) => notifier.onLateFeePercentageChanged(double.tryParse(v) ?? 0),
+                  ),
+                ],
               ]),
 
               const SizedBox(height: 24),

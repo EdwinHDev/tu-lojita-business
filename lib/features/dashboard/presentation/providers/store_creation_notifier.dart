@@ -17,6 +17,9 @@ class StoreCreationState {
   final String searchQuery;
   final bool isLoading;
   final String? errorMessage;
+  final double latitude;
+  final double longitude;
+  final String timezone;
 
   StoreCreationState({
     this.currentStep = 0,
@@ -32,6 +35,9 @@ class StoreCreationState {
     this.searchQuery = '',
     this.isLoading = false,
     this.errorMessage,
+    this.latitude = 10.4806,
+    this.longitude = -66.9036,
+    this.timezone = 'America/Caracas',
   });
 
   StoreCreationState copyWith({
@@ -48,6 +54,9 @@ class StoreCreationState {
     String? searchQuery,
     bool? isLoading,
     String? Function()? errorMessage,
+    double? latitude,
+    double? longitude,
+    String? timezone,
   }) {
     return StoreCreationState(
       currentStep: currentStep ?? this.currentStep,
@@ -63,6 +72,9 @@ class StoreCreationState {
       searchQuery: searchQuery ?? this.searchQuery,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      timezone: timezone ?? this.timezone,
     );
   }
 }
@@ -88,6 +100,8 @@ class StoreCreationNotifier extends Notifier<StoreCreationState> {
   void updateStreet(String value) => state = state.copyWith(street: value);
   void updateCity(String value) => state = state.copyWith(city: value);
   void updateState(String value) => state = state.copyWith(addressState: value);
+  void updateCoordinates(double lat, double lng) => state = state.copyWith(latitude: lat, longitude: lng);
+  void updateTimezone(String value) => state = state.copyWith(timezone: value);
   
   void updateCategory(String id) {
     if (state.categoryId == id) {

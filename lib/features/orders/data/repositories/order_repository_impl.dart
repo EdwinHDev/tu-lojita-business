@@ -66,4 +66,20 @@ class OrderRepositoryImpl implements OrderRepository {
       throw ServerException(e.toString());
     }
   }
+
+  @override
+  Future<List<Installment>> getStoreInstallments(String storeId) async {
+    try {
+      final response = await dio.get('/order/store/$storeId/installments');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        return data.map((json) => Installment.fromJson(json)).toList();
+      } else {
+        throw ServerException('Error al cargar las cuotas de la tienda');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
 }

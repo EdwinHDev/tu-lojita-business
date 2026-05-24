@@ -9,6 +9,8 @@ class User {
   final String role;
   final bool hasCompany;
   final Company? company;
+  final String? identification;
+  final String? phone;
 
   const User({
     required this.id,
@@ -19,6 +21,8 @@ class User {
     this.hasCompany = false,
     this.avatarUrl,
     this.company,
+    this.identification,
+    this.phone,
   });
 
   String get fullName => '$firstName $lastName';
@@ -32,6 +36,8 @@ class User {
     String? role,
     bool? hasCompany,
     Company? company,
+    String? identification,
+    String? phone,
   }) {
     return User(
       id: id ?? this.id,
@@ -42,6 +48,22 @@ class User {
       role: role ?? this.role,
       hasCompany: hasCompany ?? this.hasCompany,
       company: company ?? this.company,
+      identification: identification ?? this.identification,
+      phone: phone ?? this.phone,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'firstName': firstName,
+      'lastName': lastName,
+      'avatarUrl': avatarUrl,
+      'role': role,
+      'hasCompany': hasCompany,
+      'identification': identification,
+      'phone': phone,
+    };
   }
 }

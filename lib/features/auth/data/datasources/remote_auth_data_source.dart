@@ -11,6 +11,7 @@ abstract class RemoteAuthDataSource {
   Future<Map<String, dynamic>> checkHasCompany();
   Future<Map<String, dynamic>> checkHasStore();
   Future<Map<String, dynamic>> checkAuthStatus();
+  Future<Map<String, dynamic>> updateProfile(String? identification, String? phone);
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
@@ -93,6 +94,22 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
   Future<Map<String, dynamic>> checkAuthStatus() async {
     try {
       final response = await _dio.get('/auth/check-status');
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw AuthException(ErrorParser.parse(e));
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateProfile(String? identification, String? phone) async {
+    try {
+      final response = await _dio.patch(
+        '/users/profile',
+        data: <String, dynamic>{
+          'identification': identification,
+          'phone': phone,
+        }..removeWhere((key, value) => value == null),
+      );
       return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw AuthException(ErrorParser.parse(e));

@@ -27,6 +27,8 @@ class Item extends Equatable {
   final Map<String, dynamic>? attributes;
   final String? categoryId;
   final List<CustomizationGroup> customizationGroups;
+  final bool allowInstallments;
+  final double lateFeePercentage;
 
   const Item({
     required this.id,
@@ -45,6 +47,8 @@ class Item extends Equatable {
     this.attributes,
     this.categoryId,
     this.customizationGroups = const [],
+    this.allowInstallments = true,
+    this.lateFeePercentage = 0,
   });
 
   @override
@@ -65,6 +69,8 @@ class Item extends Equatable {
         attributes,
         categoryId,
         customizationGroups,
+        allowInstallments,
+        lateFeePercentage,
       ];
 }
 

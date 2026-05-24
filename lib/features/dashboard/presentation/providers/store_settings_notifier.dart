@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/data/datasources/image_remote_data_source.dart';
+import '../../domain/entities/store.dart';
 import '../../domain/repositories/stores_repository.dart';
 import 'dashboard_providers.dart';
 import 'store_details_notifier.dart';
@@ -31,6 +32,11 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         feePercentage: store.partialPaymentsFeePercentage,
         minInitialPercentage: store.minInitialPaymentPercentage,
         maxInstallments: store.maxInstallments,
+        allowChat: store.allowChat,
+        installmentIntervalValue: store.installmentIntervalValue,
+        installmentIntervalUnit: store.installmentIntervalUnit,
+        installmentFrequencyOptions: store.installmentFrequencyOptions,
+        timezone: store.timezone,
       );
     } catch (e) {
       if (!ref.mounted) return;
@@ -54,6 +60,35 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
     state = state.copyWith(maxInstallments: value);
   }
 
+  void updateAllowChat(bool value) {
+    state = state.copyWith(allowChat: value);
+  }
+
+  void updateTimezone(String value) {
+    state = state.copyWith(timezone: value);
+  }
+
+  void updateInstallmentInterval(int value, String unit) {
+    state = state.copyWith(
+      installmentIntervalValue: value,
+      installmentIntervalUnit: unit,
+    );
+  }
+
+  void toggleFrequencyOption(int value, String unit, String label) {
+    final options = List<StoreInstallmentFrequency>.from(state.installmentFrequencyOptions);
+    final existingIndex = options.indexWhere((opt) => opt.value == value && opt.unit == unit);
+
+    if (existingIndex >= 0) {
+      options.removeAt(existingIndex);
+    } else {
+      options.add(
+          StoreInstallmentFrequency(value: value, unit: unit, label: label));
+    }
+
+    state = state.copyWith(installmentFrequencyOptions: options);
+  }
+
   Future<void> pickBanner() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
@@ -66,25 +101,39 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
     }
   }
 
-  Future<bool> saveSettings(String storeId) async {
+  Future<bool> saveSettings(String storeId, {Map<String, dynamic>? specificData}) async {
+    final oldCoverImageUrl = state.store?.coverImage;
+    final wasBannerChanged = state.bannerFile != null;
+
     state = state.copyWith(isSaving: true, error: null);
     try {
-      String? coverImageUrl = state.store?.coverImage;
+      Map<String, dynamic> updateData;
 
-      // 1. Upload banner if changed
-      if (state.bannerFile != null) {
-        coverImageUrl = await _imageDataSource.uploadImage(state.bannerFile!);
-        if (!ref.mounted) return true;
+      if (specificData != null) {
+        updateData = specificData;
+      } else {
+        String? coverImageUrl = state.store?.coverImage;
+
+        // 1. Upload banner if changed
+        if (state.bannerFile != null) {
+          coverImageUrl = await _imageDataSource.uploadImage(state.bannerFile!);
+          if (!ref.mounted) return true;
+        }
+
+        // 2. Default full update
+        updateData = {
+          'coverImage': coverImageUrl,
+          'allowPartialPayments': state.allowPartialPayments,
+          'partialPaymentsFeePercentage': state.feePercentage,
+          'minInitialPaymentPercentage': state.minInitialPercentage,
+          'maxInstallments': state.maxInstallments,
+          'allowChat': state.allowChat,
+          'installmentIntervalValue': state.installmentIntervalValue,
+          'installmentIntervalUnit': state.installmentIntervalUnit,
+          'installmentFrequencyOptions': state.installmentFrequencyOptions.map((e) => e.toJson()).toList(),
+          'timezone': state.timezone,
+        };
       }
-
-      // 2. Update store in backend
-      final updateData = {
-        'coverImage': coverImageUrl,
-        'allowPartialPayments': state.allowPartialPayments,
-        'partialPaymentsFeePercentage': state.feePercentage,
-        'minInitialPaymentPercentage': state.minInitialPercentage,
-        'maxInstallments': state.maxInstallments,
-      };
 
       final updatedStore = await _repository.updateStore(storeId, updateData);
       
@@ -96,9 +145,15 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       state = state.copyWith(
         isSaving: false, 
         store: updatedStore,
-        bannerFile: null, // Clear local file after success
+        clearBannerFile: true, // Clear local file after success
         successMessage: 'Configuraciones guardadas correctamente',
       );
+
+      // Clean up old cover image if it was replaced
+      if (wasBannerChanged && oldCoverImageUrl != null && oldCoverImageUrl.isNotEmpty) {
+        _imageDataSource.deleteImage(oldCoverImageUrl);
+      }
+
       return true;
     } catch (e) {
       if (!ref.mounted) return false;

@@ -8,4 +8,5 @@ abstract class AuthRepository {
   Future<Map<String, dynamic>> checkStoreStatus();
   Future<void> saveUser(User user);
   Future<User?> checkAuthStatus();
+  Future<User> updateProfile(String? identification, String? phone);
 }

@@ -28,3 +28,17 @@ final itemRepositoryProvider = Provider<ItemRepository>((ref) {
   final dio = ref.watch(dioProvider);
   return ItemRepositoryImpl(dio);
 });
+
+class DashboardIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  @override
+  set state(int value) => super.state = value;
+}
+
+final dashboardIndexProvider = NotifierProvider<DashboardIndexNotifier, int>(() {
+  return DashboardIndexNotifier();
+});
+
+
