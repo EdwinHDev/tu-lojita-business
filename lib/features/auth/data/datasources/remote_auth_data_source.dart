@@ -47,7 +47,10 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
     try {
       final response = await _dio.post(
         '/auth/google',
-        data: {'token': idToken},
+        data: {
+          'token': idToken,
+          'appOrigin': 'BUSINESS',
+        },
       );
 
       return response.data as Map<String, dynamic>;

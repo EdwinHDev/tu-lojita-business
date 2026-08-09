@@ -61,6 +61,10 @@ class Store {
   final String installmentIntervalUnit;
   final List<StoreInstallmentFrequency> installmentFrequencyOptions;
 
+  final bool allowInstallmentExtensions;
+  final int maxExtensionDays;
+  final double? maxCreditLimit;
+
   const Store({
     required this.id,
     required this.name,
@@ -83,6 +87,9 @@ class Store {
     this.installmentIntervalValue = 7,
     this.installmentIntervalUnit = 'DAYS',
     this.installmentFrequencyOptions = const [],
+    this.allowInstallmentExtensions = false,
+    this.maxExtensionDays = 7,
+    this.maxCreditLimit,
   });
 
   String get displayName => branchName != null && branchName!.isNotEmpty 
@@ -111,6 +118,9 @@ class Store {
     int? installmentIntervalValue,
     String? installmentIntervalUnit,
     List<StoreInstallmentFrequency>? installmentFrequencyOptions,
+    bool? allowInstallmentExtensions,
+    int? maxExtensionDays,
+    double? maxCreditLimit,
   }) {
     return Store(
       id: id ?? this.id,
@@ -134,6 +144,9 @@ class Store {
       installmentIntervalValue: installmentIntervalValue ?? this.installmentIntervalValue,
       installmentIntervalUnit: installmentIntervalUnit ?? this.installmentIntervalUnit,
       installmentFrequencyOptions: installmentFrequencyOptions ?? this.installmentFrequencyOptions,
+      allowInstallmentExtensions: allowInstallmentExtensions ?? this.allowInstallmentExtensions,
+      maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
+      maxCreditLimit: maxCreditLimit ?? this.maxCreditLimit,
     );
   }
 }

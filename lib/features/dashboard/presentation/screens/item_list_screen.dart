@@ -6,6 +6,7 @@ import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
 import 'dart:async';
 
@@ -467,13 +468,57 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      item.itemType == ItemType.product ? 'Producto' : 'Servicio',
-                      style: const TextStyle(
-                        color: Color(0xFF4F46E5),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          item.itemType == ItemType.product ? 'Producto' : 'Servicio',
+                          style: const TextStyle(
+                            color: Color(0xFF4F46E5),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (!item.isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFCA5A5)),
+                            ),
+                            child: const Text(
+                              '🔴 Despublicado',
+                              style: TextStyle(color: Color(0xFFDC2626), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          )
+                        else if (item.trackInventory && (item.stockQuantity == null || item.stockQuantity! <= 0))
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFCD34D)),
+                            ),
+                            child: const Text(
+                              '⚠️ Agotado',
+                              style: TextStyle(color: Color(0xFFD97706), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF6EE7B7)),
+                            ),
+                            child: const Text(
+                              '🟢 Publicado',
+                              style: TextStyle(color: Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -548,6 +593,38 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
+                      color: item.isActive
+                          ? const Color(0xFFFFFBEB)
+                          : const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      item.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: item.isActive ? const Color(0xFFD97706) : const Color(0xFF059669),
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    item.isActive ? 'Despublicar producto' : 'Publicar producto',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: item.isActive ? const Color(0xFFD97706) : const Color(0xFF059669),
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _togglePublishItem(item);
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
                       color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -601,6 +678,22 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
         );
       },
     );
+  }
+
+  Future<void> _togglePublishItem(Item item) async {
+    try {
+      final repository = ref.read(itemRepositoryProvider);
+      await repository.updateItem(item.id, {'isActive': !item.isActive});
+      if (mounted) {
+        ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cambiar estado: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _editItem(Item item) async {

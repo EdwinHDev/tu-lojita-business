@@ -11,6 +11,7 @@ import '../providers/item_list_notifier.dart';
 import '../../../dashboard/presentation/providers/store_details_notifier.dart';
 import '../../../../core/config/envs.dart';
 import '../../../../core/utils/notification_service.dart';
+import '../../../dashboard/presentation/widgets/create_store_category_modal.dart';
 
 class ItemFormScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -183,18 +184,51 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   onChanged: (v) => notifier.onItemTypeChanged(v!),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('${state.itemId ?? "new"}_categoryId'),
-                  initialValue: state.categoryId,
-                  decoration: _inputDecoration('Categoría de la tienda'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Sin categoría')),
-                    ...storeState.categories.map((e) => DropdownMenuItem(
-                      value: e.id, 
-                      child: Text(e.name),
-                    )),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey('${state.itemId ?? "new"}_categoryId'),
+                        initialValue: state.categoryId,
+                        decoration: _inputDecoration('Categoría de la tienda'),
+                        isExpanded: true,
+                        items: storeState.categories.map((e) => DropdownMenuItem(
+                          value: e.id, 
+                          child: Text(e.name, overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                        onChanged: (v) => notifier.onCategoryIdChanged(v),
+                        validator: (v) => v == null ? 'Categoría requerida' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      height: 52,
+                      margin: const EdgeInsets.only(top: 2),
+                      child: TextButton.icon(
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => CreateStoreCategoryModal(
+                              storeId: widget.storeId,
+                              onSuccess: () {
+                                ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+                              },
+                            ),
+                          );
+                        },
+                        icon: const HugeIcon(icon: HugeIcons.strokeRoundedAdd01, size: 20, color: Color(0xFF4F46E5)),
+                        label: const Text('Nueva', style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold)),
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                      ),
+                    ),
                   ],
-                  onChanged: (v) => notifier.onCategoryIdChanged(v),
                 ),
               ]),
 
@@ -274,6 +308,15 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
               _buildCard([
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Producto Publicado', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text('Visible públicamente para los clientes en la app', style: TextStyle(fontSize: 12)),
+                  value: state.isActive,
+                  activeThumbColor: const Color(0xFF10B981),
+                  onChanged: (v) => notifier.onIsActiveChanged(v),
+                ),
+                const Divider(height: 24),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Producto Destacado', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   subtitle: const Text('Aparecerá en las primeras secciones de la tienda', style: TextStyle(fontSize: 12)),
                   value: state.isFeatured,
@@ -301,7 +344,13 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   subtitle: const Text('El cliente podrá pagar este producto en partes', style: TextStyle(fontSize: 12)),
                   value: state.allowInstallments,
                   activeThumbColor: const Color(0xFF10B981),
-                  onChanged: (v) => notifier.onAllowInstallmentsChanged(v),
+                  onChanged: (v) {
+                    if (v && storeState.store != null && !storeState.store!.allowPartialPayments) {
+                      NotificationService.showError(context, 'Debes habilitar los pagos parciales en la configuración de la tienda primero.');
+                      return;
+                    }
+                    notifier.onAllowInstallmentsChanged(v);
+                  },
                 ),
                 if (state.allowInstallments) ...[
                   const Divider(height: 24),
@@ -838,14 +887,15 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
       ] else ...[
         ...state.customizationGroups.map((group) {
           return Container(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: ExpansionTile(
               initiallyExpanded: true,
+              shape: const Border(),
               title: Text(
                 group.name.toUpperCase(),
                 style: const TextStyle(
@@ -861,227 +911,344 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                 onPressed: () {
-                  final newList = state.customizationGroups.where((g) => g.id != group.id).toList();
-                  ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Eliminar Grupo'),
+                      content: Text('¿Estás seguro de que deseas eliminar el grupo "${group.name}"?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('CANCELAR'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            final newList = state.customizationGroups.where((g) => g.id != group.id).toList();
+                            ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                          },
+                          child: const Text('ELIMINAR', style: TextStyle(color: Colors.redAccent)),
+                        ),
+                      ],
+                    ),
+                  );
                 },
               ),
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(12.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildInlineTextField(
-                                      key: ValueKey('${state.itemId ?? "new"}_${group.id}_name'),
-                                      initialValue: group.name,
-                                      label: 'Nombre del grupo',
-                                      onChanged: (val) {
-                                        final newList = state.customizationGroups.map((g) {
-                                          if (g.id == group.id) {
-                                            return CustomizationGroup(
-                                              id: g.id,
-                                              name: val.trim(),
-                                              minSelect: g.minSelect,
-                                              maxSelect: g.maxSelect,
-                                              allowOptionQuantity: g.allowOptionQuantity,
-                                              options: g.options,
-                                            );
-                                          }
-                                          return g;
-                                        }).toList();
-                                        ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Text(
-                                    '¿Es obligatorio?',
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF475569)),
-                                  ),
-                                  const Spacer(),
-                                  Switch.adaptive(
-                                    value: group.minSelect > 0,
-                                    activeThumbColor: const Color(0xFF10B981),
-                                    activeTrackColor: const Color(0xFF10B981).withValues(alpha: 0.5),
-                                    onChanged: (val) {
-                                      final newList = state.customizationGroups.map((g) {
-                                        if (g.id == group.id) {
-                                          return CustomizationGroup(
-                                            id: g.id,
-                                            name: g.name,
-                                            minSelect: val ? (g.minSelect > 0 ? g.minSelect : 1) : 0,
-                                            maxSelect: g.maxSelect,
-                                            allowOptionQuantity: g.allowOptionQuantity,
-                                            options: g.options,
-                                          );
-                                        }
-                                        return g;
-                                      }).toList();
-                                      ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2, bottom: 12),
-                                child: Text(
-                                  'Si se marca, el cliente debe elegir al menos una opción antes de añadir al carrito.',
-                                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Cantidades por opción',
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF475569)),
-                                  ),
-                                  const Spacer(),
-                                  Switch.adaptive(
-                                    value: group.allowOptionQuantity,
-                                    activeThumbColor: const Color(0xFF4F46E5),
-                                    activeTrackColor: const Color(0xFF4F46E5).withValues(alpha: 0.5),
-                                    onChanged: (val) {
-                                      final newList = state.customizationGroups.map((g) {
-                                        if (g.id == group.id) {
-                                          return CustomizationGroup(
-                                            id: g.id,
-                                            name: g.name,
-                                            minSelect: g.minSelect,
-                                            maxSelect: g.maxSelect,
-                                            allowOptionQuantity: val,
-                                            options: g.options,
-                                          );
-                                        }
-                                        return g;
-                                      }).toList();
-                                      ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2, bottom: 12),
-                                child: Text(
-                                  'Permite al cliente seleccionar cantidades de cada opción individualmente (ej. +2 unidades de un extra).',
-                                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildInlineTextField(
-                                      key: ValueKey('${state.itemId ?? "new"}_${group.id}_minSelect'),
-                                      initialValue: group.minSelect.toString(),
-                                      label: 'Mín. Selecciones',
-                                      keyboardType: TextInputType.number,
-                                      onChanged: (val) {
-                                        final numVal = int.tryParse(val) ?? 0;
-                                        final newList = state.customizationGroups.map((g) {
-                                          if (g.id == group.id) {
-                                            return CustomizationGroup(
-                                              id: g.id,
-                                              name: g.name,
-                                              minSelect: numVal,
-                                              maxSelect: g.maxSelect,
-                                              allowOptionQuantity: g.allowOptionQuantity,
-                                              options: g.options,
-                                            );
-                                          }
-                                          return g;
-                                        }).toList();
-                                        ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildInlineTextField(
-                                      key: ValueKey('${state.itemId ?? "new"}_${group.id}_maxSelect'),
-                                      initialValue: group.maxSelect.toString(),
-                                      label: 'Máx. Selecciones',
-                                      keyboardType: TextInputType.number,
-                                      onChanged: (val) {
-                                        final numVal = int.tryParse(val) ?? 0;
-                                        final newList = state.customizationGroups.map((g) {
-                                          if (g.id == group.id) {
-                                            return CustomizationGroup(
-                                              id: g.id,
-                                              name: g.name,
-                                              minSelect: g.minSelect,
-                                              maxSelect: numVal,
-                                              allowOptionQuantity: g.allowOptionQuantity,
-                                              options: g.options,
-                                            );
-                                          }
-                                          return g;
-                                        }).toList();
-                                        ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      const SizedBox(height: 16),
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'OPCIONES DEL GRUPO',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInlineTextField(
+                              key: ValueKey('${state.itemId ?? "new"}_${group.id}_name'),
+                              initialValue: group.name,
+                              label: 'Nombre del grupo de personalización',
+                              onChanged: (val) {
+                                final newList = state.customizationGroups.map((g) {
+                                  if (g.id == group.id) {
+                                    return CustomizationGroup(
+                                      id: g.id,
+                                      name: val.trim(),
+                                      minSelect: g.minSelect,
+                                      maxSelect: g.maxSelect,
+                                      options: g.options,
+                                    );
+                                  }
+                                  return g;
+                                }).toList();
+                                ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.stars_outlined, size: 18, color: Color(0xFF4F46E5)),
+                          const SizedBox(width: 8),
+                          const Text(
+                            '¿Es obligatorio?',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          ),
+                          const Spacer(),
+                          Switch.adaptive(
+                            value: group.minSelect > 0,
+                            activeThumbColor: const Color(0xFF4F46E5),
+                            onChanged: (val) {
+                              final newList = state.customizationGroups.map((g) {
+                                if (g.id == group.id) {
+                                  return CustomizationGroup(
+                                    id: g.id,
+                                    name: g.name,
+                                    minSelect: val ? (g.minSelect > 0 ? g.minSelect : 1) : 0,
+                                    maxSelect: g.maxSelect,
+                                    options: g.options,
+                                  );
+                                }
+                                return g;
+                              }).toList();
+                              ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                            },
+                          ),
+                        ],
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2, bottom: 12),
+                        child: Text(
+                          'Si se marca, el cliente debe elegir al menos una opción obligatoria de este grupo.',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      ...group.options.map((opt) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6.0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(opt.name, style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B))),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  opt.price > 0 ? '\$${opt.price.toStringAsFixed(2)}' : 'Incluido',
-                                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
-                                  textAlign: TextAlign.end,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInlineTextField(
+                              key: ValueKey('${state.itemId ?? "new"}_${group.id}_minSelect'),
+                              initialValue: group.minSelect.toString(),
+                              label: 'Mín. Selecciones Totales',
+                              keyboardType: TextInputType.number,
+                              onChanged: (val) {
+                                final numVal = int.tryParse(val) ?? 0;
+                                final newList = state.customizationGroups.map((g) {
+                                  if (g.id == group.id) {
+                                    return CustomizationGroup(
+                                      id: g.id,
+                                      name: g.name,
+                                      minSelect: numVal,
+                                      maxSelect: g.maxSelect,
+                                      options: g.options,
+                                    );
+                                  }
+                                  return g;
+                                }).toList();
+                                ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildInlineTextField(
+                              key: ValueKey('${state.itemId ?? "new"}_${group.id}_maxSelect'),
+                              initialValue: group.maxSelect.toString(),
+                              label: 'Máx. Selecciones Totales',
+                              keyboardType: TextInputType.number,
+                              onChanged: (val) {
+                                final numVal = int.tryParse(val) ?? 0;
+                                final newList = state.customizationGroups.map((g) {
+                                  if (g.id == group.id) {
+                                    return CustomizationGroup(
+                                      id: g.id,
+                                      name: g.name,
+                                      minSelect: g.minSelect,
+                                      maxSelect: numVal,
+                                      options: g.options,
+                                    );
+                                  }
+                                  return g;
+                                }).toList();
+                                ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.list_alt_rounded, size: 16, color: Color(0xFF475569)),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'OPCIONES DEL GRUPO',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (group.options.isEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'No hay opciones añadidas a este grupo aún.',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ] else ...[
+                        ...group.options.map((opt) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                  ),
+                                  builder: (context) => _OptionFormBottomSheet(
+                                    group: group,
+                                    option: opt,
+                                    state: state,
+                                    ref: ref,
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                        color: Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            opt.name,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF1E293B),
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'Mín: ${opt.minQuantity} | Máx: ${opt.maxQuantity}',
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF475569),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: opt.price > 0
+                                            ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        opt.price > 0 ? '\$${opt.price.toStringAsFixed(2)}' : 'Incluido',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: opt.price > 0 ? const Color(0xFF047857) : const Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Eliminar Opción'),
+                                            content: Text('¿Estás seguro de que deseas eliminar la opción "${opt.name}"?'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context),
+                                                child: const Text('CANCELAR'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                  final newList = state.customizationGroups.map((g) {
+                                                    if (g.id == group.id) {
+                                                      return CustomizationGroup(
+                                                        id: g.id,
+                                                        name: g.name,
+                                                        minSelect: g.minSelect,
+                                                        maxSelect: g.maxSelect,
+                                                        options: g.options.where((o) => o.id != opt.id).toList(),
+                                                      );
+                                                    }
+                                                    return g;
+                                                  }).toList();
+                                                  ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+                                                },
+                                                child: const Text('ELIMINAR', style: TextStyle(color: Colors.redAccent)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.redAccent),
-                                constraints: const BoxConstraints(),
-                                padding: EdgeInsets.zero,
-                                onPressed: () {
-                                  final newList = state.customizationGroups.map((g) {
-                                    if (g.id == group.id) {
-                                      return CustomizationGroup(
-                                        id: g.id,
-                                        name: g.name,
-                                        minSelect: g.minSelect,
-                                        maxSelect: g.maxSelect,
-                                        allowOptionQuantity: g.allowOptionQuantity,
-                                        options: g.options.where((o) => o.id != opt.id).toList(),
-                                      );
-                                    }
-                                    return g;
-                                  }).toList();
-                                  ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-                                },
+                            ),
+                          );
+                        }),
+                      ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                               ),
-                            ],
+                              builder: (context) => _OptionFormBottomSheet(
+                                group: group,
+                                state: state,
+                                ref: ref,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Agregar Opción'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4F46E5),
+                            side: const BorderSide(color: Color(0xFF4F46E5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                        );
-                      }),
-                      const SizedBox(height: 12),
-                      _AddOptionRow(group: group, state: state, ref: ref),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1103,7 +1270,6 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                 name: 'Nueva Personalización',
                 minSelect: 0,
                 maxSelect: 0,
-                allowOptionQuantity: true,
                 options: const [],
               ),
             ];
@@ -1149,109 +1315,325 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   }
 }
 
-class _AddOptionRow extends StatefulWidget {
+class _OptionFormBottomSheet extends StatefulWidget {
   final CustomizationGroup group;
+  final CustomizationOption? option;
   final ItemFormState state;
   final WidgetRef ref;
 
-  const _AddOptionRow({
+  const _OptionFormBottomSheet({
     required this.group,
+    this.option,
     required this.state,
     required this.ref,
   });
 
   @override
-  State<_AddOptionRow> createState() => _AddOptionRowState();
+  State<_OptionFormBottomSheet> createState() => _OptionFormBottomSheetState();
 }
 
-class _AddOptionRowState extends State<_AddOptionRow> {
+class _OptionFormBottomSheetState extends State<_OptionFormBottomSheet> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
+  late final TextEditingController _minQtyCtrl;
+  late final TextEditingController _maxQtyCtrl;
+  late final TextEditingController _defaultQtyCtrl;
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController();
-    _priceCtrl = TextEditingController();
+    _nameCtrl = TextEditingController(text: widget.option?.name ?? '');
+    _priceCtrl = TextEditingController(
+        text: widget.option != null && widget.option!.price > 0 ? widget.option!.price.toStringAsFixed(2) : '');
+    _minQtyCtrl = TextEditingController(
+        text: widget.option != null ? widget.option!.minQuantity.toString() : '0');
+    _maxQtyCtrl = TextEditingController(
+        text: widget.option != null ? widget.option!.maxQuantity.toString() : '1');
+    _defaultQtyCtrl = TextEditingController(
+        text: widget.option != null ? widget.option!.defaultQuantity.toString() : '0');
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _priceCtrl.dispose();
+    _minQtyCtrl.dispose();
+    _maxQtyCtrl.dispose();
+    _defaultQtyCtrl.dispose();
     super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final price = double.tryParse(_priceCtrl.text) ?? 0.0;
+    final minQty = int.tryParse(_minQtyCtrl.text) ?? 0;
+    final maxQty = int.tryParse(_maxQtyCtrl.text) ?? 1;
+    final defaultQty = int.tryParse(_defaultQtyCtrl.text) ?? 0;
+
+    final CustomizationOption finalOption;
+    if (widget.option != null) {
+      finalOption = CustomizationOption(
+        id: widget.option!.id,
+        name: _nameCtrl.text.trim(),
+        price: price,
+        minQuantity: minQty,
+        maxQuantity: maxQty,
+        defaultQuantity: defaultQty,
+      );
+    } else {
+      finalOption = CustomizationOption(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: _nameCtrl.text.trim(),
+        price: price,
+        minQuantity: minQty,
+        maxQuantity: maxQty,
+        defaultQuantity: defaultQty,
+      );
+    }
+
+    final newList = widget.state.customizationGroups.map((g) {
+      if (g.id == widget.group.id) {
+        final List<CustomizationOption> newOptions = [...g.options];
+        if (widget.option != null) {
+          final idx = newOptions.indexWhere((o) => o.id == widget.option!.id);
+          if (idx >= 0) {
+            newOptions[idx] = finalOption;
+          }
+        } else {
+          newOptions.add(finalOption);
+        }
+        return CustomizationGroup(
+          id: g.id,
+          name: g.name,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: newOptions,
+        );
+      }
+      return g;
+    }).toList();
+
+    widget.ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextFormField(
-            controller: _nameCtrl,
-            decoration: InputDecoration(
-              hintText: 'Ej. Mermelada fresa',
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.2)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            ),
-            style: const TextStyle(fontSize: 12),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        24,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.option != null ? 'Editar Opción' : 'Nueva Opción',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _nameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Nombre de la opción',
+                  hintText: 'Ej. Queso Cheddar Extra',
+                  labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                  ),
+                ),
+                style: const TextStyle(fontSize: 14),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'El nombre es obligatorio';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _priceCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Precio adicional (\$)',
+                  hintText: '0.00 (Dejar en blanco si es gratis)',
+                  labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                  ),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              const Row(
+                children: [
+                  Icon(Icons.tune, size: 16, color: Color(0xFF4F46E5)),
+                  SizedBox(width: 8),
+                  Text(
+                    'LÍMITES DE CANTIDAD POR ARTÍCULO',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF475569),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _minQtyCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Cantidad Mínima',
+                        hintText: '0',
+                        labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _maxQtyCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Cantidad Máxima',
+                        hintText: '1',
+                        labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _defaultQtyCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Cantidad por Defecto (Incluida en precio base)',
+                  hintText: '0 (Por ejemplo: 1 para indicar que ya viene preseleccionada)',
+                  labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                  ),
+                ),
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    widget.option != null ? 'GUARDAR CAMBIOS' : 'AGREGAR OPCIÓN',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 2,
-          child: TextFormField(
-            controller: _priceCtrl,
-            decoration: InputDecoration(
-              hintText: '\$ 0.00',
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.2)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            ),
-            keyboardType: TextInputType.number,
-            style: const TextStyle(fontSize: 12),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton.filled(
-          onPressed: () {
-            if (_nameCtrl.text.trim().isEmpty) return;
-            final priceNum = double.tryParse(_priceCtrl.text) ?? 0.0;
-            final optId = DateTime.now().millisecondsSinceEpoch.toString();
-            final newList = widget.state.customizationGroups.map((g) {
-              if (g.id == widget.group.id) {
-                return CustomizationGroup(
-                  id: g.id,
-                  name: g.name,
-                  minSelect: g.minSelect,
-                  maxSelect: g.maxSelect,
-                  allowOptionQuantity: g.allowOptionQuantity,
-                  options: [
-                    ...g.options,
-                    CustomizationOption(id: optId, name: _nameCtrl.text.trim(), price: priceNum),
-                  ],
-                );
-              }
-              return g;
-            }).toList();
-            widget.ref.read(itemFormProvider.notifier).onCustomizationGroupsChanged(newList);
-            _nameCtrl.clear();
-            _priceCtrl.clear();
-          },
-          style: IconButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), padding: EdgeInsets.zero),
-          icon: const Icon(Icons.add, size: 18, color: Colors.white),
-        ),
-      ],
+      ),
     );
   }
 }

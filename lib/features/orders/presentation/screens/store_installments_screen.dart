@@ -5,6 +5,7 @@ import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import '../../domain/entities/order.dart';
 import '../providers/orders_provider.dart';
 import 'order_details_screen.dart';
+import '../widgets/accounts_receivable_calendar_view.dart';
 
 class StoreInstallmentsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -40,7 +41,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     final installmentsAsync = ref.watch(storeInstallmentsProvider(widget.storeId));
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
@@ -77,6 +78,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
               Tab(text: 'Pendientes'),
               Tab(text: 'Vencidas'),
               Tab(text: 'Pagadas'),
+              Tab(text: 'Calendario de Cobros'),
             ],
           ),
         ),
@@ -95,6 +97,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                       _buildFilteredList(installments, 'PENDING'),
                       _buildFilteredList(installments, 'OVERDUE'),
                       _buildFilteredList(installments, 'PAID'),
+                      AccountsReceivableCalendarView(storeId: widget.storeId),
                     ],
                   );
                 },
@@ -208,6 +211,8 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
         ? order.id.substring(order.id.length - 6).toUpperCase()
         : order?.id.toUpperCase() ?? '';
 
+    final double remainingAmount = installment.amount + installment.lateFeeApplied - installment.paidAmount;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -302,16 +307,16 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
-                    'Monto de Cuota',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  Text(
+                    installment.status == 'PAID' ? 'Monto Pagado' : 'Pendiente Real',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${installment.amount.toStringAsFixed(2)}',
+                    '\$${remainingAmount.toStringAsFixed(2)}',
                     style: const TextStyle(
                       color: Color(0xFF0F172A),
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       fontSize: 16,
                     ),
                   ),
@@ -319,6 +324,108 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
               ),
             ],
           ),
+
+          // Abono progress bar
+          if (installment.paidAmount > 0 && installment.status != 'PAID') ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: installment.paidAmount / (installment.amount + installment.lateFeeApplied),
+                backgroundColor: const Color(0xFFF1F5F9),
+                color: const Color(0xFF10B981),
+                minHeight: 6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Abonado: \$${installment.paidAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Cuota total: \$${(installment.amount + installment.lateFeeApplied).toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ],
+
+          // Extension status badge
+          if (installment.extensionStatus != 'NONE') ...[
+            const SizedBox(height: 12),
+            _buildMerchantExtensionBadge(installment),
+          ],
+
+          // Extension pending actions
+          if (installment.extensionStatus == 'PENDING') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFEF3C7)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.help_outline_rounded, color: Color(0xFFD97706), size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Solicitud: ${installment.extensionRequestedDays ?? 7} días adicionales',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFD97706)),
+                      ),
+                    ],
+                  ),
+                  if (installment.extensionReason != null && installment.extensionReason!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Motivo: "${installment.extensionReason}"',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF78350F), fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => _showRejectExtensionDialog(context, installment),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC2626),
+                          side: const BorderSide(color: Color(0xFFFCA5A5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('Rechazar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () => _approveExtension(context, installment),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          elevation: 0,
+                        ),
+                        child: const Text('Aprobar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           if (order != null) ...[
             const SizedBox(height: 14),
             SizedBox(
@@ -418,5 +525,166 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
         ),
       ),
     );
+  }
+
+  Widget _buildMerchantExtensionBadge(Installment installment) {
+    Color bgColor;
+    Color textColor;
+    String label;
+    IconData icon;
+    
+    switch (installment.extensionStatus) {
+      case 'PENDING':
+        bgColor = const Color(0xFFFEF3C7);
+        textColor = const Color(0xFFD97706);
+        label = 'Solicitud de prórroga pendiente';
+        icon = Icons.hourglass_empty_rounded;
+        break;
+      case 'APPROVED':
+        bgColor = const Color(0xFFDBEAFE);
+        textColor = const Color(0xFF2563EB);
+        label = 'Prórroga aprobada (+${installment.extensionRequestedDays ?? 7} días)';
+        icon = Icons.check_circle_outline_rounded;
+        break;
+      case 'REJECTED':
+        bgColor = const Color(0xFFFEE2E2);
+        textColor = const Color(0xFFDC2626);
+        label = 'Prórroga rechazada';
+        icon = Icons.cancel_outlined;
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: textColor, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          if (installment.extensionStatus == 'REJECTED' && installment.extensionMerchantComment != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Motivo rechazo: "${installment.extensionMerchantComment}"',
+              style: TextStyle(color: textColor.withValues(alpha: 0.8), fontSize: 10, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showRejectExtensionDialog(BuildContext context, Installment installment) {
+    final commentController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Rechazar Prórroga', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Por favor, indica la razón del rechazo para informar al cliente:', style: TextStyle(fontSize: 13, height: 1.4)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: commentController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  hintText: 'Ej. No se permiten prórrogas consecutivas...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final comment = commentController.text.trim();
+                if (comment.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Por favor, indica un motivo de rechazo.')),
+                  );
+                  return;
+                }
+                Navigator.pop(context);
+                
+                try {
+                  await ref.read(verifyExtensionProvider({
+                    'installmentId': installment.id,
+                    'status': 'REJECTED',
+                    'merchantComment': comment,
+                    'storeId': widget.storeId,
+                  }).future);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Prórroga rechazada correctamente.'), backgroundColor: Color(0xFFDC2626)),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${e.toString()}')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Rechazar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _approveExtension(BuildContext context, Installment installment) async {
+    try {
+      await ref.read(verifyExtensionProvider({
+        'installmentId': installment.id,
+        'status': 'APPROVED',
+        'merchantComment': 'Prórroga aprobada por la tienda.',
+        'storeId': widget.storeId,
+      }).future);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prórroga aprobada con éxito!'), backgroundColor: Color(0xFF10B981)),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 }

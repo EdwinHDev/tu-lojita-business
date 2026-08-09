@@ -29,6 +29,7 @@ class Item extends Equatable {
   final List<CustomizationGroup> customizationGroups;
   final bool allowInstallments;
   final double lateFeePercentage;
+  final bool isActive;
 
   const Item({
     required this.id,
@@ -49,6 +50,7 @@ class Item extends Equatable {
     this.customizationGroups = const [],
     this.allowInstallments = true,
     this.lateFeePercentage = 0,
+    this.isActive = true,
   });
 
   @override
@@ -71,6 +73,7 @@ class Item extends Equatable {
         customizationGroups,
         allowInstallments,
         lateFeePercentage,
+        isActive,
       ];
 }
 
@@ -79,7 +82,6 @@ class CustomizationGroup extends Equatable {
   final String name;
   final int minSelect;
   final int maxSelect;
-  final bool allowOptionQuantity;
   final List<CustomizationOption> options;
 
   const CustomizationGroup({
@@ -87,7 +89,6 @@ class CustomizationGroup extends Equatable {
     required this.name,
     required this.minSelect,
     required this.maxSelect,
-    this.allowOptionQuantity = false,
     required this.options,
   });
 
@@ -97,18 +98,6 @@ class CustomizationGroup extends Equatable {
       name: json['name'] ?? '',
       minSelect: json['minSelect'] ?? 0,
       maxSelect: json['maxSelect'] ?? 0,
-      allowOptionQuantity: json['allowOptionQuantity'] == true ||
-          json['allowoptionquantity'] == true ||
-          json['allow_option_quantity'] == true ||
-          json['allowOptionQuantity'] == 1 ||
-          json['allowoptionquantity'] == 1 ||
-          json['allow_option_quantity'] == 1 ||
-          json['allowOptionQuantity'] == 'true' ||
-          json['allowoptionquantity'] == 'true' ||
-          json['allow_option_quantity'] == 'true' ||
-          json['allowOptionQuantity'] == '1' ||
-          json['allowoptionquantity'] == '1' ||
-          json['allow_option_quantity'] == '1',
       options: (json['options'] as List<dynamic>?)
               ?.map((o) => CustomizationOption.fromJson(o))
               .toList() ??
@@ -121,23 +110,28 @@ class CustomizationGroup extends Equatable {
     'name': name,
     'minSelect': minSelect,
     'maxSelect': maxSelect,
-    'allowOptionQuantity': allowOptionQuantity,
     'options': options.map((o) => o.toJson()).toList(),
   };
 
   @override
-  List<Object?> get props => [id, name, minSelect, maxSelect, allowOptionQuantity, options];
+  List<Object?> get props => [id, name, minSelect, maxSelect, options];
 }
 
 class CustomizationOption extends Equatable {
   final String id;
   final String name;
   final double price;
+  final int minQuantity;
+  final int maxQuantity;
+  final int defaultQuantity;
 
   const CustomizationOption({
     required this.id,
     required this.name,
     required this.price,
+    this.minQuantity = 0,
+    this.maxQuantity = 1,
+    this.defaultQuantity = 0,
   });
 
   factory CustomizationOption.fromJson(Map<String, dynamic> json) {
@@ -145,6 +139,9 @@ class CustomizationOption extends Equatable {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       price: json['price'] != null ? double.parse(json['price'].toString()) : 0.0,
+      minQuantity: json['minQuantity'] ?? 0,
+      maxQuantity: json['maxQuantity'] ?? 1,
+      defaultQuantity: json['defaultQuantity'] ?? 0,
     );
   }
 
@@ -152,8 +149,11 @@ class CustomizationOption extends Equatable {
     'id': id,
     'name': name,
     'price': price,
+    'minQuantity': minQuantity,
+    'maxQuantity': maxQuantity,
+    'defaultQuantity': defaultQuantity,
   };
 
   @override
-  List<Object?> get props => [id, name, price];
+  List<Object?> get props => [id, name, price, minQuantity, maxQuantity, defaultQuantity];
 }

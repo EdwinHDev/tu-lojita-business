@@ -5,10 +5,13 @@ import '../../domain/entities/order.dart';
 import '../../../../core/config/envs.dart';
 import '../providers/orders_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/utils/error_parser.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import '../widgets/receipt_image_viewer.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
+import 'package:tu_lojita_business/core/utils/notification_helper.dart';
 
 class OrderDetailsScreen extends ConsumerStatefulWidget {
   final Order? order;
@@ -31,6 +34,34 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     super.initState();
     if (widget.order != null) {
       currentOrder = widget.order;
+    }
+    _clearNotifications();
+  }
+
+  void _clearNotifications() {
+    final orderId = widget.orderId ?? widget.order?.id;
+    if (orderId != null) {
+      // Cancelar notificación local del sistema operativo
+      NotificationHelper.cancelNotification(orderId.hashCode);
+      
+      // Marcar como leída en el backend (después de que el frame se haya renderizado)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final notificationsAsync = ref.read(notificationsProvider);
+        if (notificationsAsync.value != null) {
+          final unreadForOrder = notificationsAsync.value!.where((n) => 
+            !n.isRead && n.targetId == orderId
+          ).toList();
+          
+          if (unreadForOrder.isNotEmpty) {
+            final repo = ref.read(notificationRepositoryProvider);
+            Future.wait(unreadForOrder.map((n) => repo.markAsRead(n.id))).then((_) {
+              if (mounted) {
+                ref.invalidate(notificationsProvider);
+              }
+            });
+          }
+        }
+      });
     }
   }
 
@@ -127,7 +158,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       setState(() => _isUpdating = true);
 
       final updatedOrder = await ref
-          .read(ordersNotifierProvider(storeId).notifier)
+          .read(ordersNotifierProvider((storeId: storeId, status: null)).notifier)
           .updateOrderStatus(currentOrder!.id, 'FULLY_PAID');
 
       if (!mounted) return;
@@ -313,7 +344,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       setState(() => _isUpdating = true);
 
       final updatedOrder = await ref
-          .read(ordersNotifierProvider(storeId).notifier)
+          .read(ordersNotifierProvider((storeId: storeId, status: null)).notifier)
           .updateOrderStatus(
             currentOrder!.id,
             'CANCELLED',
@@ -337,22 +368,21 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (currentOrder == null && widget.orderId != null) {
-      final orderFuture = ref.watch(orderByIdProvider(widget.orderId!));
+    final orderAsync = widget.orderId != null
+        ? ref.watch(orderByIdProvider(widget.orderId!))
+        : null;
 
-      return orderFuture.when(
-        data: (order) {
-          Future.microtask(() {
-            if (mounted) setState(() => currentOrder = order);
-          });
-          return _buildLoading();
-        },
-        loading: () => _buildLoading(),
-        error: (err, stack) => _buildError(err.toString()),
-      );
+    currentOrder = orderAsync?.asData?.value ?? currentOrder ?? widget.order;
+
+    if (currentOrder == null) {
+      if (orderAsync != null && orderAsync.isLoading) {
+        return _buildLoading();
+      }
+      if (orderAsync != null && orderAsync.hasError) {
+        return _buildError(orderAsync.error.toString());
+      }
+      return _buildError('Orden no encontrada');
     }
-
-    if (currentOrder == null) return _buildError('Orden no encontrada');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -386,27 +416,34 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           ],
         ),
         actions: [
-          if (currentOrder != null &&
-              currentOrder!.status != 'FULLY_PAID' &&
-              currentOrder!.status != 'CANCELLED')
-            IconButton(
-              icon: const Icon(
-                Icons.chat_bubble_outline,
-                color: Color(0xFF4F46E5),
-              ),
-              onPressed: () {
-                final user = currentOrder!.user;
-                final firstName = user?['firstName'] ?? 'Cliente';
-                final lastName = user?['lastName'] ?? '';
-                final userName = '$firstName $lastName'.trim();
+          if (currentOrder != null)
+            Builder(
+              builder: (context) {
+                final isClosed = currentOrder!.status == 'FULLY_PAID' || currentOrder!.status == 'CANCELLED';
+                
+                return IconButton(
+                  icon: Icon(
+                    Icons.chat_bubble_outline,
+                    color: isClosed ? const Color(0xFF94A3B8) : const Color(0xFF4F46E5),
+                  ),
+                  tooltip: isClosed 
+                      ? 'Ver historial de chat (Solo lectura)' 
+                      : 'Chatear con el cliente',
+                  onPressed: () {
+                    final user = currentOrder!.user;
+                    final firstName = user?['firstName'] ?? 'Cliente';
+                    final lastName = user?['lastName'] ?? '';
+                    final userName = '$firstName $lastName'.trim();
 
-                final storeId = widget.storeId ?? currentOrder?.storeId;
-                if (storeId != null) {
-                  context.push(
-                    '/dashboard/stores/$storeId/orders/${currentOrder!.id}/chat?userName=$userName',
-                  );
-                }
-              },
+                    final storeId = widget.storeId ?? currentOrder?.storeId;
+                    if (storeId != null) {
+                      context.push(
+                        '/dashboard/stores/$storeId/orders/${currentOrder!.id}/chat?userName=$userName',
+                      );
+                    }
+                  },
+                );
+              }
             ),
           const SizedBox(width: 8),
         ],
@@ -415,36 +452,47 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           child: Container(color: const Color(0xFFE2E8F0), height: 1),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatusCard(),
-            const SizedBox(height: 16),
-            _buildCustomerCard(),
-            const SizedBox(height: 16),
-            _buildSectionTitle('Artículos del pedido'),
-            const SizedBox(height: 8),
-            _buildItemsList(),
-            const SizedBox(height: 16),
-            _buildSummaryCard(),
-            const SizedBox(height: 16),
-            _buildFinancialSummary(),
-            if (currentOrder!.installments.isNotEmpty) ...[
+      body: RefreshIndicator(
+        color: const Color(0xFF4F46E5),
+        onRefresh: () async {
+          final orderId = widget.orderId ?? currentOrder?.id;
+          if (orderId != null) {
+            ref.invalidate(orderByIdProvider(orderId));
+            await ref.read(orderByIdProvider(orderId).future);
+          }
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildStatusCard(),
               const SizedBox(height: 16),
-              _buildSectionTitle('Plan de Pagos / Cuotas'),
-              const SizedBox(height: 8),
-              _buildInstallmentsSection(),
-            ],
-            if (currentOrder!.payments.isNotEmpty) ...[
+              _buildCustomerCard(),
               const SizedBox(height: 16),
-              _buildSectionTitle('Comprobantes de Pago'),
+              _buildSectionTitle('Artículos del pedido'),
               const SizedBox(height: 8),
-              _buildPaymentsCard(),
+              _buildItemsList(),
+              const SizedBox(height: 16),
+              _buildSummaryCard(),
+              const SizedBox(height: 16),
+              _buildFinancialSummary(),
+              if (currentOrder!.installments.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildSectionTitle('Plan de Pagos / Cuotas'),
+                const SizedBox(height: 8),
+                _buildInstallmentsSection(),
+              ],
+              if (currentOrder!.payments.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildSectionTitle('Comprobantes de Pago'),
+                const SizedBox(height: 8),
+                _buildPaymentsCard(),
+              ],
+              const SizedBox(height: 80),
             ],
-            const SizedBox(height: 80),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: _buildBottomActions(),
@@ -853,7 +901,6 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         name: 'Personalización',
                         maxSelect: 0,
                         minSelect: 0,
-                        allowOptionQuantity: false,
                         options: [],
                       ),
                     );
@@ -1008,9 +1055,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   }
 
   Widget _buildFinancialSummary() {
-    final paidAmount = currentOrder!.finalAmount - currentOrder!.balance;
+    final paidAmount = currentOrder!.totalPaidAmount;
     final hasDebt = currentOrder!.balance > 0;
-    final isInstallment = currentOrder!.installments.isNotEmpty;
+    final isInstallment = currentOrder!.isPartialPayment;
 
     // Get unique payment methods
     final paymentMethods = currentOrder!.payments
@@ -1072,19 +1119,15 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 decoration: BoxDecoration(
                   color: isInstallment
                       ? const Color(0xFFEEF2FF)
-                      : (hasDebt
-                          ? const Color(0xFFFFF7ED)
-                          : const Color(0xFFECFDF5)),
+                      : const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isInstallment
-                      ? 'PAGO EN CUOTAS'
-                      : (hasDebt ? 'PAGO PARCIAL' : 'PAGO COMPLETO'),
+                  isInstallment ? 'PAGO EN CUOTAS' : 'PAGO COMPLETO',
                   style: TextStyle(
                     color: isInstallment
                         ? const Color(0xFF4F46E5)
-                        : (hasDebt ? const Color(0xFFC2410C) : const Color(0xFF047857)),
+                        : const Color(0xFF047857),
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
@@ -1230,6 +1273,18 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   }
 
   Widget _buildInstallmentsSection() {
+    // Pre-calcular qué cuotas están "en revisión" por pagos en espera
+    final waitingPayments = currentOrder!.payments
+        .where((p) => p.status == 'WAITING_VERIFICATION')
+        .toList();
+    final installmentsInReview = <String>{};
+    for (final wp in waitingPayments) {
+      final ctx = _getInstallmentContextForPayment(wp);
+      if (ctx.installment != null) {
+        installmentsInReview.add(ctx.installment!.id);
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1251,6 +1306,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             final isLast = index == currentOrder!.installments.length - 1;
             final isOverdue = installment.dueDate.isBefore(DateTime.now()) &&
                 installment.status == 'PENDING';
+            final isInReview = installmentsInReview.contains(installment.id);
 
             Color statusBgColor;
             Color statusTextColor;
@@ -1260,6 +1316,10 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               statusBgColor = const Color(0xFFECFDF5);
               statusTextColor = const Color(0xFF047857);
               statusLabel = 'PAGADA';
+            } else if (isInReview) {
+              statusBgColor = const Color(0xFFFFFBEB);
+              statusTextColor = const Color(0xFFD97706);
+              statusLabel = 'EN REVISIÓN';
             } else if (isOverdue) {
               statusBgColor = const Color(0xFFFEF2F2);
               statusTextColor = const Color(0xFFB91C1C);
@@ -1282,9 +1342,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         decoration: BoxDecoration(
                           color: installment.status == 'PAID'
                               ? const Color(0xFFECFDF5)
-                              : (isOverdue
-                                  ? const Color(0xFFFEF2F2)
-                                  : const Color(0xFFEEF2FF)),
+                              : (isInReview
+                                  ? const Color(0xFFFFFBEB)
+                                  : (isOverdue
+                                      ? const Color(0xFFFEF2F2)
+                                      : const Color(0xFFEEF2FF))),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -1293,9 +1355,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                             style: TextStyle(
                               color: installment.status == 'PAID'
                                   ? const Color(0xFF047857)
-                                  : (isOverdue
-                                      ? const Color(0xFFB91C1C)
-                                      : const Color(0xFF4F46E5)),
+                                  : (isInReview
+                                      ? const Color(0xFFD97706)
+                                      : (isOverdue
+                                          ? const Color(0xFFB91C1C)
+                                          : const Color(0xFF4F46E5))),
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),
@@ -1388,7 +1452,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
   Widget? _buildBottomActions() {
     if (currentOrder!.status == 'FULLY_PAID' ||
-        currentOrder!.status == 'CANCELLED') {
+        currentOrder!.status == 'CANCELLED' ||
+        currentOrder!.isPartialPayment) {
       return null;
     }
 
@@ -1503,7 +1568,18 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     return Column(
       children: currentOrder!.payments.map((payment) {
         final isApproved = payment.status == 'APPROVED';
+        final isRejected = payment.status == 'REJECTED';
+        final isWaiting = payment.status == 'WAITING_VERIFICATION';
         final imageUrl = _resolveImageUrl(payment.receiptImage ?? '');
+
+        // Contexto de cuota para pagos en revisión
+        final installmentCtx = isWaiting
+            ? _getInstallmentContextForPayment(payment)
+            : (installment: null, installmentIndex: -1, minRequired: 0.0);
+        final coveredInstallment = installmentCtx.installment;
+        final isSufficient = coveredInstallment != null &&
+            (payment.amount * 100).round() >= ((installmentCtx.minRequired * 100).round() - 1);
+        final impacts = isWaiting ? _getApprovalImpact(payment) : <({int index, String status, double remaining})>[];
         
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -1553,10 +1629,14 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                             ),
                           ),
                           Text(
-                            isApproved ? 'Verificado' : 'En revisión',
+                            isApproved 
+                                ? 'Verificado' 
+                                : (isRejected ? 'Rechazado' : 'En revisión'),
                             style: TextStyle(
                               fontSize: 11,
-                              color: isApproved ? const Color(0xFF047857) : const Color(0xFFC2410C),
+                              color: isApproved 
+                                  ? const Color(0xFF047857) 
+                                  : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFC2410C)),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1574,6 +1654,100 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   ),
                 ],
               ),
+
+              // ── Banner de cuota asociada (solo para pagos en revisión) ──
+              if (isWaiting && coveredInstallment != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isSufficient
+                        ? const Color(0xFFF0FDF4)
+                        : const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSufficient
+                          ? const Color(0xFF86EFAC)
+                          : const Color(0xFFFCA5A5),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 14,
+                            color: isSufficient
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFFDC2626),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Cuota ${installmentCtx.installmentIndex + 1} de ${currentOrder!.installments.length}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isSufficient
+                                  ? const Color(0xFF15803D)
+                                  : const Color(0xFFDC2626),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '· Vence ${coveredInstallment.dueDate.toSlashDateString()}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isSufficient
+                                  ? const Color(0xFF166534)
+                                  : const Color(0xFFB91C1C),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            isSufficient
+                                ? Icons.check_circle_outline
+                                : Icons.error_outline_rounded,
+                            size: 14,
+                            color: isSufficient
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFFDC2626),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            isSufficient
+                                ? 'Monto suficiente ✓  (mínimo \$${installmentCtx.minRequired.toStringAsFixed(2)})'
+                                : 'Monto insuficiente — requiere \$${installmentCtx.minRequired.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSufficient
+                                  ? const Color(0xFF15803D)
+                                  : const Color(0xFFDC2626),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // ── Preview de impacto de aprobación ──────────────────────
+              if (isWaiting && impacts.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _ImpactPreview(
+                  impacts: impacts,
+                  installments: currentOrder!.installments,
+                ),
+              ],
+
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
                 child: Divider(height: 1, color: Color(0xFFF1F5F9)),
@@ -1669,6 +1843,41 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   ),
                 ),
               ],
+              if (isWaiting) ...[
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _isUpdating ? null : () => _rejectIndividualPayment(payment),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: const Text('Rechazar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: _isUpdating ? null : () => _approveIndividualPayment(payment),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 40),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.check_rounded, size: 16),
+                      label: const Text('Aprobar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );
@@ -1676,11 +1885,197 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
+  // ── Helpers de contexto de cuota ──────────────────────────────────────
+
+  /// Dado un pago, retorna la (cuota, minRequired) que ese pago cubre primero,
+  /// simulando la amortización secuencial del backend.
+  ({Installment? installment, int installmentIndex, double minRequired}) _getInstallmentContextForPayment(Payment payment) {
+    // Cuotas ordenadas por fecha de vencimiento
+    final sorted = [...currentOrder!.installments];
+    sorted.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    // Acumular lo ya pagado (pagos APPROVED antes que este)
+    int alreadyCoveredCents = 0;
+    for (final p in currentOrder!.payments) {
+      if (p.id == payment.id) break;
+      if (p.status == 'APPROVED') {
+        alreadyCoveredCents += (p.amount * 100).round();
+      }
+    }
+
+    // Recorrer cuotas y saltear las ya cubiertas por pagos anteriores
+    for (int i = 0; i < sorted.length; i++) {
+      final inst = sorted[i];
+      final neededCents = ((inst.amount + inst.lateFeeApplied - inst.paidAmount) * 100).round();
+      if (neededCents <= 1) continue; // ya pagada
+
+      if (alreadyCoveredCents >= neededCents - 1) {
+        alreadyCoveredCents -= neededCents;
+        continue;
+      }
+      // Esta es la cuota que el pago cubre (parcial o totalmente)
+      final originalIndex = currentOrder!.installments.indexOf(inst);
+      final remainingCents = neededCents - alreadyCoveredCents;
+      final minRequired = remainingCents > 0 ? remainingCents / 100.0 : 0.0;
+      return (installment: inst, installmentIndex: originalIndex, minRequired: minRequired);
+    }
+    return (installment: null, installmentIndex: -1, minRequired: 0.0);
+  }
+
+  /// Calcula el impacto de aprobar un pago: qué cuotas quedan PAID y cuánto
+  /// queda de la siguiente cuota si hay exceso.
+  List<({int index, String status, double remaining})> _getApprovalImpact(Payment payment) {
+    final sorted = [...currentOrder!.installments];
+    sorted.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    int alreadyCoveredCents = 0;
+    for (final p in currentOrder!.payments) {
+      if (p.id == payment.id) break;
+      if (p.status == 'APPROVED') {
+        alreadyCoveredCents += (p.amount * 100).round();
+      }
+    }
+
+    int remainingCents = (payment.amount * 100).round();
+    final impacts = <({int index, String status, double remaining})>[];
+    bool started = false;
+
+    for (int i = 0; i < sorted.length; i++) {
+      final inst = sorted[i];
+      final neededCents = ((inst.amount + inst.lateFeeApplied - inst.paidAmount) * 100).round();
+      if (neededCents <= 1) continue;
+
+      if (!started && alreadyCoveredCents >= neededCents - 1) {
+        alreadyCoveredCents -= neededCents;
+        continue;
+      }
+      started = true;
+      if (remainingCents <= 0) break;
+
+      final originalIndex = currentOrder!.installments.indexOf(inst);
+      final effectiveNeededCents = neededCents - alreadyCoveredCents;
+
+      // Se permite tolerancia de 1 centavo ($0.01) para considerar la cuota PAGADA
+      if (remainingCents >= effectiveNeededCents - 1) {
+        impacts.add((index: originalIndex, status: 'PAID', remaining: 0.0));
+        remainingCents -= effectiveNeededCents;
+        alreadyCoveredCents = 0;
+      } else {
+        final newRemainingCents = effectiveNeededCents - remainingCents;
+        final newRemaining = newRemainingCents > 1 ? newRemainingCents / 100.0 : 0.0;
+        impacts.add((
+          index: originalIndex,
+          status: newRemaining <= 0.01 ? 'PAID' : 'PARTIAL',
+          remaining: newRemaining <= 0.01 ? 0.0 : newRemaining,
+        ));
+        remainingCents = 0;
+      }
+    }
+    return impacts;
+  }
+
+  Future<void> _approveIndividualPayment(Payment payment) async {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    try {
+      final repo = ref.read(ordersRepositoryProvider);
+      final updatedOrder = await repo.verifyPayment(
+        payment.id,
+        'APPROVED',
+        currentOrder!.id,
+      );
+
+      final orderId = widget.orderId ?? currentOrder!.id;
+      final storeId = widget.storeId ?? currentOrder?.storeId;
+
+      ref.invalidate(orderByIdProvider(orderId));
+      if (storeId != null && storeId.isNotEmpty) {
+        ref.invalidate(ordersNotifierProvider((storeId: storeId, status: null)));
+        ref.invalidate(storeInstallmentsProvider(storeId));
+        ref.invalidate(storeReceivablesProvider(storeId));
+      }
+
+      if (mounted) {
+        setState(() {
+          currentOrder = updatedOrder;
+          _isUpdating = false;
+        });
+        NotificationService.showSuccess(context, 'Pago aprobado con éxito');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        final cleanMsg = ErrorParser.parse(e)
+            .replaceAll('Exception: ', '')
+            .replaceAll('ServerException: ', '');
+        NotificationService.showError(
+          context,
+          'No se pudo aprobar el pago: $cleanMsg',
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectIndividualPayment(Payment payment) async {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    try {
+      final repo = ref.read(ordersRepositoryProvider);
+      final updatedOrder = await repo.verifyPayment(
+        payment.id,
+        'REJECTED',
+        currentOrder!.id,
+      );
+
+      final orderId = widget.orderId ?? currentOrder!.id;
+      final storeId = widget.storeId ?? currentOrder?.storeId;
+
+      ref.invalidate(orderByIdProvider(orderId));
+      if (storeId != null && storeId.isNotEmpty) {
+        ref.invalidate(ordersNotifierProvider((storeId: storeId, status: null)));
+        ref.invalidate(storeInstallmentsProvider(storeId));
+        ref.invalidate(storeReceivablesProvider(storeId));
+      }
+
+      if (mounted) {
+        setState(() {
+          currentOrder = updatedOrder;
+          _isUpdating = false;
+        });
+        NotificationService.showSuccess(context, 'Pago rechazado correctamente');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        final cleanMsg = ErrorParser.parse(e)
+            .replaceAll('Exception: ', '')
+            .replaceAll('ServerException: ', '');
+        NotificationService.showError(
+          context,
+          'No se pudo rechazar el pago: $cleanMsg',
+        );
+      }
+    }
+  }
+
   String _resolveImageUrl(String path) {
     if (path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
+    if (path.startsWith('http')) {
+      try {
+        Uri.parse(path);
+        return path;
+      } catch (_) {
+        return '';
+      }
+    }
     final cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    return '${Envs.apiBaseUrlImages}/$cleanPath';
+    final url = '${Envs.apiBaseUrlImages}/$cleanPath';
+    try {
+      Uri.parse(url);
+      return url;
+    } catch (_) {
+      return '';
+    }
   }
 
   Widget _buildImageError() {
@@ -1700,6 +2095,158 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             'Error al cargar imagen',
             style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Widget de preview de impacto de aprobación ────────────────────────────────
+
+class _ImpactPreview extends StatefulWidget {
+  final List<({int index, String status, double remaining})> impacts;
+  final List<Installment> installments;
+
+  const _ImpactPreview({
+    required this.impacts,
+    required this.installments,
+  });
+
+  @override
+  State<_ImpactPreview> createState() => _ImpactPreviewState();
+}
+
+class _ImpactPreviewState extends State<_ImpactPreview> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    final isFullLiquidation = widget.impacts.isNotEmpty &&
+        widget.impacts.every((i) => i.status == 'PAID');
+    final coversMultiple =
+        widget.impacts.where((i) => i.status == 'PAID').length >= 2;
+    _expanded = isFullLiquidation || coversMultiple;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final paidCount = widget.impacts.where((i) => i.status == 'PAID').length;
+    final isFullLiquidation = widget.impacts.isNotEmpty &&
+        widget.impacts.every((i) => i.status == 'PAID');
+
+    final headerColor = isFullLiquidation
+        ? const Color(0xFF059669)
+        : const Color(0xFF4F46E5);
+    final bgColor = isFullLiquidation
+        ? const Color(0xFFECFDF5)
+        : const Color(0xFFF8FAFF);
+    final borderColor = isFullLiquidation
+        ? const Color(0xFFA7F3D0)
+        : const Color(0xFFE0E7FF);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    isFullLiquidation
+                        ? Icons.verified_rounded
+                        : Icons.preview_outlined,
+                    size: 18,
+                    color: headerColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isFullLiquidation
+                          ? '✨ LIQUIDACIÓN TOTAL (Salda las $paidCount cuotas pendientes)'
+                          : (paidCount > 1
+                              ? '⚡ Cubre $paidCount cuotas pendientes'
+                              : 'Impacto al aprobar'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: headerColor,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: headerColor,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            Divider(height: 1, color: borderColor),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: widget.impacts.map((impact) {
+                  final installment = widget.installments[impact.index];
+                  final isPaid = impact.status == 'PAID';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: isPaid
+                                ? const Color(0xFFD1FAE5)
+                                : const Color(0xFFFFFBEB),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${impact.index + 1}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isPaid
+                                    ? const Color(0xFF047857)
+                                    : const Color(0xFFD97706),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isPaid
+                                ? 'Cuota ${impact.index + 1} → PAGADA (\$${installment.amount.toStringAsFixed(2)})'
+                                : 'Cuota ${impact.index + 1} → queda \$${impact.remaining.toStringAsFixed(2)} pendiente',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isPaid
+                                  ? const Color(0xFF065F46)
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ],
       ),
     );

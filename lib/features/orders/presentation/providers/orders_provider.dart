@@ -42,15 +42,17 @@ class OrdersState {
   }
 }
 
+typedef OrderFilter = ({String storeId, String? status});
+
 // ------------------------------------------------------------------
-// Notifier — receives storeId via constructor (Riverpod v3 pattern)
+// Notifier — receives filter via constructor (Riverpod v3 pattern)
 // ------------------------------------------------------------------
 class OrdersNotifier extends Notifier<OrdersState> {
-  final String storeId;
+  final OrderFilter filter;
   int _currentOffset = 0;
   final int _limit = 20;
 
-  OrdersNotifier(this.storeId);
+  OrdersNotifier(this.filter);
 
   @override
   OrdersState build() {
@@ -64,7 +66,7 @@ class OrdersNotifier extends Notifier<OrdersState> {
     state = const OrdersState(isLoading: true);
     try {
       final repo = ref.read(ordersRepositoryProvider);
-      final items = await repo.getOrdersPaginated(storeId, _limit, 0);
+      final items = await repo.getOrdersPaginated(filter.storeId, _limit, 0, status: filter.status);
       
       if (!ref.mounted) return;
 
@@ -90,7 +92,7 @@ class OrdersNotifier extends Notifier<OrdersState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final repo = ref.read(ordersRepositoryProvider);
-      final nextItems = await repo.getOrdersPaginated(storeId, _limit, _currentOffset);
+      final nextItems = await repo.getOrdersPaginated(filter.storeId, _limit, _currentOffset, status: filter.status);
       
       if (!ref.mounted) return;
 
@@ -129,11 +131,11 @@ class OrdersNotifier extends Notifier<OrdersState> {
 }
 
 // ------------------------------------------------------------------
-// Provider — factory receives the storeId arg (Riverpod v3 syntax)
+// Provider — factory receives the filter arg (Riverpod v3 syntax)
 // ------------------------------------------------------------------
 final ordersNotifierProvider = NotifierProvider.autoDispose
-    .family<OrdersNotifier, OrdersState, String>(
-  (storeId) => OrdersNotifier(storeId),
+    .family<OrdersNotifier, OrdersState, OrderFilter>(
+  (filter) => OrdersNotifier(filter),
 );
 
 final orderByIdProvider = FutureProvider.family<Order, String>((ref, orderId) async {
@@ -145,3 +147,36 @@ final storeInstallmentsProvider = FutureProvider.family<List<Installment>, Strin
   final repo = ref.read(ordersRepositoryProvider);
   return repo.getStoreInstallments(storeId);
 });
+
+final verifyExtensionProvider = FutureProvider.family<void, Map<String, dynamic>>((ref, params) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  final installmentId = params['installmentId'] as String;
+  final status = params['status'] as String;
+  final merchantComment = params['merchantComment'] as String?;
+  final storeId = params['storeId'] as String;
+  
+  await repo.verifyExtension(installmentId, status, merchantComment: merchantComment);
+  ref.invalidate(storeInstallmentsProvider(storeId));
+});
+
+final verifyPaymentProvider = FutureProvider.family<Order, Map<String, dynamic>>((ref, params) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  final paymentId = params['paymentId'] as String;
+  final status = params['status'] as String;
+  final orderId = params['orderId'] as String;
+  
+  final updatedOrder = await repo.verifyPayment(paymentId, status, orderId);
+  ref.invalidate(orderByIdProvider(orderId));
+  return updatedOrder;
+});
+
+final storeReceivablesProvider = FutureProvider.family<List<Installment>, String>((ref, storeId) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  return repo.getStoreReceivables(storeId);
+});
+
+final orderStatementProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  return repo.getOrderStatement(orderId);
+});
+

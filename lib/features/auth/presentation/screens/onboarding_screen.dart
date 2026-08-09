@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:tu_lojita_business/core/utils/app_notification.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 
@@ -52,7 +52,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     ref.listen(authProvider, (previous, next) {
       if (next is AuthError) {
-        AppNotification.showError(context, next.message);
+        NotificationService.showError(context, next.message);
       }
     });
 
@@ -128,12 +128,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Image.network(
-                            'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_"G"_logo.svg/120px-Google_"G"_logo.svg.png',
+                          Container(
+                            width: 24,
                             height: 24,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'G',
+                                style: TextStyle(
+                                  color: Color(0xFF4285F4),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
-                          const Text('Iniciar con Google'),
+                          const Flexible(
+                            child: Text(
+                              'Iniciar con Google',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
               ),

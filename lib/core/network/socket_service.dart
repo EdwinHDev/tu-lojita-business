@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:developer';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:dio/dio.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:tu_lojita_business/features/auth/data/datasources/local_auth_data_source.dart';
 
 class SocketService {
   final LocalAuthDataSource _localAuthDataSource;
   io.Socket? _socket;
+  final List<void Function()> _pendingActions = [];
+  String? _currentChatOrderId;
+  bool _isReconnecting = false;
   
   final _notificationController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get notificationsStream => _notificationController.stream;
@@ -37,11 +41,13 @@ class SocketService {
 
   SocketService(this._localAuthDataSource);
 
-  void init() async {
+  bool get isConnected => _socket != null && _socket!.connected;
+
+  Future<void> init() async {
     if (_socket != null && _socket!.connected) return;
 
-    final token = await _localAuthDataSource.getAccessToken();
-    final baseUrl = dotenv.maybeGet('API_BASE_URL') ?? 'http://10.0.2.2:4500/api/v1';
+    var token = await _localAuthDataSource.getAccessToken();
+    final baseUrl = Envs.apiBaseUrl;
     final socketUrl = baseUrl.replaceAll('/api/v1', '');
 
     _socket = io.io(
@@ -50,11 +56,39 @@ class SocketService {
           .setTransports(['websocket'])
           .setAuth({'token': 'Bearer $token'})
           .enableAutoConnect()
+          .enableReconnection()
+          .setReconnectionDelay(1000)
+          .setReconnectionDelayMax(5000)
+          .setReconnectionAttempts(15)
+          .setTimeout(10000)
           .build(),
     );
 
+    _setupListeners();
+  }
+
+  void _setupListeners() {
+    if (_socket == null) return;
+
     _socket!.onConnect((_) {
       log('Business Socket connected to /notifications namespace');
+      _isReconnecting = false;
+      
+      // Auto-rejoin de chat activo en caso de reconexión
+      if (_currentChatOrderId != null) {
+        log('Business Auto-rejoining chat room: $_currentChatOrderId');
+        _socket!.emit('join_chat', {'orderId': _currentChatOrderId});
+      }
+
+      // Procesar y vaciar cola de acciones pendientes
+      while (_pendingActions.isNotEmpty) {
+        final action = _pendingActions.removeAt(0);
+        try {
+          action();
+        } catch (e) {
+          log('Business Error running pending socket action: $e');
+        }
+      }
     });
 
     _socket!.onDisconnect((_) {
@@ -69,8 +103,6 @@ class SocketService {
     _socket!.on('new_chat_message', (data) {
       log('New chat message received: $data');
       _chatController.add(Map<String, dynamic>.from(data));
-      // Si la app está abierta y el mensaje llega, el dispositivo lo recibió → marcar como entregado.
-      // El servidor filtra: solo marca mensajes donde sender != yo, así que es seguro emitirlo siempre.
       final orderId = data['orderId'] ?? data['order']?['id'];
       if (orderId != null) {
         _socket?.emit('mark_messages_delivered', {'orderId': orderId});
@@ -85,8 +117,6 @@ class SocketService {
     _socket!.on('chat_notification', (data) {
       log('Business Chat notification received: $data');
       _chatNotificationController.add(Map<String, dynamic>.from(data));
-      // chat_notification siempre llega al destinatario (sala user_ID).
-      // Aunque no tenga el chat abierto, confirmamos la entrega del mensaje.
       final orderId = data['orderId'];
       if (orderId != null) {
         _socket?.emit('mark_messages_delivered', {'orderId': orderId});
@@ -117,35 +147,148 @@ class SocketService {
       _chatClosedController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket!.onConnectError((err) => log('Business Socket connect error: $err'));
-    _socket!.onError((err) => log('Business Socket error: $err'));
+    _socket!.on('exception', (data) {
+      log('Business Socket exception event: $data');
+      _handleConnectionError(data);
+    });
+
+    _socket!.onConnectError((err) {
+      log('Business Socket connect error: $err');
+      _handleConnectionError(err);
+    });
+
+    _socket!.onError((err) {
+      log('Business Socket error: $err');
+      _handleConnectionError(err);
+    });
+  }
+
+  Future<void> _handleConnectionError(dynamic err) async {
+    final errStr = err.toString().toLowerCase();
+    if (errStr.contains('unauthorized') || errStr.contains('jwt') || errStr.contains('token') || errStr.contains('forbidden')) {
+      if (!_isReconnecting) {
+        _isReconnecting = true;
+        log('Business Auth error detected on socket. Triggering reconnectWithFreshToken...');
+        await reconnectWithFreshToken();
+      }
+    }
+  }
+
+  Future<void> reconnectWithFreshToken() async {
+    log('Business Reconnecting socket with fresh token...');
+    try {
+      final refreshToken = await _localAuthDataSource.getRefreshToken();
+      if (refreshToken != null) {
+        final dio = Dio();
+        final baseUrl = Envs.apiBaseUrl;
+        final response = await dio.get(
+          '$baseUrl/auth/refresh',
+          options: Options(headers: {'Authorization': 'Bearer $refreshToken'}),
+        );
+        if (response.statusCode == 200 && response.data != null) {
+          final newAccessToken = response.data['accessToken'];
+          final newRefreshToken = response.data['refreshToken'];
+          if (newAccessToken != null && newRefreshToken != null) {
+            await _localAuthDataSource.saveAccessToken(newAccessToken);
+            await _localAuthDataSource.saveRefreshToken(newRefreshToken);
+            log('Business Tokens refreshed successfully for WebSocket');
+          }
+        }
+      }
+    } catch (e) {
+      log('Business Failed to refresh token during socket reconnect: $e');
+    }
+
+    _socket?.dispose();
+    _socket = null;
+    _isReconnecting = false;
+    await init();
+  }
+
+  void _emitOrQueue(String event, Map<String, dynamic> data) {
+    if (_socket != null && _socket!.connected) {
+      _socket!.emit(event, data);
+    } else {
+      log('Business Socket not connected. Queueing event: $event with data: $data');
+      _pendingActions.add(() {
+        _socket?.emit(event, data);
+      });
+    }
   }
 
   void joinChat(String orderId) {
-    _socket?.emit('join_chat', {'orderId': orderId});
+    _currentChatOrderId = orderId;
+    _emitOrQueue('join_chat', {'orderId': orderId});
   }
 
   void leaveChat(String orderId) {
-    _socket?.emit('leave_chat', {'orderId': orderId});
+    if (_currentChatOrderId == orderId) {
+      _currentChatOrderId = null;
+    }
+    _emitOrQueue('leave_chat', {'orderId': orderId});
   }
 
   void sendMessage(String orderId, String content) {
-    _socket?.emit('send_message', {
+    _emitOrQueue('send_message', {
       'orderId': orderId,
       'content': content,
     });
   }
 
+  Future<Map<String, dynamic>> sendMessageWithAck(
+    String orderId,
+    String content, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final completer = Completer<Map<String, dynamic>>();
+    final data = {'orderId': orderId, 'content': content};
+
+    if (_socket == null || !_socket!.connected) {
+      await reconnectWithFreshToken();
+    }
+
+    if (_socket != null && _socket!.connected) {
+      try {
+        _socket!.emitWithAck('send_message', data, ack: (response) {
+          if (!completer.isCompleted) {
+            if (response is Map) {
+              completer.complete(Map<String, dynamic>.from(response));
+            } else {
+              completer.complete({'success': true});
+            }
+          }
+        });
+      } catch (e) {
+        log('Business Error in emitWithAck: $e');
+        if (!completer.isCompleted) {
+          completer.complete({'success': false, 'error': e.toString()});
+        }
+      }
+    } else {
+      if (!completer.isCompleted) {
+        completer.complete({'success': false, 'error': 'NOT_CONNECTED'});
+      }
+    }
+
+    return completer.future.timeout(
+      timeout,
+      onTimeout: () {
+        log('Business sendMessageWithAck timeout for order $orderId');
+        return {'success': false, 'error': 'TIMEOUT'};
+      },
+    );
+  }
+
   void emitTyping(String orderId, bool isTyping) {
-    _socket?.emit('typing', {'orderId': orderId, 'isTyping': isTyping});
+    _emitOrQueue('typing', {'orderId': orderId, 'isTyping': isTyping});
   }
 
   void markMessagesRead(String orderId) {
-    _socket?.emit('mark_messages_read', {'orderId': orderId});
+    _emitOrQueue('mark_messages_read', {'orderId': orderId});
   }
 
   void markMessagesDelivered(String orderId) {
-    _socket?.emit('mark_messages_delivered', {'orderId': orderId});
+    _emitOrQueue('mark_messages_delivered', {'orderId': orderId});
   }
 
   void disconnect() {

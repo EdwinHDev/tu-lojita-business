@@ -1,14 +1,16 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
-import '../../../../features/dashboard/presentation/providers/notifications_provider.dart';
-import '../../../../features/auth/presentation/providers/auth_notifier.dart';
-import '../../../../features/auth/presentation/providers/auth_state.dart';
-import '../../../../core/network/socket_service.dart';
-import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/chat/domain/entities/chat_message.dart';
+import 'package:tu_lojita_business/features/chat/presentation/providers/chat_provider.dart';
+import 'package:tu_lojita_business/features/orders/presentation/providers/orders_provider.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/core/network/socket_service.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
+import 'package:tu_lojita_business/core/utils/notification_helper.dart';
 
 class OrderChatScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -27,133 +29,45 @@ class OrderChatScreen extends ConsumerStatefulWidget {
 class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, dynamic>> _messages = [];
-  StreamSubscription? _chatSubscription;
-  StreamSubscription? _typingSubscription;
-  StreamSubscription? _readSubscription;
-  StreamSubscription? _deliveredSubscription;
-  StreamSubscription? _closedSubscription;
-  Timer? _typingTimer;
-  bool _isTyping = false;
   late SocketService _socketService;
 
   @override
   void initState() {
     super.initState();
     _socketService = ref.read(socketServiceProvider);
+    
+    // Unirse a la sala y marcar mensajes como leídos
     _socketService.joinChat(widget.orderId);
+    _socketService.markMessagesRead(widget.orderId);
+    
+    _clearNotifications();
+  }
 
+  void _clearNotifications() {
+    // Cancelar notificación local del OS (idéntico a lo que pasa en OrderDetailsScreen)
+    NotificationHelper.cancelNotification(widget.orderId.hashCode);
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Marcar como leídos los mensajes al abrir el chat (la entrega la gestiona el servidor en join_chat)
-      _socketService.markMessagesRead(widget.orderId);
-
-      // Escuchar historial primero
-      _socketService.chatHistoryStream.listen((history) {
-        if (mounted) {
-          setState(() {
-            _messages.clear();
-            _messages.addAll(history.cast<Map<String, dynamic>>());
-          });
-          _scrollToBottom();
-        }
-      });
-
-      _chatSubscription = _socketService.chatStream.listen((message) {
-        if (message['orderId'] == widget.orderId || message['order']?['id'] == widget.orderId) {
-          if (mounted) {
-            final authState = ref.read(authProvider);
-            final currentUser = (authState is Authenticated) ? authState.user : null;
-            setState(() {
-              // Remover temporal si existe
-              if (message['sender']?['id'] == currentUser?.id) {
-                _messages.removeWhere((m) => 
-                  m['id'].toString().startsWith('temp-') && m['content'] == message['content']
-                );
-              }
-              _messages.add(message);
-            });
-            _scrollToBottom();
-            // Solo marcar como leídos cuando el mensaje es de OTRA persona.
-            // El eco de nuestro propio mensaje NO debe disparar mark_messages_read.
-            if (message['sender']?['id'] != currentUser?.id) {
-              _socketService.markMessagesRead(widget.orderId);
-            }
-          }
-        }
-      });
-
-      _typingSubscription = _socketService.chatTypingStream.listen((data) {
-        if (data['orderId'] == widget.orderId && mounted) {
-          setState(() {
-            _isTyping = data['isTyping'];
-          });
-          _typingTimer?.cancel();
-          if (_isTyping) {
-            _typingTimer = Timer(const Duration(seconds: 3), () {
-              if (mounted) setState(() => _isTyping = false);
-            });
-          }
-        }
-      });
-
-      _readSubscription = _socketService.chatMessagesReadStream.listen((data) {
-        if (data['orderId'] == widget.orderId && mounted) {
-          final authState = ref.read(authProvider);
-          final currentUserId = (authState is Authenticated) ? authState.user.id : '';
-          final readBy = data['readBy'] as String?;
-
-          // CRÍTICO: solo poner azul cuando EL OTRO leyó mis mensajes.
-          // Si readBy == yo, significa que YO abrí el chat y leí los mensajes del otro.
-          // Eso NO implica que el otro haya leído los míos → ignorar.
-          if (readBy == null || readBy == currentUserId) return;
-
-          setState(() {
-            for (var m in _messages) {
-              if (m['sender']?['id'] == currentUserId && m['isRead'] != true) {
-                m['isRead'] = true;
-                m['isDelivered'] = true;
-              }
+      final notificationsAsync = ref.read(notificationsProvider);
+      if (notificationsAsync.value != null) {
+        final unreadForOrder = notificationsAsync.value!.where((n) => 
+          !n.isRead && n.targetId == widget.orderId
+        ).toList();
+        
+        if (unreadForOrder.isNotEmpty) {
+          final repo = ref.read(notificationRepositoryProvider);
+          Future.wait(unreadForOrder.map((n) => repo.markAsRead(n.id))).then((_) {
+            if (mounted) {
+              ref.invalidate(notificationsProvider);
             }
           });
         }
-      });
-
-      _deliveredSubscription = _socketService.chatMessagesDeliveredStream.listen((data) {
-        if (data['orderId'] == widget.orderId && mounted) {
-          setState(() {
-            for (var m in _messages) {
-              if (m['isRead'] != true) {
-                m['isDelivered'] = true;
-              }
-            }
-          });
-        }
-      });
-
-      _closedSubscription = _socketService.chatClosedStream.listen((data) {
-        if (data['orderId'] == widget.orderId && mounted) {
-          NotificationService.showError(
-            context, 
-            'El chat ha sido cerrado porque la orden fue pagada o cancelada.',
-          );
-          if (context.canPop()) {
-            context.pop();
-          }
-        }
-      });
-
+      }
     });
   }
 
   @override
   void dispose() {
-    _chatSubscription?.cancel();
-    _typingSubscription?.cancel();
-    _readSubscription?.cancel();
-    _deliveredSubscription?.cancel();
-    _closedSubscription?.cancel();
-    _typingTimer?.cancel();
-    _socketService.leaveChat(widget.orderId);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -175,29 +89,56 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    final authState = ref.read(authProvider);
-    final currentUser = (authState is Authenticated) ? authState.user : null;
-    
-    // Optimistic message
-    final tempMsg = {
-      'id': 'temp-${DateTime.now().millisecondsSinceEpoch}',
-      'content': text,
-      'createdAt': DateTime.now().toIso8601String(),
-      'sender': currentUser?.toJson(),
-      'orderId': widget.orderId,
-    };
-    
-    setState(() {
-      _messages.add(tempMsg);
-    });
-    _scrollToBottom();
-
-    _socketService.sendMessage(widget.orderId, text);
+    ref.read(chatProvider(widget.orderId).notifier).sendMessage(text);
     _messageController.clear();
+    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
+    final chatState = ref.watch(chatProvider(widget.orderId));
+    final authState = ref.watch(authProvider);
+    final currentUser = (authState is Authenticated) ? authState.user : null;
+
+    // Obtener la orden para verificar si el chat debe ser de solo lectura
+    final orderAsync = ref.watch(orderByIdProvider(widget.orderId));
+    final bool isReadOnly = orderAsync.maybeWhen(
+      data: (order) => order.status == 'FULLY_PAID' || order.status == 'CANCELLED',
+      orElse: () => false,
+    );
+
+    // Auto-scroll al final al recibir nuevos mensajes
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    Widget? readOnlyBanner;
+    if (isReadOnly) {
+      readOnlyBanner = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: const Color(0xFFF1F5F9),
+        child: Row(
+          children: [
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedCircleLock01,
+              color: const Color(0xFF64748B),
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Este chat se encuentra en modo solo lectura porque el pedido ha sido completado o cancelado.',
+                style: TextStyle(
+                  color: Color(0xFF475569),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -212,77 +153,83 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-              child: Text(
-                widget.userName.substring(0, 1).toUpperCase(),
-                style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+        title: () {
+          final displayName = widget.userName.trim().isEmpty ? 'Cliente' : widget.userName;
+          final initialLetter = displayName.substring(0, 1).toUpperCase();
+          final orderShortId = widget.orderId.length >= 6
+              ? widget.orderId.substring(widget.orderId.length - 6).toUpperCase()
+              : widget.orderId.toUpperCase();
+
+          return Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                child: Text(
+                  initialLetter,
+                  style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.userName,
-                  style: const TextStyle(
-                    color: Color(0xFF1F2937),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                GestureDetector(
-                  onTap: () => context.push('/dashboard/orders/${widget.orderId}'),
-                  child: Text(
-                    'Pedido #${widget.orderId.substring(widget.orderId.length - 6).toUpperCase()}',
-                    style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 12, decoration: TextDecoration.underline),
+                  GestureDetector(
+                    onTap: () => context.push('/dashboard/orders/${widget.orderId}'),
+                    child: Text(
+                      'Pedido #$orderShortId',
+                      style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 12, decoration: TextDecoration.underline),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
+                ],
+              ),
+            ],
+          );
+        }(),
       ),
       body: Column(
         children: [
+          readOnlyBanner ?? const SizedBox.shrink(),
           Expanded(
-            child: _messages.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(20),
-                    itemCount: _messages.length + (_isTyping ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index == _messages.length) {
-                        return const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: EdgeInsets.only(bottom: 16, left: 8),
-                            child: Text(
-                              'Escribiendo...',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                                fontStyle: FontStyle.italic,
+            child: chatState.isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
+                : chatState.messages.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(20),
+                        itemCount: chatState.messages.length + (chatState.isTyping ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == chatState.messages.length) {
+                            return const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: EdgeInsets.only(bottom: 16, left: 8),
+                                child: Text(
+                                  'Escribiendo...',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      }
-                      final message = _messages[index];
-                      final sender = message['sender'];
-                      // Si el sender ID es igual al del usuario logueado en la app de negocio
-                      final authState = ref.watch(authProvider);
-                      final currentUserId = (authState is Authenticated) ? authState.user.id : '';
-                      final isMe = sender?['id'] == currentUserId;
-
-                      return _buildMessageBubble(message, isMe);
-                    },
-                  ),
+                            );
+                          }
+                          final message = chatState.messages[index];
+                          final isMe = message.sender.id == currentUser?.id;
+                          return _buildMessageBubble(message, isMe);
+                        },
+                      ),
           ),
-          _buildMessageInput(),
+          if (!isReadOnly) _buildMessageInput(),
         ],
       ),
     );
@@ -320,81 +267,111 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message, bool isMe) {
-    final timestamp = DateTime.tryParse(message['createdAt'] ?? '') ?? DateTime.now();
-    final timeStr = timestamp.toTimeString(use24Hour: true);
+  Widget _buildMessageBubble(ChatMessage message, bool isMe) {
+    final timeStr = message.createdAt.toTimeString(use24Hour: true);
+    final bool hasError = message.hasError;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isMe ? const Color(0xFF4F46E5) : const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 0),
-            bottomRight: Radius.circular(isMe ? 0 : 16),
+      child: GestureDetector(
+        onTap: hasError 
+            ? () => ref.read(chatProvider(widget.orderId).notifier).retryMessage(message.id)
+            : null,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+          decoration: BoxDecoration(
+            color: hasError 
+                ? const Color(0xFFFEF2F2)
+                : (isMe ? const Color(0xFF4F46E5) : const Color(0xFFF3F4F6)),
+            border: hasError ? Border.all(color: const Color(0xFFEF4444), width: 1) : null,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: Radius.circular(isMe ? 16 : 0),
+              bottomRight: Radius.circular(isMe ? 0 : 16),
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message['content'] ?? '',
-              style: TextStyle(
-                color: isMe ? Colors.white : const Color(0xFF1F2937),
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  timeStr,
-                  style: TextStyle(
-                    color: isMe ? Colors.white.withValues(alpha: 0.7) : const Color(0xFF9CA3AF),
-                    fontSize: 10,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                message.content,
+                style: TextStyle(
+                  color: hasError 
+                      ? const Color(0xFF991B1B)
+                      : (isMe ? Colors.white : const Color(0xFF1F2937)),
+                  fontSize: 14,
                 ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Builder(
-                    builder: (context) {
-                      final isTemp = message['id'].toString().startsWith('temp-');
-                      final isRead = message['isRead'] == true;
-                      final isDelivered = message['isDelivered'] == true;
-
-                      if (isTemp) {
-                        return const HugeIcon(
-                          icon: HugeIcons.strokeRoundedTime02,
-                          color: Colors.white70,
-                          size: 12,
-                        );
-                      }
-                      
-                      if (isRead) {
-                        return const _WhatsAppTicks(isRead: true);
-                      }
-                      
-                      if (isDelivered) {
-                        return const _WhatsAppTicks(isRead: false);
-                      }
-                      
-                      return const HugeIcon(
-                        icon: HugeIcons.strokeRoundedTick01,
-                        color: Colors.white70,
-                        size: 14,
-                      );
-                    },
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    timeStr,
+                    style: TextStyle(
+                      color: hasError 
+                          ? const Color(0xFFEF4444)
+                          : (isMe ? Colors.white.withValues(alpha: 0.7) : const Color(0xFF9CA3AF)),
+                      fontSize: 10,
+                    ),
                   ),
+                  if (isMe) ...[
+                    const SizedBox(width: 4),
+                    Builder(
+                      builder: (context) {
+                        if (hasError) {
+                          return const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              HugeIcon(
+                                icon: HugeIcons.strokeRoundedAlertCircle,
+                                color: Color(0xFFEF4444),
+                                size: 12,
+                              ),
+                              SizedBox(width: 2),
+                              Text(
+                                'Tocar para reintentar',
+                                style: TextStyle(color: Color(0xFFEF4444), fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          );
+                        }
+
+                        final isTemp = message.id.startsWith('temp-');
+                        final isRead = message.isRead;
+                        final isDelivered = message.isDelivered;
+
+                        if (isTemp) {
+                          return const HugeIcon(
+                            icon: HugeIcons.strokeRoundedTime02,
+                            color: Colors.white70,
+                            size: 12,
+                          );
+                        }
+                        
+                        if (isRead) {
+                          return const _WhatsAppTicks(isRead: true);
+                        }
+                        
+                        if (isDelivered) {
+                          return const _WhatsAppTicks(isRead: false);
+                        }
+                        
+                        return const HugeIcon(
+                          icon: HugeIcons.strokeRoundedTick01,
+                          color: Colors.white70,
+                          size: 14,
+                        );
+                      },
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

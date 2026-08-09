@@ -22,6 +22,10 @@ class StoreModel extends Store {
     super.allowChat = true,
     super.installmentIntervalValue = 7,
     super.installmentIntervalUnit = 'DAYS',
+    super.installmentFrequencyOptions = const [],
+    super.allowInstallmentExtensions = false,
+    super.maxExtensionDays = 7,
+    super.maxCreditLimit,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +50,13 @@ class StoreModel extends Store {
       allowChat: json['allowChat'] as bool? ?? true,
       installmentIntervalValue: json['installmentIntervalValue'] as int? ?? 7,
       installmentIntervalUnit: json['installmentIntervalUnit'] as String? ?? 'DAYS',
+      installmentFrequencyOptions: (json['installmentFrequencyOptions'] as List?)
+              ?.map((e) => StoreInstallmentFrequency.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      allowInstallmentExtensions: json['allowInstallmentExtensions'] as bool? ?? false,
+      maxExtensionDays: json['maxExtensionDays'] as int? ?? 7,
+      maxCreditLimit: json['maxCreditLimit'] != null ? double.tryParse(json['maxCreditLimit'].toString()) : null,
     );
   }
 
@@ -71,6 +82,10 @@ class StoreModel extends Store {
       'allowChat': allowChat,
       'installmentIntervalValue': installmentIntervalValue,
       'installmentIntervalUnit': installmentIntervalUnit,
+      'installmentFrequencyOptions': installmentFrequencyOptions.map((e) => e.toJson()).toList(),
+      'allowInstallmentExtensions': allowInstallmentExtensions,
+      'maxExtensionDays': maxExtensionDays,
+      'maxCreditLimit': maxCreditLimit,
     };
   }
 }

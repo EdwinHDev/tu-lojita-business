@@ -5,35 +5,45 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // Crear el canal de notificaciones para Android antes de configurar el servicio
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+  // Crear los canales de notificaciones para Android antes de configurar el servicio
+  const AndroidNotificationChannel businessChannel = AndroidNotificationChannel(
     'business_notifications',
     'Business Notifications',
     description: 'Canal para notificaciones de pedidos y pagos',
     importance: Importance.max,
   );
 
+  const AndroidNotificationChannel bgServiceChannel = AndroidNotificationChannel(
+    'bg_service_channel',
+    'Servicio en segundo plano',
+    description: 'Mantiene la conexión activa para recibir notificaciones',
+    importance: Importance.low,
+  );
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  await flutterLocalNotificationsPlugin
+  final androidImpl = flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  await androidImpl?.createNotificationChannel(businessChannel);
+  await androidImpl?.createNotificationChannel(bgServiceChannel);
 
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
       autoStart: true,
       isForegroundMode: true,
-      notificationChannelId: 'business_notifications',
-      initialNotificationTitle: 'Tu Lojita Business Service',
-      initialNotificationContent: 'Monitoreando nuevos pedidos...',
+      notificationChannelId: 'bg_service_channel',
+      initialNotificationTitle: 'Tu Lojita Business',
+      initialNotificationContent: 'Servicio activo para notificaciones',
       foregroundServiceNotificationId: 999,
     ),
     iosConfiguration: IosConfiguration(
@@ -59,6 +69,7 @@ void onStart(ServiceInstance service) async {
 
   // Cargar variables de entorno
   await dotenv.load(fileName: ".env");
+  final baseUrl = Envs.apiBaseUrl;
   const storage = FlutterSecureStorage();
   const accessTokenKey = 'access_token';
 
@@ -66,7 +77,7 @@ void onStart(ServiceInstance service) async {
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   
   const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@drawable/ic_notification');
   const DarwinInitializationSettings initializationSettingsIOS =
       DarwinInitializationSettings();
   const InitializationSettings initializationSettings = InitializationSettings(
@@ -82,7 +93,6 @@ void onStart(ServiceInstance service) async {
     if (socket != null && socket!.connected) return;
 
     final token = await storage.read(key: accessTokenKey);
-    final baseUrl = dotenv.maybeGet('API_BASE_URL') ?? 'http://10.0.2.2:4500/api/v1';
     final socketUrl = baseUrl.replaceAll('/api/v1', '');
 
     if (token == null) {
@@ -123,6 +133,8 @@ void onStart(ServiceInstance service) async {
             'Business Notifications',
             importance: Importance.max,
             priority: Priority.high,
+            icon: 'ic_notification',
+            color: Color(0xFF4F46E5),
             playSound: true,
           ),
           iOS: DarwinNotificationDetails(

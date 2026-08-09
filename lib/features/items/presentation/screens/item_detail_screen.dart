@@ -409,9 +409,23 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
       mainAxisSpacing: 12,
       childAspectRatio: 2.3,
       children: [
+        _buildPublishCard(),
         _buildStockCard(),
         _buildBookingCard(),
       ],
+    );
+  }
+
+  Widget _buildPublishCard() {
+    final item = widget.item;
+    final bool active = item.isActive;
+
+    return _buildStatusCardTemplate(
+      icon: active ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+      iconColor: active ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+      bgColor: active ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+      title: 'Estado Público',
+      desc: active ? 'Publicado' : 'Despublicado',
     );
   }
 

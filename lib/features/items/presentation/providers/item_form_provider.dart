@@ -33,6 +33,7 @@ class ItemFormState {
   final List<CustomizationGroup> customizationGroups;
   final bool allowInstallments;
   final double lateFeePercentage;
+  final bool isActive;
 
   const ItemFormState({
     this.selectedImages = const [],
@@ -58,8 +59,9 @@ class ItemFormState {
     this.requiresBooking = false,
     this.categoryId,
     this.customizationGroups = const [],
-    this.allowInstallments = true,
+    this.allowInstallments = false,
     this.lateFeePercentage = 0,
+    this.isActive = true,
   });
 
   ItemFormState copyWith({
@@ -88,6 +90,7 @@ class ItemFormState {
     List<CustomizationGroup>? customizationGroups,
     bool? allowInstallments,
     double? lateFeePercentage,
+    bool? isActive,
   }) {
     return ItemFormState(
       selectedImages: selectedImages ?? this.selectedImages,
@@ -115,22 +118,28 @@ class ItemFormState {
       customizationGroups: customizationGroups ?? this.customizationGroups,
       allowInstallments: allowInstallments ?? this.allowInstallments,
       lateFeePercentage: lateFeePercentage ?? this.lateFeePercentage,
+      isActive: isActive ?? this.isActive,
     );
   }
 }
 
 class ItemFormNotifier extends Notifier<ItemFormState> {
   @override
-  ItemFormState build() {
-    return const ItemFormState();
-  }
+  ItemFormState build() => const ItemFormState();
 
-  void initForEditing(Item item) {
+  void initForEditing(Item item) => initFromItem(item);
+
+  void initFromItem(Item item) {
     Map<String, dynamic> mappedAttributes = {};
-    if (item.attributes != null && item.attributes!['properties'] != null) {
-      final props = item.attributes!['properties'] as List;
-      for (var p in props) {
-        mappedAttributes[p['key']] = p['value'];
+    if (item.attributes != null) {
+      if (item.attributes!['properties'] is List) {
+        for (var prop in (item.attributes!['properties'] as List)) {
+          if (prop is Map && prop['key'] != null) {
+            mappedAttributes[prop['key']] = prop['value'];
+          }
+        }
+      } else {
+        mappedAttributes = Map<String, dynamic>.from(item.attributes!);
       }
     }
 
@@ -152,6 +161,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       customizationGroups: item.customizationGroups,
       allowInstallments: item.allowInstallments,
       lateFeePercentage: item.lateFeePercentage,
+      isActive: item.isActive,
     );
     if (item.categoryId != null) {
       loadCategoryTemplates(item.categoryId!);
@@ -163,6 +173,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onPriceChanged(double value) => state = state.copyWith(price: value);
   void onPriceTypeChanged(PriceType value) => state = state.copyWith(priceType: value);
   void onIsFeaturedChanged(bool value) => state = state.copyWith(isFeatured: value);
+  void onIsActiveChanged(bool value) => state = state.copyWith(isActive: value);
   void onDiscountPriceChanged(double? value) => state = state.copyWith(discountPrice: value);
   void onItemTypeChanged(ItemType value) => state = state.copyWith(itemType: value);
   void onTrackInventoryChanged(bool value) => state = state.copyWith(trackInventory: value);
@@ -189,7 +200,6 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       state = state.copyWith(availableTemplates: templates, isLoadingTemplates: false);
     } catch (e) {
       state = state.copyWith(isLoadingTemplates: false);
-      // TODO: Log error to a monitoring service
     }
   }
 
@@ -256,6 +266,15 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       return;
     }
 
+    if (state.trackInventory) {
+      if (state.stockQuantity == null || state.stockQuantity! <= 0) {
+        state = state.copyWith(
+          errorMessage: 'Debes especificar una cantidad de stock mayor a 0 al activar el control de inventario.',
+        );
+        return;
+      }
+    }
+
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
@@ -279,6 +298,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         'priceType': state.priceType.name.replaceAllMapped(RegExp(r'([A-Z])'), (match) => '_${match.group(0)}').toUpperCase(),
         'itemType': state.itemType.name.toUpperCase(),
         'isFeatured': state.isFeatured,
+        'isActive': state.isActive,
         'discountPrice': state.discountPrice,
         'trackInventory': state.trackInventory,
         'stockQuantity': state.trackInventory ? state.stockQuantity : null,
@@ -301,32 +321,34 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
           mainImageIndex: state.primaryImageIndex,
         );
         if (state.deletedImages.isNotEmpty) {
-          repository.deleteImages(state.deletedImages);
+          await repository.deleteImages(state.deletedImages);
         }
       } else {
         await repository.createItem(
-          itemData, 
+          itemData,
           validImages,
           mainImageIndex: state.primaryImageIndex,
         );
       }
-      
-      if (!ref.mounted) return;
-      
+
       state = state.copyWith(isLoading: false, isSuccess: true);
-    } on DioException catch (e) {
-      final msg = e.response?.data != null && e.response!.data['message'] != null
-          ? (e.response!.data['message'] is List
-              ? (e.response!.data['message'] as List).join(', ')
-              : e.response!.data['message'].toString())
-          : e.toString();
-      state = state.copyWith(isLoading: false, errorMessage: msg);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      String message = 'Error al guardar el producto';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map && data['message'] != null) {
+          message = data['message'] is List ? (data['message'] as List).join(', ') : data['message'].toString();
+        } else if (e.message != null) {
+          message = e.message!;
+        }
+      } else {
+        message = e.toString();
+      }
+      state = state.copyWith(isLoading: false, errorMessage: message);
     }
   }
 }
 
-final itemFormProvider = NotifierProvider.autoDispose<ItemFormNotifier, ItemFormState>(() {
-  return ItemFormNotifier();
-});
+final itemFormProvider = NotifierProvider.autoDispose<ItemFormNotifier, ItemFormState>(
+  ItemFormNotifier.new,
+);

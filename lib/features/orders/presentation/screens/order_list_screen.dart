@@ -15,14 +15,12 @@ class OrderListScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderListScreenState extends ConsumerState<OrderListScreen> {
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text;
@@ -32,24 +30,12 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      ref.read(ordersNotifierProvider(widget.storeId).notifier).fetchNextPage();
-    }
-  }
-
-  Future<void> _onRefresh() async {
-    await ref.read(ordersNotifierProvider(widget.storeId).notifier).refresh();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final ordersState = ref.watch(ordersNotifierProvider(widget.storeId));
 
     return DefaultTabController(
       length: 5,
@@ -100,11 +86,11 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildFilteredList(ordersState, null),
-                  _buildFilteredList(ordersState, 'PENDING'),
-                  _buildFilteredList(ordersState, 'PARTIALLY_PAID'),
-                  _buildFilteredList(ordersState, 'FULLY_PAID'),
-                  _buildFilteredList(ordersState, 'CANCELLED'),
+                  _buildFilteredList((storeId: widget.storeId, status: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: 'PENDING')),
+                  _buildFilteredList((storeId: widget.storeId, status: 'PARTIALLY_PAID')),
+                  _buildFilteredList((storeId: widget.storeId, status: 'FULLY_PAID')),
+                  _buildFilteredList((storeId: widget.storeId, status: 'CANCELLED')),
                 ],
               ),
             ),
@@ -147,7 +133,9 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     );
   }
 
-  Widget _buildFilteredList(OrdersState ordersState, String? statusFilter) {
+  Widget _buildFilteredList(OrderFilter filter) {
+    final ordersState = ref.watch(ordersNotifierProvider(filter));
+
     if (ordersState.isLoading && ordersState.orders.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
@@ -155,7 +143,6 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     }
 
     final filteredOrders = ordersState.orders.where((order) {
-      final matchesStatus = statusFilter == null || order.status == statusFilter;
       final matchesQuery = _searchQuery.isEmpty ||
           order.id.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           (order.user != null &&
@@ -163,12 +150,14 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                   .toLowerCase()
                   .contains(_searchQuery.toLowerCase()));
 
-      return matchesStatus && matchesQuery;
+      return matchesQuery;
     }).toList();
 
     if (filteredOrders.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _onRefresh,
+        onRefresh: () async {
+          await ref.read(ordersNotifierProvider(filter).notifier).refresh();
+        },
         color: const Color(0xFF4F46E5),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -212,39 +201,48 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _onRefresh,
+      onRefresh: () async {
+        await ref.read(ordersNotifierProvider(filter).notifier).refresh();
+      },
       color: const Color(0xFF4F46E5),
-      child: ListView.builder(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: filteredOrders.length + (ordersState.isLoading ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == filteredOrders.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5))),
-            );
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification scrollInfo) {
+          if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+            ref.read(ordersNotifierProvider(filter).notifier).fetchNextPage();
           }
-          final order = filteredOrders[index];
-          return OrderCard(
-            order: order,
-            onTap: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => OrderDetailsScreen(
-                    order: order,
-                    storeId: widget.storeId,
-                  ),
-                ),
-              );
-              if ((result == true || mounted)) {
-                ref.read(ordersNotifierProvider(widget.storeId).notifier).refresh();
-              }
-            },
-          );
+          return true;
         },
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          itemCount: filteredOrders.length + (ordersState.isLoading ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == filteredOrders.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5))),
+              );
+            }
+            final order = filteredOrders[index];
+            return OrderCard(
+              order: order,
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderDetailsScreen(
+                      order: order,
+                      storeId: widget.storeId,
+                    ),
+                  ),
+                );
+                if ((result == true || mounted)) {
+                  ref.read(ordersNotifierProvider(filter).notifier).refresh();
+                }
+              },
+            );
+          },
+        ),
       ),
     );
   }

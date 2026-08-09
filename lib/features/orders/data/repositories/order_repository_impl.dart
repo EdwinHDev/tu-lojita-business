@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/utils/error_parser.dart';
 import '../../domain/entities/order.dart';
 import '../../domain/repositories/order_repository.dart';
 
@@ -9,15 +10,20 @@ class OrderRepositoryImpl implements OrderRepository {
   OrderRepositoryImpl({required this.dio});
 
   @override
-  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset) async {
+  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset, {String? status}) async {
     try {
+      final queryParams = <String, dynamic>{
+        'storeId': storeId,
+        'limit': limit,
+        'offset': offset,
+      };
+      if (status != null) {
+        queryParams['status'] = status;
+      }
+
       final response = await dio.get(
         '/order',
-        queryParameters: {
-          'storeId': storeId,
-          'limit': limit,
-          'offset': offset,
-        },
+        queryParameters: queryParams,
       );
 
       if (response.statusCode == 200) {
@@ -82,4 +88,76 @@ class OrderRepositoryImpl implements OrderRepository {
       throw ServerException(e.toString());
     }
   }
+
+  @override
+  Future<void> verifyExtension(String installmentId, String status, {String? merchantComment}) async {
+    try {
+      final response = await dio.post(
+        '/order/installment/$installmentId/verify-extension',
+        data: {
+          'status': status,
+          'merchantComment': merchantComment,
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw ServerException('Error al verificar la prórroga');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<Order> verifyPayment(String paymentId, String status, String orderId) async {
+    try {
+      final response = await dio.post(
+        '/payment/$paymentId/verify',
+        data: {
+          'status': status,
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw ServerException('Error al verificar el comprobante de pago');
+      }
+
+      // Fetch the updated order details
+      return await getOrderById(orderId);
+    } catch (e) {
+      throw ServerException(ErrorParser.parse(e));
+    }
+  }
+
+  @override
+  Future<List<Installment>> getStoreReceivables(String storeId) async {
+    try {
+      final response = await dio.get('/order/store/$storeId/installments/receivables');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        return data.map((json) => Installment.fromJson(json)).toList();
+      } else {
+        throw ServerException('Error al cargar la tesorería proyectada');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getOrderStatement(String orderId) async {
+    try {
+      final response = await dio.get('/order/$orderId/statement');
+
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      } else {
+        throw ServerException('Error al cargar el estado de cuenta');
+      }
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
 }
+

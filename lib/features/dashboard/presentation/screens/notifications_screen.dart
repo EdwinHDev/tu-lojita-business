@@ -634,20 +634,22 @@ class _PremiumNotificationTile extends ConsumerWidget {
     );
   }
 
-  void _handleTap(BuildContext context, WidgetRef ref) async {
-    if (!notification.isRead) {
-      await ref.read(notificationRepositoryProvider).markAsRead(notification.id);
-      ref.invalidate(notificationsProvider);
-    }
-
-    if (!context.mounted) return;
-
+  void _handleTap(BuildContext context, WidgetRef ref) {
     if (notification.targetId != null && notification.targetId!.isNotEmpty) {
       if (notification.type == 'CHAT_MESSAGE') {
         context.push('/dashboard/orders/${notification.targetId}/chat');
       } else {
         context.push('/dashboard/orders/${notification.targetId}');
       }
+    }
+
+    if (!notification.isRead) {
+      ref.read(notificationRepositoryProvider)
+          .markAsRead(notification.id)
+          .then((_) {
+            ref.invalidate(notificationsProvider);
+          })
+          .catchError((_) {});
     }
   }
 }

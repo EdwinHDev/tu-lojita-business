@@ -18,15 +18,15 @@ class UserModel extends User {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] as String,
-      email: json['email'] as String,
-      firstName: json['firstName'] as String,
-      lastName: json['lastName'] as String,
-      role: json['role'] as String? ?? 'USER',
+      id: json['id']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      firstName: json['firstName']?.toString() ?? '',
+      lastName: json['lastName']?.toString() ?? '',
+      role: json['role']?.toString() ?? 'USER',
       hasCompany: json['hasCompany'] as bool? ?? (json['company'] != null),
       avatarUrl: json['avatarUrl'] as String?,
-      company: json['company'] != null
-          ? CompanyModel.fromJson(json['company'] as Map<String, dynamic>)
+      company: json['company'] != null && json['company'] is Map
+          ? CompanyModel.fromJson(Map<String, dynamic>.from(json['company']))
           : null,
       identification: json['identification'] as String?,
       phone: json['phone'] as String?,

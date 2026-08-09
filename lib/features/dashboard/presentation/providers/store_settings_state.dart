@@ -17,6 +17,9 @@ class StoreSettingsState {
   final String installmentIntervalUnit;
   final List<StoreInstallmentFrequency> installmentFrequencyOptions;
   final String timezone;
+  final bool allowInstallmentExtensions;
+  final int maxExtensionDays;
+  final double? maxCreditLimit;
 
   const StoreSettingsState({
     this.isLoading = false,
@@ -34,6 +37,9 @@ class StoreSettingsState {
     this.installmentIntervalUnit = 'DAYS',
     this.installmentFrequencyOptions = const [],
     this.timezone = 'America/Caracas',
+    this.allowInstallmentExtensions = false,
+    this.maxExtensionDays = 7,
+    this.maxCreditLimit,
   });
 
   factory StoreSettingsState.initial() => const StoreSettingsState();
@@ -55,6 +61,10 @@ class StoreSettingsState {
     String? installmentIntervalUnit,
     List<StoreInstallmentFrequency>? installmentFrequencyOptions,
     String? timezone,
+    bool? allowInstallmentExtensions,
+    int? maxExtensionDays,
+    double? maxCreditLimit,
+    bool clearMaxCreditLimit = false,
   }) {
     return StoreSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -72,6 +82,9 @@ class StoreSettingsState {
       installmentIntervalUnit: installmentIntervalUnit ?? this.installmentIntervalUnit,
       installmentFrequencyOptions: installmentFrequencyOptions ?? this.installmentFrequencyOptions,
       timezone: timezone ?? this.timezone,
+      allowInstallmentExtensions: allowInstallmentExtensions ?? this.allowInstallmentExtensions,
+      maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
+      maxCreditLimit: clearMaxCreditLimit ? null : (maxCreditLimit ?? this.maxCreditLimit),
     );
   }
 }

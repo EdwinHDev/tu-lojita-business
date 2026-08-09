@@ -29,27 +29,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           : AppBar(
               title: const Text('Dashboard'),
               actions: [
-                ref.watch(notificationsProvider).maybeWhen(
-                  data: (notifications) {
-                    final unreadCount = notifications.where((n) => !n.isRead).length;
-                    return Badge(
-                      label: Text(unreadCount.toString()),
-                      isLabelVisible: unreadCount > 0,
-                      child: IconButton(
-                        icon: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedNotification01,
-                          color: Colors.indigo,
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ref.watch(notificationsProvider).maybeWhen(
+                    data: (notifications) {
+                      final unreadCount = notifications.where((n) => !n.isRead).length;
+                      return Badge(
+                        label: Text(unreadCount.toString()),
+                        isLabelVisible: unreadCount > 0,
+                        child: IconButton(
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedNotification01,
+                            color: Colors.indigo,
+                          ),
+                          onPressed: () => context.go('/dashboard/notifications'),
                         ),
-                        onPressed: () => context.go('/dashboard/notifications'),
+                      );
+                    },
+                    orElse: () => IconButton(
+                      icon: const HugeIcon(
+                        icon: HugeIcons.strokeRoundedNotification01,
+                        color: Colors.indigo,
                       ),
-                    );
-                  },
-                  orElse: () => IconButton(
-                    icon: const HugeIcon(
-                      icon: HugeIcons.strokeRoundedNotification01,
-                      color: Colors.indigo,
+                      onPressed: () => context.go('/dashboard/notifications'),
                     ),
-                    onPressed: () => context.go('/dashboard/notifications'),
                   ),
                 ),
               ],

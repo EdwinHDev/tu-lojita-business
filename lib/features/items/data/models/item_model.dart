@@ -21,6 +21,7 @@ class ItemModel extends Item {
     super.customizationGroups = const [],
     super.allowInstallments = true,
     super.lateFeePercentage = 0,
+    super.isActive = true,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -45,6 +46,7 @@ class ItemModel extends Item {
       customizationGroups: _extractCustomizationGroups(json),
       allowInstallments: json['allowInstallments'] == true,
       lateFeePercentage: _parseDouble(json['lateFeePercentage']),
+      isActive: json['isActive'] ?? true,
     );
   }
 

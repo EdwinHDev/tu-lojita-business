@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationHelper {
@@ -9,7 +10,7 @@ class NotificationHelper {
 
   static Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@drawable/ic_notification');
 
     const DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
@@ -30,6 +31,18 @@ class NotificationHelper {
       },
     );
 
+    // Eliminar canal viejo para forzar a Android a recargar propiedades
+    // (Android cachea permanentemente iconos y configuración de canales)
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    try {
+      await androidPlugin?.deleteNotificationChannel('business_notifications');
+    } catch (e) {
+      debugPrint('Notification channel deletion skipped: $e');
+    }
+
     // Crear canal de notificaciones para Android
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'business_notifications',
@@ -39,15 +52,9 @@ class NotificationHelper {
       playSound: true,
     );
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    await androidPlugin?.requestNotificationsPermission();
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    await androidPlugin?.createNotificationChannel(channel);
   }
 
   static Future<void> showNotification({
@@ -63,6 +70,8 @@ class NotificationHelper {
       channelDescription: 'This channel is used for important notifications.',
       importance: Importance.max,
       priority: Priority.high,
+      icon: 'ic_notification',
+      color: Color(0xFF4F46E5),
       showWhen: true,
     );
 
@@ -78,5 +87,9 @@ class NotificationHelper {
       platformChannelSpecifics,
       payload: payload,
     );
+  }
+
+  static Future<void> cancelNotification(int id) async {
+    await flutterLocalNotificationsPlugin.cancel(id);
   }
 }

@@ -15,6 +15,9 @@ class PartialPaymentsSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsSettingsScreen> {
+  final TextEditingController _creditLimitController = TextEditingController();
+  bool _isCreditLimitControllerInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -23,6 +26,12 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
         ref.read(storeSettingsProvider.notifier).loadStore(widget.storeId);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _creditLimitController.dispose();
+    super.dispose();
   }
 
   bool _areFrequenciesEqual(
@@ -44,11 +53,21 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
     final state = ref.watch(storeSettingsProvider);
 
     final store = state.store;
+
+    if (store != null && !_isCreditLimitControllerInitialized) {
+      final initialVal = state.maxCreditLimit;
+      _creditLimitController.text = initialVal != null ? initialVal.toStringAsFixed(0) : '';
+      _isCreditLimitControllerInitialized = true;
+    }
+
     final hasChanges = store == null ||
         state.allowPartialPayments != store.allowPartialPayments ||
         state.feePercentage != store.partialPaymentsFeePercentage ||
         state.minInitialPercentage != store.minInitialPaymentPercentage ||
         state.maxInstallments != store.maxInstallments ||
+        state.allowInstallmentExtensions != store.allowInstallmentExtensions ||
+        state.maxExtensionDays != store.maxExtensionDays ||
+        state.maxCreditLimit != store.maxCreditLimit ||
         !_areFrequenciesEqual(state.installmentFrequencyOptions, store.installmentFrequencyOptions);
 
     ref.listen(storeSettingsProvider.select((s) => s.successMessage), (prev, next) {
@@ -106,6 +125,10 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
                             _buildCostCard(state),
                             const SizedBox(height: 24),
                             _buildTermsCard(state),
+                            const SizedBox(height: 24),
+                            _buildExtensionsCard(state),
+                            const SizedBox(height: 24),
+                            _buildCreditLimitCard(state),
                           ],
                         ),
                         crossFadeState: state.allowPartialPayments
@@ -390,12 +413,12 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
                     ),
                   ],
                   IconButton(
-                    onPressed: state.maxInstallments <= 1 ? null : () {
+                    onPressed: state.maxInstallments <= 2 ? null : () {
                       ref.read(storeSettingsProvider.notifier).updateMaxInstallments(state.maxInstallments - 1);
                     },
                     icon: Icon(
                       Icons.remove_circle_outline,
-                      color: state.maxInstallments <= 1 ? Colors.grey.shade400 : const Color(0xFF4F46E5),
+                      color: state.maxInstallments <= 2 ? Colors.grey.shade400 : const Color(0xFF4F46E5),
                     ),
                   ),
                   Container(
@@ -411,12 +434,12 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
                     ),
                   ),
                   IconButton(
-                    onPressed: state.maxInstallments >= 48 ? null : () {
+                    onPressed: state.maxInstallments >= 12 ? null : () {
                       ref.read(storeSettingsProvider.notifier).updateMaxInstallments(state.maxInstallments + 1);
                     },
                     icon: Icon(
                       Icons.add_circle_outline,
-                      color: state.maxInstallments >= 48 ? Colors.grey.shade400 : const Color(0xFF4F46E5),
+                      color: state.maxInstallments >= 12 ? Colors.grey.shade400 : const Color(0xFF4F46E5),
                     ),
                   ),
                 ],
@@ -587,6 +610,9 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
                         'installmentIntervalValue': state.installmentIntervalValue,
                         'installmentIntervalUnit': state.installmentIntervalUnit,
                         'installmentFrequencyOptions': state.installmentFrequencyOptions.map((e) => e.toJson()).toList(),
+                        'allowInstallmentExtensions': state.allowInstallmentExtensions,
+                        'maxExtensionDays': state.maxExtensionDays,
+                        'maxCreditLimit': state.maxCreditLimit,
                       },
                     );
                 if (success && mounted) {
@@ -612,4 +638,226 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
       ),
     );
   }
+
+  Widget _buildExtensionsCard(StoreSettingsState state) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              HugeIcon(
+                icon: HugeIcons.strokeRoundedCalendar03,
+                color: const Color(0xFF4F46E5),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Políticas de Prórrogas',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Permitir prórrogas",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF374151), fontSize: 13),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      "Clientes podrán solicitar días adicionales para pagar cuotas.",
+                      style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: state.allowInstallmentExtensions,
+                activeTrackColor: const Color(0xFF4F46E5),
+                activeThumbColor: Colors.white,
+                onChanged: (val) => ref.read(storeSettingsProvider.notifier).updateAllowInstallmentExtensions(val),
+              ),
+            ],
+          ),
+          if (state.allowInstallmentExtensions) ...[
+            const Divider(height: 32, thickness: 1, color: Color(0xFFE5E7EB)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Días máximos de prórroga",
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF374151), fontSize: 13),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    "${state.maxExtensionDays} días",
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF4F46E5), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: const Color(0xFF4F46E5),
+                inactiveTrackColor: Colors.grey.shade200,
+                thumbColor: const Color(0xFF4F46E5),
+                overlayColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                valueIndicatorColor: const Color(0xFF4F46E5),
+                valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              child: Slider(
+                value: state.maxExtensionDays.toDouble().clamp(1, 30),
+                min: 1,
+                max: 30,
+                divisions: 29,
+                label: "${state.maxExtensionDays} días",
+                onChanged: (val) {
+                  ref.read(storeSettingsProvider.notifier).updateMaxExtensionDays(val.round());
+                },
+              ),
+            ),
+            Text(
+              "Límite máximo de días que un cliente puede solicitar por cuota.",
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreditLimitCard(StoreSettingsState state) {
+    final hasLimit = state.maxCreditLimit != null;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              HugeIcon(
+                icon: HugeIcons.strokeRoundedCreditCard,
+                color: const Color(0xFF4F46E5),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Límite de Crédito por Cliente',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Limitar saldo adeudado",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF374151), fontSize: 13),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      "Establece una deuda total acumulada máxima por cliente.",
+                      style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: hasLimit,
+                activeTrackColor: const Color(0xFF4F46E5),
+                activeThumbColor: Colors.white,
+                onChanged: (val) {
+                  if (val) {
+                    ref.read(storeSettingsProvider.notifier).updateMaxCreditLimit(500.0);
+                    _creditLimitController.text = '500';
+                  } else {
+                    ref.read(storeSettingsProvider.notifier).updateMaxCreditLimit(null);
+                    _creditLimitController.clear();
+                  }
+                },
+              ),
+            ],
+          ),
+          if (hasLimit) ...[
+            const Divider(height: 32, thickness: 1, color: Color(0xFFE5E7EB)),
+            const Text(
+              "Monto del límite de crédito (USD)",
+              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF374151), fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _creditLimitController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF111827)),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.attach_money, color: Color(0xFF4F46E5)),
+                hintText: "0.00",
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 2),
+                ),
+              ),
+              onChanged: (val) {
+                final doubleValue = double.tryParse(val);
+                ref.read(storeSettingsProvider.notifier).updateMaxCreditLimit(doubleValue);
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Si el total de la deuda activa de un cliente más la nueva compra excede este valor, el checkout a cuotas será rechazado automáticamente.",
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
+

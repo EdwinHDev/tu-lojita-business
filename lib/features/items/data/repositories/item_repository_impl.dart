@@ -14,7 +14,10 @@ class ItemRepositoryImpl implements ItemRepository {
   @override
   Future<List<Item>> getItemsByStore(String storeId) async {
     try {
-      final response = await _dio.get('/items/store/$storeId');
+      final response = await _dio.get(
+        '/items/store/$storeId',
+        queryParameters: {'includeInactive': true},
+      );
       final data = response.data['data'] as List;
       return data.map((json) => ItemModel.fromJson(json)).toList();
     } catch (e) {
@@ -38,6 +41,7 @@ class ItemRepositoryImpl implements ItemRepository {
         'limit': limit,
         'offset': offset,
         'storeId': storeId,
+        'includeInactive': true,
       };
 
       if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -52,8 +56,8 @@ class ItemRepositoryImpl implements ItemRepository {
       if (order != null) {
         queryParameters['order'] = order;
       }
-      if (onlyInStock != null) {
-        queryParameters['onlyInStock'] = onlyInStock;
+      if (onlyInStock == true) {
+        queryParameters['onlyInStock'] = true;
       }
 
       final response = await _dio.get('/items', queryParameters: queryParameters);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/data/datasources/image_remote_data_source.dart';
+import 'package:tu_lojita_business/core/utils/error_parser.dart';
 import '../../domain/entities/store.dart';
 import '../../domain/repositories/stores_repository.dart';
 import 'dashboard_providers.dart';
@@ -37,6 +38,9 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         installmentIntervalUnit: store.installmentIntervalUnit,
         installmentFrequencyOptions: store.installmentFrequencyOptions,
         timezone: store.timezone,
+        allowInstallmentExtensions: store.allowInstallmentExtensions,
+        maxExtensionDays: store.maxExtensionDays,
+        maxCreditLimit: store.maxCreditLimit,
       );
     } catch (e) {
       if (!ref.mounted) return;
@@ -66,6 +70,22 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
 
   void updateTimezone(String value) {
     state = state.copyWith(timezone: value);
+  }
+
+  void updateAllowInstallmentExtensions(bool value) {
+    state = state.copyWith(allowInstallmentExtensions: value);
+  }
+
+  void updateMaxExtensionDays(int value) {
+    state = state.copyWith(maxExtensionDays: value);
+  }
+
+  void updateMaxCreditLimit(double? value) {
+    if (value == null) {
+      state = state.copyWith(clearMaxCreditLimit: true);
+    } else {
+      state = state.copyWith(maxCreditLimit: value);
+    }
   }
 
   void updateInstallmentInterval(int value, String unit) {
@@ -132,6 +152,9 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
           'installmentIntervalUnit': state.installmentIntervalUnit,
           'installmentFrequencyOptions': state.installmentFrequencyOptions.map((e) => e.toJson()).toList(),
           'timezone': state.timezone,
+          'allowInstallmentExtensions': state.allowInstallmentExtensions,
+          'maxExtensionDays': state.maxExtensionDays,
+          'maxCreditLimit': state.maxCreditLimit,
         };
       }
 
@@ -157,7 +180,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       return true;
     } catch (e) {
       if (!ref.mounted) return false;
-      state = state.copyWith(isSaving: false, error: e.toString());
+      state = state.copyWith(isSaving: false, error: ErrorParser.parse(e));
       return false;
     }
   }
