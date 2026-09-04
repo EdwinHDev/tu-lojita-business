@@ -164,8 +164,14 @@ final verifyPaymentProvider = FutureProvider.family<Order, Map<String, dynamic>>
   final paymentId = params['paymentId'] as String;
   final status = params['status'] as String;
   final orderId = params['orderId'] as String;
+  final rejectionReason = params['rejectionReason'] as String?;
   
-  final updatedOrder = await repo.verifyPayment(paymentId, status, orderId);
+  final updatedOrder = await repo.verifyPayment(
+    paymentId,
+    status,
+    orderId,
+    rejectionReason: rejectionReason,
+  );
   ref.invalidate(orderByIdProvider(orderId));
   return updatedOrder;
 });
@@ -178,5 +184,30 @@ final storeReceivablesProvider = FutureProvider.family<List<Installment>, String
 final orderStatementProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, orderId) async {
   final repo = ref.read(ordersRepositoryProvider);
   return repo.getOrderStatement(orderId);
+});
+
+final registerManualPaymentProvider = FutureProvider.family<Map<String, dynamic>, Map<String, dynamic>>((ref, params) async {
+  final repo = ref.read(ordersRepositoryProvider);
+  final orderId = params['orderId'] as String;
+  final amount = (params['amount'] as num).toDouble();
+  final paymentMethod = params['paymentMethod'] as String;
+  final reference = params['reference'] as String?;
+  final notes = params['notes'] as String?;
+  final storeId = params['storeId'] as String?;
+
+  final result = await repo.registerManualPayment(
+    orderId,
+    amount,
+    paymentMethod,
+    reference: reference,
+    notes: notes,
+  );
+
+  ref.invalidate(orderByIdProvider(orderId));
+  if (storeId != null) {
+    ref.invalidate(storeInstallmentsProvider(storeId));
+    ref.invalidate(storeReceivablesProvider(storeId));
+  }
+  return result;
 });
 

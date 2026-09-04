@@ -6,6 +6,7 @@ class ChatMessage {
   final String orderId;
   final User sender;
   final String content;
+  final String? imageUrl;
   final DateTime createdAt;
   final bool isRead;
   final bool isDelivered;
@@ -16,6 +17,7 @@ class ChatMessage {
     required this.orderId,
     required this.sender,
     required this.content,
+    this.imageUrl,
     required this.createdAt,
     this.isRead = false,
     this.isDelivered = false,
@@ -27,6 +29,7 @@ class ChatMessage {
     String? orderId,
     User? sender,
     String? content,
+    String? imageUrl,
     DateTime? createdAt,
     bool? isRead,
     bool? isDelivered,
@@ -37,6 +40,7 @@ class ChatMessage {
       orderId: orderId ?? this.orderId,
       sender: sender ?? this.sender,
       content: content ?? this.content,
+      imageUrl: imageUrl ?? this.imageUrl,
       createdAt: createdAt ?? this.createdAt,
       isRead: isRead ?? this.isRead,
       isDelivered: isDelivered ?? this.isDelivered,
@@ -59,6 +63,7 @@ class ChatMessage {
           ? UserModel.fromJson(Map<String, dynamic>.from(json['sender']))
           : const User(id: '', email: '', firstName: '', lastName: '', role: 'USER'),
       content: json['content'] ?? '',
+      imageUrl: json['imageUrl'] as String?,
       createdAt: json['createdAt'] != null 
           ? DateTime.parse(json['createdAt']) 
           : DateTime.now(),
@@ -74,6 +79,7 @@ class ChatMessage {
       'orderId': orderId,
       'sender': sender.toJson(),
       'content': content,
+      'imageUrl': imageUrl,
       'createdAt': createdAt.toIso8601String(),
       'isRead': isRead,
       'isDelivered': isDelivered,

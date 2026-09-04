@@ -6,7 +6,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:tu_lojita_business/core/utils/jwt_utils.dart';
 
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
@@ -70,8 +72,11 @@ void onStart(ServiceInstance service) async {
   // Cargar variables de entorno
   await dotenv.load(fileName: ".env");
   final baseUrl = Envs.apiBaseUrl;
-  const storage = FlutterSecureStorage();
+  const storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(resetOnError: false),
+  );
   const accessTokenKey = 'access_token';
+  const refreshTokenKey = 'refresh_token';
 
   // Inicializar notificaciones locales DENTRO del isolate
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -86,19 +91,49 @@ void onStart(ServiceInstance service) async {
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   io.Socket? socket;
-  Timer? reconnectTimer;
+
+  Future<String?> refreshBackgroundToken() async {
+    try {
+      final refreshToken = await storage.read(key: refreshTokenKey);
+      if (refreshToken != null) {
+        final dio = Dio();
+        final response = await dio.get(
+          '$baseUrl/auth/refresh',
+          options: Options(headers: {'Authorization': 'Bearer $refreshToken'}),
+        );
+        if (response.statusCode == 200 && response.data != null) {
+          final newAccessToken = response.data['accessToken'];
+          final newRefreshToken = response.data['refreshToken'];
+          if (newAccessToken != null && newRefreshToken != null) {
+            await storage.write(key: accessTokenKey, value: newAccessToken);
+            await storage.write(key: refreshTokenKey, value: newRefreshToken);
+            debugPrint('Business BackgroundService: Tokens refreshed successfully');
+            return newAccessToken;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Business BackgroundService: Failed to refresh token: $e');
+    }
+    return null;
+  }
 
   Future<void> connectSocket() async {
     // Si ya está conectado, no hacemos nada
     if (socket != null && socket!.connected) return;
 
-    final token = await storage.read(key: accessTokenKey);
-    final socketUrl = baseUrl.replaceAll('/api/v1', '');
-
-    if (token == null) {
-      debugPrint('BackgroundService: No token found, waiting...');
-      return;
+    var token = await storage.read(key: accessTokenKey);
+    
+    if (token == null || isJwtExpired(token)) {
+      debugPrint('Business BackgroundService: Token is null or expired on connect. Refreshing token...');
+      token = await refreshBackgroundToken();
+      if (token == null) {
+        debugPrint('Business BackgroundService: Unable to refresh token, skipping connection.');
+        return;
+      }
     }
+
+    final socketUrl = baseUrl.replaceAll('/api/v1', '');
 
     // Si ya existe pero no está conectado, lo desconectamos para limpiar
     if (socket != null) {
@@ -111,6 +146,10 @@ void onStart(ServiceInstance service) async {
           .setTransports(['websocket'])
           .setAuth({'token': 'Bearer $token'})
           .enableAutoConnect()
+          .enableReconnection()
+          .setReconnectionDelay(5000)
+          .setReconnectionDelayMax(30000)
+          .setReconnectionAttempts(10)
           .build(),
     );
 
@@ -120,6 +159,22 @@ void onStart(ServiceInstance service) async {
 
     socket!.onDisconnect((_) {
       debugPrint('BackgroundService: Disconnected from socket');
+    });
+
+    socket!.onConnectError((err) async {
+      debugPrint('Business BackgroundService: Socket connect error: $err');
+      final errStr = err.toString().toLowerCase();
+      if (errStr.contains('unauthorized') || errStr.contains('jwt') || errStr.contains('token') || errStr.contains('forbidden')) {
+        await refreshBackgroundToken();
+      }
+    });
+
+    socket!.on('auth_error', (data) async {
+      debugPrint('Business BackgroundService: Auth error event: $data. Refreshing token...');
+      await refreshBackgroundToken();
+      socket?.dispose();
+      socket = null;
+      connectSocket();
     });
 
     socket!.on('new_notification', (data) {
@@ -149,16 +204,7 @@ void onStart(ServiceInstance service) async {
   // Intentar conectar inicialmente
   connectSocket();
 
-  // Reintentar cada 30 segundos si no está conectado
-  reconnectTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-    if (socket == null || !socket!.connected) {
-      debugPrint('BackgroundService: Attempting to reconnect...');
-      connectSocket();
-    }
-  });
-
   service.on('stopService').listen((event) {
-    reconnectTimer?.cancel();
     socket?.disconnect();
     socket?.dispose();
     service.stopSelf();

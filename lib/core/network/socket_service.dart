@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:tu_lojita_business/features/auth/data/datasources/local_auth_data_source.dart';
 
+import 'package:tu_lojita_business/core/utils/jwt_utils.dart';
+
 class SocketService {
   final LocalAuthDataSource _localAuthDataSource;
   io.Socket? _socket;
@@ -12,6 +14,8 @@ class SocketService {
   String? _currentChatOrderId;
   bool _isReconnecting = false;
   
+  Timer? _tokenRefreshTimer;
+
   final _notificationController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get notificationsStream => _notificationController.stream;
 
@@ -33,11 +37,13 @@ class SocketService {
   final _chatMessagesDeliveredController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get chatMessagesDeliveredStream => _chatMessagesDeliveredController.stream;
 
-  final _chatMessagesUnreadController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get chatMessagesUnreadStream => _chatMessagesUnreadController.stream;
-
   final _chatClosedController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get chatClosedStream => _chatClosedController.stream;
+
+  final _storeInstallmentsController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get storeInstallmentsStream => _storeInstallmentsController.stream;
+
+  String? _currentStoreId;
 
   SocketService(this._localAuthDataSource);
 
@@ -47,6 +53,17 @@ class SocketService {
     if (_socket != null && _socket!.connected) return;
 
     var token = await _localAuthDataSource.getAccessToken();
+    if (isJwtExpired(token)) {
+      log('Business SocketService: Token is expired on init. Attempting refresh...');
+      final refreshed = await _refreshTokenOnly();
+      if (!refreshed) {
+        log('Business SocketService: Unable to refresh token on init. Aborting socket connection.');
+        return;
+      }
+      token = await _localAuthDataSource.getAccessToken();
+      if (token == null || isJwtExpired(token)) return;
+    }
+
     final baseUrl = Envs.apiBaseUrl;
     final socketUrl = baseUrl.replaceAll('/api/v1', '');
 
@@ -65,6 +82,15 @@ class SocketService {
     );
 
     _setupListeners();
+    _startProactiveTokenRefresh();
+  }
+
+  void _startProactiveTokenRefresh() {
+    _tokenRefreshTimer?.cancel();
+    _tokenRefreshTimer = Timer.periodic(const Duration(minutes: 12), (_) async {
+      log('Business Proactive token refresh triggered for SocketService');
+      await reconnectWithFreshToken();
+    });
   }
 
   void _setupListeners() {
@@ -78,6 +104,12 @@ class SocketService {
       if (_currentChatOrderId != null) {
         log('Business Auto-rejoining chat room: $_currentChatOrderId');
         _socket!.emit('join_chat', {'orderId': _currentChatOrderId});
+      }
+
+      // Auto-rejoin de tienda activa en caso de reconexión
+      if (_currentStoreId != null) {
+        log('Business Auto-rejoining store room: $_currentStoreId');
+        _socket!.emit('join_store', {'storeId': _currentStoreId});
       }
 
       // Procesar y vaciar cola de acciones pendientes
@@ -137,14 +169,23 @@ class SocketService {
       _chatMessagesDeliveredController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket!.on('messages_unread', (data) {
-      log('Business Messages unread received: $data');
-      _chatMessagesUnreadController.add(Map<String, dynamic>.from(data));
-    });
-
     _socket!.on('chat_closed', (data) {
       log('Business Chat closed event received: $data');
       _chatClosedController.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('store_installments_updated', (data) {
+      log('Business store_installments_updated received: $data');
+      if (data is Map) {
+        _storeInstallmentsController.add(Map<String, dynamic>.from(data));
+      } else {
+        _storeInstallmentsController.add({'data': data});
+      }
+    });
+
+    _socket!.on('auth_error', (data) {
+      log('Business Socket auth_error event: $data');
+      _handleConnectionError('unauthorized');
     });
 
     _socket!.on('exception', (data) {
@@ -174,8 +215,7 @@ class SocketService {
     }
   }
 
-  Future<void> reconnectWithFreshToken() async {
-    log('Business Reconnecting socket with fresh token...');
+  Future<bool> _refreshTokenOnly() async {
     try {
       final refreshToken = await _localAuthDataSource.getRefreshToken();
       if (refreshToken != null) {
@@ -192,22 +232,40 @@ class SocketService {
             await _localAuthDataSource.saveAccessToken(newAccessToken);
             await _localAuthDataSource.saveRefreshToken(newRefreshToken);
             log('Business Tokens refreshed successfully for WebSocket');
+            return true;
           }
         }
       }
     } catch (e) {
       log('Business Failed to refresh token during socket reconnect: $e');
     }
+    return false;
+  }
 
+  Future<void> reconnectWithFreshToken() async {
+    log('Business Reconnecting socket with fresh token...');
     _socket?.dispose();
     _socket = null;
+
+    final refreshed = await _refreshTokenOnly();
+    if (!refreshed) {
+      log('Business SocketService: Token refresh failed during reconnect. Aborting socket reconnection.');
+      _isReconnecting = false;
+      return;
+    }
+
     _isReconnecting = false;
     await init();
   }
 
-  void _emitOrQueue(String event, Map<String, dynamic> data) {
+  void _emitOrQueue(String event, Map<String, dynamic> data) async {
     if (_socket != null && _socket!.connected) {
-      _socket!.emit(event, data);
+      final token = await _localAuthDataSource.getAccessToken();
+      if (isJwtExpired(token)) {
+        log('Business SocketService: Token expired during _emitOrQueue. Reconnecting...');
+        await reconnectWithFreshToken();
+      }
+      _socket?.emit(event, data);
     } else {
       log('Business Socket not connected. Queueing event: $event with data: $data');
       _pendingActions.add(() {
@@ -228,6 +286,18 @@ class SocketService {
     _emitOrQueue('leave_chat', {'orderId': orderId});
   }
 
+  void joinStore(String storeId) {
+    _currentStoreId = storeId;
+    _emitOrQueue('join_store', {'storeId': storeId});
+  }
+
+  void leaveStore(String storeId) {
+    if (_currentStoreId == storeId) {
+      _currentStoreId = null;
+    }
+    _emitOrQueue('leave_store', {'storeId': storeId});
+  }
+
   void sendMessage(String orderId, String content) {
     _emitOrQueue('send_message', {
       'orderId': orderId,
@@ -238,21 +308,37 @@ class SocketService {
   Future<Map<String, dynamic>> sendMessageWithAck(
     String orderId,
     String content, {
+    String? imageUrl,
     Duration timeout = const Duration(seconds: 8),
+    bool isRetry = false,
   }) async {
-    final completer = Completer<Map<String, dynamic>>();
-    final data = {'orderId': orderId, 'content': content};
-
-    if (_socket == null || !_socket!.connected) {
+    final token = await _localAuthDataSource.getAccessToken();
+    if (isJwtExpired(token) || _socket == null || !_socket!.connected) {
+      log('Business SocketService: Token is expired or socket disconnected before sendMessageWithAck. Reconnecting...');
       await reconnectWithFreshToken();
     }
 
+    final completer = Completer<Map<String, dynamic>>();
+    final data = <String, dynamic>{
+      'orderId': orderId,
+      'content': content,
+      'imageUrl': ?imageUrl,
+    };
+
     if (_socket != null && _socket!.connected) {
       try {
-        _socket!.emitWithAck('send_message', data, ack: (response) {
+        _socket!.emitWithAck('send_message', data, ack: (response) async {
           if (!completer.isCompleted) {
             if (response is Map) {
-              completer.complete(Map<String, dynamic>.from(response));
+              final resMap = Map<String, dynamic>.from(response);
+              if (resMap['error'] == 'INVALID_TOKEN' && !isRetry) {
+                log('Business SocketService: ACK returned INVALID_TOKEN. Triggering reconnect and retry...');
+                await reconnectWithFreshToken();
+                final retryRes = await sendMessageWithAck(orderId, content, imageUrl: imageUrl, timeout: timeout, isRetry: true);
+                completer.complete(retryRes);
+                return;
+              }
+              completer.complete(resMap);
             } else {
               completer.complete({'success': true});
             }
@@ -297,6 +383,7 @@ class SocketService {
   }
 
   void dispose() {
+    _tokenRefreshTimer?.cancel();
     _notificationController.close();
     _chatController.close();
     _chatHistoryController.close();
@@ -304,8 +391,8 @@ class SocketService {
     _chatTypingController.close();
     _chatMessagesReadController.close();
     _chatMessagesDeliveredController.close();
-    _chatMessagesUnreadController.close();
     _chatClosedController.close();
+    _storeInstallmentsController.close();
     disconnect();
   }
 }

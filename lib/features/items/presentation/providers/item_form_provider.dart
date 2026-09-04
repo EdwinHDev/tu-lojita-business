@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../domain/entities/item.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 
 class ItemFormState {
@@ -34,6 +35,7 @@ class ItemFormState {
   final bool allowInstallments;
   final double lateFeePercentage;
   final bool isActive;
+  final List<Map<String, dynamic>> commissionRanges;
 
   const ItemFormState({
     this.selectedImages = const [],
@@ -62,7 +64,48 @@ class ItemFormState {
     this.allowInstallments = false,
     this.lateFeePercentage = 0,
     this.isActive = true,
+    this.commissionRanges = const [],
   });
+
+  double get effectivePrice =>
+      (discountPrice != null && discountPrice! > 0) ? discountPrice! : price;
+
+  Map<String, dynamic>? get matchedRange {
+    final p = effectivePrice;
+    if (p <= 0 || commissionRanges.isEmpty) return null;
+    for (final r in commissionRanges) {
+      final min =
+          double.tryParse(r['minAmount']?.toString() ?? '0') ?? 0.0;
+      final max = r['maxAmount'] != null
+          ? double.tryParse(r['maxAmount'].toString())
+          : double.infinity;
+      if (p >= min && p <= (max ?? double.infinity)) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  double get singleCommissionRate =>
+      double.tryParse(matchedRange?['singlePaymentRate']?.toString() ?? '0') ??
+      0.0;
+
+  double get installmentCommissionRate =>
+      double.tryParse(
+          matchedRange?['installmentPaymentRate']?.toString() ?? '0') ??
+      0.0;
+
+  double get singleCommissionAmount =>
+      (effectivePrice * singleCommissionRate) / 100;
+
+  double get installmentCommissionAmount =>
+      (effectivePrice * installmentCommissionRate) / 100;
+
+  double get customerSingleFinalPrice =>
+      effectivePrice + singleCommissionAmount;
+
+  double get customerInstallmentFinalPrice =>
+      effectivePrice + installmentCommissionAmount;
 
   ItemFormState copyWith({
     List<File>? selectedImages,
@@ -91,6 +134,7 @@ class ItemFormState {
     bool? allowInstallments,
     double? lateFeePercentage,
     bool? isActive,
+    List<Map<String, dynamic>>? commissionRanges,
   }) {
     return ItemFormState(
       selectedImages: selectedImages ?? this.selectedImages,
@@ -119,13 +163,32 @@ class ItemFormState {
       allowInstallments: allowInstallments ?? this.allowInstallments,
       lateFeePercentage: lateFeePercentage ?? this.lateFeePercentage,
       isActive: isActive ?? this.isActive,
+      commissionRanges: commissionRanges ?? this.commissionRanges,
     );
   }
 }
 
 class ItemFormNotifier extends Notifier<ItemFormState> {
   @override
-  ItemFormState build() => const ItemFormState();
+  ItemFormState build() {
+    Future.microtask(() => loadCommissionSettings());
+    return const ItemFormState();
+  }
+
+  Future<void> loadCommissionSettings() async {
+    try {
+      final dio = ref.read(dioProvider);
+      final res = await dio.get('/commissions/active-ranges');
+      final isEnabled = res.data['isEnabled'] == true;
+      final ranges = isEnabled
+          ? ((res.data['ranges'] as List?)
+                  ?.map((r) => Map<String, dynamic>.from(r as Map))
+                  .toList() ??
+              [])
+          : <Map<String, dynamic>>[];
+      state = state.copyWith(commissionRanges: ranges);
+    } catch (_) {}
+  }
 
   void initForEditing(Item item) => initFromItem(item);
 

@@ -109,12 +109,14 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Order> verifyPayment(String paymentId, String status, String orderId) async {
+  Future<Order> verifyPayment(String paymentId, String status, String orderId, {String? rejectionReason}) async {
     try {
       final response = await dio.post(
         '/payment/$paymentId/verify',
         data: {
           'status': status,
+          if (rejectionReason != null && rejectionReason.isNotEmpty)
+            'rejectionReason': rejectionReason,
         },
       );
 
@@ -157,6 +159,35 @@ class OrderRepositoryImpl implements OrderRepository {
       }
     } catch (e) {
       throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> registerManualPayment(
+    String orderId,
+    double amount,
+    String paymentMethod, {
+    String? reference,
+    String? notes,
+  }) async {
+    try {
+      final response = await dio.post(
+        '/order/$orderId/manual-payment',
+        data: {
+          'amount': amount,
+          'paymentMethod': paymentMethod,
+          if (reference != null && reference.isNotEmpty) 'reference': reference,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return response.data as Map<String, dynamic>;
+      } else {
+        throw ServerException('Error al registrar el pago manual');
+      }
+    } catch (e) {
+      throw ServerException(ErrorParser.parse(e));
     }
   }
 }

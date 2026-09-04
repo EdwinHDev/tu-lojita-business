@@ -56,27 +56,12 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Container(
-          margin: const EdgeInsets.all(8),
-          decoration: const BoxDecoration(
-            color: Colors.black26,
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: const HugeIcon(
-              icon: HugeIcons.strokeRoundedArrowLeft01,
-              color: Colors.white,
-              size: 20,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-      ),
-      body: RefreshIndicator(
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: Stack(
+          children: [
+            RefreshIndicator(
         onRefresh: () async {
           await ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
         },
@@ -109,6 +94,29 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
           ],
         ),
       ),
+
+      // Botón Atrás Flotante
+      Positioned(
+        top: 8,
+        left: 8,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.black26,
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              color: Colors.white,
+              size: 20,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showManagementMenu(context),
         backgroundColor: const Color(0xFF4F46E5),

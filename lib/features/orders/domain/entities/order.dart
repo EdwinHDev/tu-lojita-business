@@ -8,6 +8,8 @@ class Payment {
   final String paymentMethod;
   final String? reference;
   final String? receiptImage;
+  final String? rejectionReason;
+  final int? installmentIndex;
   final DateTime createdAt;
 
   Payment({
@@ -18,6 +20,8 @@ class Payment {
     required this.paymentMethod,
     this.reference,
     this.receiptImage,
+    this.rejectionReason,
+    this.installmentIndex,
     required this.createdAt,
   });
 
@@ -30,6 +34,8 @@ class Payment {
       paymentMethod: json['paymentMethod'] ?? '',
       reference: json['reference'] as String?,
       receiptImage: json['receiptImage'] as String?,
+      rejectionReason: json['rejectionReason'] as String?,
+      installmentIndex: json['installmentIndex'] as int?,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
     );
   }
@@ -48,6 +54,44 @@ extension PaymentX on Payment {
         return paymentMethod;
     }
   }
+
+  String get quotaLabel {
+    if (installmentIndex == null) return 'Pago Total';
+    if (installmentIndex == 1) return 'Pago Inicial (Cuota 1)';
+    return 'Cuota #$installmentIndex';
+  }
+
+  String getQuotaLabel(Order order) {
+    if (!order.isPartialPayment) {
+      return 'Pago Total (1 de 1)';
+    }
+
+    final total = order.installments.isNotEmpty ? order.installments.length : 1;
+    final idx = installmentIndex ?? _deduceInstallmentIndex(order);
+
+    if (idx == 1) {
+      return total > 1 ? 'Cuota 1 de $total (Inicial)' : 'Cuota 1 de 1';
+    } else if (idx == total) {
+      return 'Cuota $total de $total (Final)';
+    } else {
+      return 'Cuota $idx de $total';
+    }
+  }
+
+  int _deduceInstallmentIndex(Order order) {
+    final sorted = [...order.payments];
+    sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    int approvedBefore = 0;
+    for (final p in sorted) {
+      if (p.id == id) break;
+      if (p.status == 'APPROVED') {
+        approvedBefore++;
+      }
+    }
+    final deduced = approvedBefore + 1;
+    final maxInst = order.installments.isNotEmpty ? order.installments.length : 1;
+    return deduced > maxInst ? maxInst : deduced;
+  }
 }
 
 class Order {
@@ -55,6 +99,8 @@ class Order {
   final String status;
   final double totalAmount;
   final double feeAmount;
+  final double platformCommissionRate;
+  final double platformCommissionAmount;
   final double finalAmount;
   final double balance;
   final DateTime createdAt;
@@ -78,6 +124,8 @@ class Order {
     required this.status,
     required this.totalAmount,
     this.feeAmount = 0.0,
+    this.platformCommissionRate = 0.0,
+    this.platformCommissionAmount = 0.0,
     required this.finalAmount,
     required this.balance,
     required this.createdAt,
@@ -103,6 +151,12 @@ class Order {
       status: json['status'] ?? 'PENDING',
       totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
       feeAmount: double.tryParse(json['feeAmount']?.toString() ?? '0') ?? 0.0,
+      platformCommissionRate:
+          double.tryParse(json['platformCommissionRate']?.toString() ?? '0') ??
+              0.0,
+      platformCommissionAmount:
+          double.tryParse(json['platformCommissionAmount']?.toString() ?? '0') ??
+              0.0,
       finalAmount: double.tryParse(json['finalAmount']?.toString() ?? '0') ?? 0.0,
       balance: double.tryParse(json['balance']?.toString() ?? '0') ?? 0.0,
       createdAt: json['createdAt'] != null
@@ -140,7 +194,7 @@ class Installment {
   final double amount;
   final double paidAmount;
   final double lateFeeApplied;
-  final DateTime dueDate;
+  final DateTime? dueDate;
   final DateTime? paymentDate;
   final String status;
   final Order? order;
@@ -155,7 +209,7 @@ class Installment {
     required this.amount,
     required this.paidAmount,
     required this.lateFeeApplied,
-    required this.dueDate,
+    this.dueDate,
     this.paymentDate,
     required this.status,
     this.order,
@@ -171,8 +225,8 @@ class Installment {
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
       paidAmount: double.tryParse(json['paidAmount']?.toString() ?? '0') ?? 0.0,
       lateFeeApplied: double.tryParse(json['lateFeeApplied']?.toString() ?? '0') ?? 0.0,
-      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : DateTime.now(),
-      paymentDate: json['paymentDate'] != null ? DateTime.parse(json['paymentDate']) : null,
+      dueDate: json['dueDate'] != null ? DateTime.tryParse(json['dueDate'].toString()) : null,
+      paymentDate: json['paymentDate'] != null ? DateTime.tryParse(json['paymentDate'].toString()) : null,
       status: json['status'] ?? 'PENDING',
       order: json['order'] != null ? Order.fromJson(json['order']) : null,
       extensionStatus: json['extensionStatus'] ?? 'NONE',

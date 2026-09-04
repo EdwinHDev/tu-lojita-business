@@ -1036,16 +1036,38 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       child: Column(
         children: [
           _buildSummaryRow(
-            'Subtotal',
+            'Subtotal (Productos)',
             '\$${currentOrder!.totalAmount.toStringAsFixed(2)}',
             isTotal: false,
           ),
+          if (currentOrder!.feeAmount > 0) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(color: Color(0xFFF1F5F9), height: 1),
+            ),
+            _buildSummaryRow(
+              'Recargo por pago en cuotas',
+              '+\$${currentOrder!.feeAmount.toStringAsFixed(2)}',
+              isTotal: false,
+            ),
+          ],
+          if (currentOrder!.platformCommissionAmount > 0) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(color: Color(0xFFF1F5F9), height: 1),
+            ),
+            _buildSummaryRow(
+              'Servicio Plataforma (+${currentOrder!.platformCommissionRate.toStringAsFixed(1)}%)',
+              '+\$${currentOrder!.platformCommissionAmount.toStringAsFixed(2)}',
+              isTotal: false,
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
             child: Divider(color: Color(0xFFF1F5F9), height: 1),
           ),
           _buildSummaryRow(
-            'Total a Pagar',
+            'Total Facturado al Cliente',
             '\$${currentOrder!.finalAmount.toStringAsFixed(2)}',
             isTotal: true,
           ),
@@ -1123,7 +1145,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isInstallment ? 'PAGO EN CUOTAS' : 'PAGO COMPLETO',
+                  isInstallment
+                      ? (currentOrder!.feeAmount > 0 ? 'PAGO EN CUOTAS (+RECARGO)' : 'PAGO EN CUOTAS')
+                      : 'PAGO COMPLETO',
                   style: TextStyle(
                     color: isInstallment
                         ? const Color(0xFF4F46E5)
@@ -1304,31 +1328,69 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             final index = entry.key;
             final installment = entry.value;
             final isLast = index == currentOrder!.installments.length - 1;
-            final isOverdue = installment.dueDate.isBefore(DateTime.now()) &&
+            
+            final isInReview = installmentsInReview.contains(installment.id) ||
+                (index == 0 && waitingPayments.isNotEmpty && installment.status != 'PAID');
+            final isPaid = installment.status == 'PAID';
+            final isInitialPayment = index == 0;
+            
+            // Regla: la primera cuota o pagos en revisión NUNCA pueden ser vencidos
+            final isOverdue = !isPaid &&
+                !isInReview &&
+                !isInitialPayment &&
+                installment.dueDate != null &&
+                installment.dueDate!.isBefore(DateTime.now()) &&
                 installment.status == 'PENDING';
-            final isInReview = installmentsInReview.contains(installment.id);
 
             Color statusBgColor;
             Color statusTextColor;
             String statusLabel;
+            String dateLabel;
+            Color dateColor;
 
-            if (installment.status == 'PAID') {
+            if (isPaid) {
               statusBgColor = const Color(0xFFECFDF5);
               statusTextColor = const Color(0xFF047857);
               statusLabel = 'PAGADA';
+              dateLabel = installment.paymentDate != null
+                  ? 'Pagada el ${installment.paymentDate!.toSlashDateString()}'
+                  : 'Pagada';
+              dateColor = const Color(0xFF047857);
             } else if (isInReview) {
               statusBgColor = const Color(0xFFFFFBEB);
               statusTextColor = const Color(0xFFD97706);
               statusLabel = 'EN REVISIÓN';
+              dateLabel = isInitialPayment
+                  ? 'Pago inicial en verificación'
+                  : 'Comprobante en verificación';
+              dateColor = const Color(0xFFD97706);
             } else if (isOverdue) {
               statusBgColor = const Color(0xFFFEF2F2);
               statusTextColor = const Color(0xFFB91C1C);
               statusLabel = 'VENCIDA';
+              dateLabel = 'Venció el ${installment.dueDate!.toSlashDateString()}';
+              dateColor = const Color(0xFFB91C1C);
+            } else if (isInitialPayment) {
+              statusBgColor = const Color(0xFFF1F5F9);
+              statusTextColor = const Color(0xFF475569);
+              statusLabel = 'PENDIENTE';
+              dateLabel = 'Pago inicial (al comprar)';
+              dateColor = const Color(0xFF64748B);
+            } else if (installment.dueDate == null) {
+              statusBgColor = const Color(0xFFF1F5F9);
+              statusTextColor = const Color(0xFF475569);
+              statusLabel = 'PENDIENTE';
+              dateLabel = 'Por programar (al pagar cuota anterior)';
+              dateColor = const Color(0xFF64748B);
             } else {
               statusBgColor = const Color(0xFFF1F5F9);
               statusTextColor = const Color(0xFF475569);
               statusLabel = 'PENDIENTE';
+              dateLabel = 'Vence: ${installment.dueDate!.toSlashDateString()}';
+              dateColor = const Color(0xFF64748B);
             }
+
+            final titleLabel = isInitialPayment ? 'Pago Inicial (Cuota 1)' : 'Cuota ${index + 1}';
 
             return Column(
               children: [
@@ -1340,7 +1402,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: installment.status == 'PAID'
+                          color: isPaid
                               ? const Color(0xFFECFDF5)
                               : (isInReview
                                   ? const Color(0xFFFFFBEB)
@@ -1353,7 +1415,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                           child: Text(
                             '${index + 1}',
                             style: TextStyle(
-                              color: installment.status == 'PAID'
+                              color: isPaid
                                   ? const Color(0xFF047857)
                                   : (isInReview
                                       ? const Color(0xFFD97706)
@@ -1372,23 +1434,31 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '\$${installment.amount.toStringAsFixed(2)}',
+                              titleLabel,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '\$${installment.amount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
                                 fontSize: 15,
                                 color: Color(0xFF0F172A),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Vence: ${installment.dueDate.toSlashDateString()}',
+                              dateLabel,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isOverdue
-                                    ? const Color(0xFFB91C1C)
-                                    : const Color(0xFF64748B),
-                                fontWeight:
-                                    isOverdue ? FontWeight.bold : FontWeight.normal,
+                                color: dateColor,
+                                fontWeight: (isOverdue || isInReview || isPaid)
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -1628,17 +1698,37 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                               color: Color(0xFF0F172A),
                             ),
                           ),
-                          Text(
-                            isApproved 
-                                ? 'Verificado' 
-                                : (isRejected ? 'Rechazado' : 'En revisión'),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isApproved 
-                                  ? const Color(0xFF047857) 
-                                  : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFC2410C)),
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                isApproved 
+                                    ? 'Verificado' 
+                                    : (isRejected ? 'Rechazado' : 'En revisión'),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isApproved 
+                                      ? const Color(0xFF047857) 
+                                      : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFC2410C)),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  payment.getQuotaLabel(currentOrder!),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1654,6 +1744,49 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   ),
                 ],
               ),
+
+              // ── Banner de motivo de rechazo si fue rechazado ──
+              if (isRejected && payment.rejectionReason != null && payment.rejectionReason!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Motivo del Rechazo:',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFDC2626),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        payment.rejectionReason!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF991B1B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               // ── Banner de cuota asociada (solo para pagos en revisión) ──
               if (isWaiting && coveredInstallment != null) ...[
@@ -1697,7 +1830,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '· Vence ${coveredInstallment.dueDate.toSlashDateString()}',
+                            coveredInstallment.dueDate != null
+                                ? '· Vence ${coveredInstallment.dueDate!.toSlashDateString()}'
+                                : '· Por programar',
                             style: TextStyle(
                               fontSize: 11,
                               color: isSufficient
@@ -1851,7 +1986,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _isUpdating ? null : () => _rejectIndividualPayment(payment),
+                      onPressed: _isUpdating ? null : () => _showRejectPaymentDialog(payment),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFDC2626),
                         side: const BorderSide(color: Color(0xFFFCA5A5)),
@@ -1890,9 +2025,14 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   /// Dado un pago, retorna la (cuota, minRequired) que ese pago cubre primero,
   /// simulando la amortización secuencial del backend.
   ({Installment? installment, int installmentIndex, double minRequired}) _getInstallmentContextForPayment(Payment payment) {
-    // Cuotas ordenadas por fecha de vencimiento
+    // Cuotas ordenadas por fecha de vencimiento (o por orden de cuota si no está programada)
     final sorted = [...currentOrder!.installments];
-    sorted.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    sorted.sort((a, b) {
+      if (a.dueDate == null && b.dueDate == null) return 0;
+      if (a.dueDate == null) return 1;
+      if (b.dueDate == null) return -1;
+      return a.dueDate!.compareTo(b.dueDate!);
+    });
 
     // Acumular lo ya pagado (pagos APPROVED antes que este)
     int alreadyCoveredCents = 0;
@@ -1926,7 +2066,12 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   /// queda de la siguiente cuota si hay exceso.
   List<({int index, String status, double remaining})> _getApprovalImpact(Payment payment) {
     final sorted = [...currentOrder!.installments];
-    sorted.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    sorted.sort((a, b) {
+      if (a.dueDate == null && b.dueDate == null) return 0;
+      if (a.dueDate == null) return 1;
+      if (b.dueDate == null) return -1;
+      return a.dueDate!.compareTo(b.dueDate!);
+    });
 
     int alreadyCoveredCents = 0;
     for (final p in currentOrder!.payments) {
@@ -2016,7 +2161,213 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     }
   }
 
-  Future<void> _rejectIndividualPayment(Payment payment) async {
+  Future<void> _showRejectPaymentDialog(Payment payment) async {
+    String selectedReason = 'Referencia bancaria no encontrada';
+    final customNotesController = TextEditingController();
+    final reasons = [
+      'Referencia bancaria no encontrada',
+      'Monto incompleto o incorrecto',
+      'Comprobante ilegible o cortado',
+      'Cuenta bancaria destino equivocada',
+      'Otro motivo',
+    ];
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                top: 24,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.cancel_outlined,
+                          color: Color(0xFFDC2626),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rechazar Comprobante',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            Text(
+                              'Indica el motivo para informar al cliente',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Selecciona el motivo:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: reasons.map((reason) {
+                      final isSelected = selectedReason == reason;
+                      return ChoiceChip(
+                        label: Text(reason),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setModalState(() => selectedReason = reason);
+                          }
+                        },
+                        selectedColor: const Color(0xFFFEE2E2),
+                        backgroundColor: const Color(0xFFF8FAFC),
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? const Color(0xFFDC2626) : const Color(0xFF475569),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isSelected ? const Color(0xFFDC2626) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Detalle o instrucciones adicionales (opcional):',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: customNotesController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: El monto reportado fue de \$5 en lugar de \$10.',
+                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDC2626)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF64748B),
+                            side: const BorderSide(color: Color(0xFFE2E8F0)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text('Confirmar Rechazo', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      final extra = customNotesController.text.trim();
+      final fullReason = extra.isNotEmpty && selectedReason != 'Otro motivo'
+          ? '$selectedReason ($extra)'
+          : (extra.isNotEmpty ? extra : selectedReason);
+      await _executeRejectPayment(payment, fullReason);
+    }
+  }
+
+  Future<void> _executeRejectPayment(Payment payment, String reason) async {
     if (_isUpdating) return;
     setState(() => _isUpdating = true);
     try {
@@ -2025,6 +2376,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         payment.id,
         'REJECTED',
         currentOrder!.id,
+        rejectionReason: reason,
       );
 
       final orderId = widget.orderId ?? currentOrder!.id;

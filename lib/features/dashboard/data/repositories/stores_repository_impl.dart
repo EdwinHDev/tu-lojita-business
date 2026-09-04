@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import '../models/store_model.dart';
 import '../models/dashboard_stats_model.dart';
+import '../models/dashboard_analytics_model.dart';
 import '../../domain/entities/store.dart';
 import '../../domain/entities/dashboard_stats.dart';
+import '../../domain/entities/dashboard_analytics.dart';
 import '../../domain/repositories/stores_repository.dart';
 
 class StoresRepositoryImpl implements StoresRepository {
@@ -26,6 +28,32 @@ class StoresRepositoryImpl implements StoresRepository {
     try {
       final response = await _dio.get('/companies/$companyId/dashboard/stats');
       return DashboardStatsModel.fromJson(response.data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<DashboardAnalytics> getAnalytics({
+    required String companyId,
+    String period = 'month',
+    String storeId = 'all',
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final queryParams = <String, dynamic>{
+        'period': period,
+        'storeId': storeId,
+        if (startDate != null && startDate.isNotEmpty) 'startDate': startDate,
+        if (endDate != null && endDate.isNotEmpty) 'endDate': endDate,
+      };
+
+      final response = await _dio.get(
+        '/companies/$companyId/dashboard/analytics',
+        queryParameters: queryParams,
+      );
+      return DashboardAnalyticsModel.fromJson(response.data);
     } catch (e) {
       rethrow;
     }

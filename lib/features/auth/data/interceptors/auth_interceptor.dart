@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/auth/data/datasources/local_auth_data_source.dart';
 
-class AuthInterceptor extends Interceptor {
+class AuthInterceptor extends QueuedInterceptor {
   final LocalAuthDataSource _localDataSource;
   final Dio _dio; // To retry requests
 
@@ -16,8 +16,8 @@ class AuthInterceptor extends Interceptor {
   ) async {
     final token = await _localDataSource.getAccessToken();
 
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
+    if (token != null && token.trim().isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer ${token.trim()}';
     }
 
     return handler.next(options);
@@ -39,9 +39,15 @@ class AuthInterceptor extends Interceptor {
         String? newRefreshToken;
 
         try {
-          // Attempt to refresh token
-          // Using a separate Dio or avoiding this interceptor for the refresh call
-          final response = await Dio(BaseOptions(baseUrl: Envs.apiBaseUrl)).get(
+          final tempDio = Dio(
+            BaseOptions(
+              baseUrl: Envs.apiBaseUrl,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10),
+            ),
+          );
+
+          final response = await tempDio.get(
             '/auth/refresh',
             options: Options(
               headers: {'Authorization': 'Bearer $refreshToken'},
@@ -55,11 +61,18 @@ class AuthInterceptor extends Interceptor {
             await _localDataSource.saveAccessToken(newAccessToken);
             await _localDataSource.saveRefreshToken(newRefreshToken);
           }
+        } on DioException catch (dioErr) {
+          final statusCode = dioErr.response?.statusCode;
+          if (statusCode == 401 || statusCode == 403) {
+            debugPrint('Business AuthInterceptor: Refresh token rejected with HTTP $statusCode. Clearing session...');
+            await _localDataSource.clearAll();
+          } else {
+            debugPrint('Business AuthInterceptor: Transient error during refresh ($statusCode / $dioErr). Preserving session.');
+          }
+          return handler.next(err);
         } catch (e, stackTrace) {
-          // If refresh fails, log error, clear everything and propagate error
-          debugPrint('Token refresh failed: $e');
+          debugPrint('Business AuthInterceptor: Unexpected error during refresh: $e');
           debugPrint(stackTrace.toString());
-          await _localDataSource.clearAll();
           return handler.next(err);
         }
 
@@ -72,8 +85,7 @@ class AuthInterceptor extends Interceptor {
             final retryResponse = await _dio.fetch(options);
             return handler.resolve(retryResponse);
           } catch (e) {
-            // If the retry fails for non-auth reasons, do not clear storage, just propagate
-            debugPrint('Retry request failed: $e');
+            debugPrint('Business Retry request failed: $e');
             if (e is DioException) {
               return handler.next(e);
             }

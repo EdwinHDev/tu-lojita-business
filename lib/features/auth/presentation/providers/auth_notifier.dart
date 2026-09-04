@@ -3,6 +3,7 @@ import 'package:tu_lojita_business/features/auth/domain/repositories/auth_reposi
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
+import 'package:tu_lojita_business/features/auth/domain/exceptions/auth_exceptions.dart';
 
 class AuthNotifier extends Notifier<AuthState> {
   @override
@@ -15,25 +16,38 @@ class AuthNotifier extends Notifier<AuthState> {
   AuthRepository get _repository => ref.read(authRepositoryProvider);
 
   Future<void> checkStatus() async {
-    state = const AuthLoading();
+    final localUser = await _repository.getSession();
+    if (localUser != null) {
+      state = Authenticated(localUser);
+      ref.read(socketServiceProvider).init();
+    } else {
+      state = const AuthLoading();
+    }
+
     try {
-      // Intentamos sincronizar con el backend directamente
       final user = await _repository.checkAuthStatus();
       if (user != null) {
         state = Authenticated(user);
         ref.read(socketServiceProvider).init();
-      } else {
-        // Si falla el backend (ej: offline), intentamos con la sesión local
-        final localUser = await _repository.getSession();
-        if (localUser != null) {
-          state = Authenticated(localUser);
+      } else if (state is! Authenticated) {
+        final fallbackUser = await _repository.getSession();
+        if (fallbackUser != null) {
+          state = Authenticated(fallbackUser);
           ref.read(socketServiceProvider).init();
         } else {
           state = const Unauthenticated();
         }
       }
     } catch (e) {
-      state = const Unauthenticated();
+      if (state is! Authenticated) {
+        final fallbackUser = await _repository.getSession();
+        if (fallbackUser != null) {
+          state = Authenticated(fallbackUser);
+          ref.read(socketServiceProvider).init();
+        } else {
+          state = const Unauthenticated();
+        }
+      }
     }
   }
 
@@ -61,6 +75,10 @@ class AuthNotifier extends Notifier<AuthState> {
       // Sincronizamos inmediatamente para obtener el estado real de la empresa/tienda
       await checkStatus();
     } catch (e) {
+      if (e is GoogleSignInCancelledException) {
+        state = const Unauthenticated();
+        return;
+      }
       state = AuthError(e.toString());
     }
   }

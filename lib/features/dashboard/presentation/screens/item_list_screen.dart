@@ -8,6 +8,8 @@ import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
+import 'package:tu_lojita_business/core/repositories/payment_methods_repository.dart';
+import '../widgets/item_creation_prerequisites_modal.dart';
 import 'dart:async';
 
 class ItemListScreen extends ConsumerStatefulWidget {
@@ -23,6 +25,58 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   bool _isSearchingLocal = false;
+  bool _isCheckingPrerequisites = false;
+
+  Future<void> _checkPrerequisitesAndNavigate() async {
+    if (_isCheckingPrerequisites) return;
+    setState(() => _isCheckingPrerequisites = true);
+
+    try {
+      // 1. Verificar categorías
+      var storeData = ref.read(storeDetailsProvider).forStore(widget.storeId);
+      if (storeData.categories.isEmpty && !storeData.isLoading) {
+        await ref.read(storeDetailsProvider.notifier).loadData(widget.storeId, force: true);
+        storeData = ref.read(storeDetailsProvider).forStore(widget.storeId);
+      }
+      final bool hasCategories = storeData.categories.isNotEmpty;
+
+      // 2. Verificar métodos de pago activos
+      final methods = await ref.read(paymentMethodsRepositoryProvider).getStoreMethods(widget.storeId);
+      final bool hasActivePaymentMethods = methods.any((m) => m.isActive);
+
+      if (!mounted) return;
+      setState(() => _isCheckingPrerequisites = false);
+
+      if (hasCategories && hasActivePaymentMethods) {
+        final result = await context.push(
+          '/dashboard/stores/${widget.storeId}/items/new',
+        );
+        if (result == true && mounted) {
+          ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+        }
+      } else {
+        ItemCreationPrerequisitesModal.show(
+          context: context,
+          storeId: widget.storeId,
+          hasCategories: hasCategories,
+          hasActivePaymentMethods: hasActivePaymentMethods,
+          onPrerequisitesMet: () async {
+            final result = await context.push(
+              '/dashboard/stores/${widget.storeId}/items/new',
+            );
+            if (result == true && mounted) {
+              ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+            }
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCheckingPrerequisites = false);
+        NotificationService.showError(context, 'Error al verificar requisitos: $e');
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -136,24 +190,24 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                                 width: double.infinity,
                                 height: 52,
                                 child: ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final result = await context.push(
-                                      '/dashboard/stores/${widget.storeId}/items/new',
-                                    );
-                                    if (result == true && mounted) {
-                                      ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
-                                    }
-                                  },
-                                  icon: const HugeIcon(
-                                    icon: HugeIcons.strokeRoundedAdd01,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  label: const Text(
-                                    'Agregar Artículo',
-                                    style: TextStyle(
+                                  onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
+                                  icon: _isCheckingPrerequisites
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                        )
+                                      : const HugeIcon(
+                                          icon: HugeIcons.strokeRoundedAdd01,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                  label: Text(
+                                    _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 15,
+                                      fontSize: 16,
+                                      color: Colors.white,
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
@@ -381,16 +435,18 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
             if (!hasFilters) ...[
               const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: () async {
-                  final result = await context.push(
-                    '/dashboard/stores/${widget.storeId}/items/new',
-                  );
-                  if (result == true && mounted) {
-                    ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
-                  }
-                },
-                icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                label: const Text('Agregar Artículo', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
+                icon: _isCheckingPrerequisites
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add, color: Colors.white, size: 18),
+                label: Text(
+                  _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4F46E5),
                   elevation: 0,

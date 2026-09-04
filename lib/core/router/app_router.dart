@@ -24,6 +24,11 @@ import 'package:tu_lojita_business/features/orders/presentation/screens/order_li
 import 'package:tu_lojita_business/features/orders/presentation/screens/order_details_screen.dart';
 import 'package:tu_lojita_business/features/chat/presentation/screens/order_chat_screen.dart';
 import 'package:tu_lojita_business/features/orders/presentation/screens/store_installments_screen.dart';
+import 'package:tu_lojita_business/features/subscription/domain/entities/company_subscription.dart';
+import 'package:tu_lojita_business/features/subscription/presentation/providers/subscription_provider.dart';
+import 'package:tu_lojita_business/features/subscription/presentation/screens/subscription_paywall_screen.dart';
+import 'package:tu_lojita_business/features/subscription/presentation/screens/subscription_pending_screen.dart';
+import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -37,6 +42,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding/company',
         builder: (context, state) => const CompanyOnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/subscription/paywall',
+        builder: (context, state) => const SubscriptionPaywallScreen(),
+      ),
+      GoRoute(
+        path: '/subscription/pending',
+        builder: (context, state) => const SubscriptionPendingScreen(),
       ),
       GoRoute(
         path: '/dashboard',
@@ -158,6 +171,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return StoreInstallmentsScreen(storeId: storeId);
                 },
               ),
+              GoRoute(
+                path: 'debts',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return StoreDebtsScreen(storeId: storeId);
+                },
+              ),
             ],
           ),
         ],
@@ -167,6 +187,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authProvider);
       final isLoggingIn = state.matchedLocation == '/onboarding';
       final isOnboardingCompany = state.matchedLocation == '/onboarding/company';
+      final isPaywall = state.matchedLocation == '/subscription/paywall';
+      final isPending = state.matchedLocation == '/subscription/pending';
 
       if (authState is! Authenticated) {
         return (isLoggingIn || isOnboardingCompany) ? null : '/onboarding';
@@ -179,7 +201,26 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isOnboardingCompany ? null : '/onboarding/company';
       }
 
-      if (isLoggingIn || isOnboardingCompany) {
+      // If merchant, check subscription status
+      if (user.role != 'ADMIN') {
+        final subState = ref.read(subscriptionProvider);
+        if (subState.subscription == null && !subState.isLoading) {
+          Future.microtask(() => ref.read(subscriptionProvider.notifier).loadSubscriptionAndMethods());
+        }
+
+        final sub = subState.subscription;
+        if (sub != null) {
+          if (sub.status == SubscriptionStatus.paymentRequired ||
+              sub.status == SubscriptionStatus.suspended) {
+            return isPaywall ? null : '/subscription/paywall';
+          }
+          if (sub.status == SubscriptionStatus.pendingVerification) {
+            return isPending ? null : '/subscription/pending';
+          }
+        }
+      }
+
+      if (isLoggingIn || isOnboardingCompany || isPaywall || isPending) {
         return '/dashboard';
       }
 
@@ -191,5 +232,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 class _AuthListenable extends ChangeNotifier {
   _AuthListenable(Ref ref) {
     ref.listen(authProvider, (_, next) => notifyListeners());
+    ref.listen(subscriptionProvider, (_, next) => notifyListeners());
   }
 }

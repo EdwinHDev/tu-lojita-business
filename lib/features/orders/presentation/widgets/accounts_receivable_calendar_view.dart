@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import '../providers/orders_provider.dart';
 import '../../domain/entities/order.dart';
@@ -10,6 +11,28 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
   final String storeId;
 
   const AccountsReceivableCalendarView({super.key, required this.storeId});
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _isOverdue(Installment inst, DateTime now) {
+    if (inst.status == 'PAID') return false;
+    if (inst.status == 'OVERDUE') return true;
+    final hasWaitingPayment = inst.order?.payments.any((p) => p.status == 'WAITING_VERIFICATION') ?? false;
+    final isFirstInstallment = inst.order?.installments.isNotEmpty == true && inst.order!.installments.first.id == inst.id;
+    final isInReview = hasWaitingPayment || (inst.order?.status == 'PENDING' && isFirstInstallment);
+    if (isInReview || isFirstInstallment) return false;
+    return inst.dueDate != null && inst.dueDate!.isBefore(now);
+  }
+
+  bool _isScheduledOrActive(Installment inst) {
+    if (inst.status == 'PAID') return true;
+    if (inst.dueDate != null) return true;
+    final hasWaitingPayment = inst.order?.payments.any((p) => p.status == 'WAITING_VERIFICATION') ?? false;
+    final isFirstInstallment = inst.order?.installments.isNotEmpty == true && inst.order!.installments.first.id == inst.id;
+    return hasWaitingPayment || (inst.order?.status == 'PENDING' && isFirstInstallment);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,45 +44,69 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
           return _buildEmptyState();
         }
 
-        // Calcular Métricas
+        final now = DateTime.now();
+        final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        final sevenDaysFromNow = endOfToday.add(const Duration(days: 7));
+        final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
+        // Buckets
+        final List<Installment> overdueList = [];
+        final List<Installment> dueTodayList = [];
+        final List<Installment> dueThisWeekList = [];
+        final List<Installment> dueThisMonthList = [];
+        final List<Installment> futureList = [];
+
         double totalOutstanding = 0.0;
         double totalOverdue = 0.0;
         double totalThisWeek = 0.0;
-        final now = DateTime.now();
-        final sevenDaysFromNow = now.add(const Duration(days: 7));
 
-        for (var inst in installments) {
+        for (final inst in installments) {
+          if (inst.status == 'PAID') continue;
+          if (!_isScheduledOrActive(inst)) continue;
+
           final instAmount = inst.amount + inst.lateFeeApplied - inst.paidAmount;
           totalOutstanding += instAmount;
 
-          final isOverdue = inst.dueDate.isBefore(now);
+          final bool isOverdue = _isOverdue(inst, now);
+
           if (isOverdue) {
+            overdueList.add(inst);
             totalOverdue += instAmount;
-          } else if (inst.dueDate.isBefore(sevenDaysFromNow)) {
+          } else if (inst.dueDate != null && _isSameDay(inst.dueDate!, now)) {
+            dueTodayList.add(inst);
             totalThisWeek += instAmount;
+          } else if (inst.dueDate != null && inst.dueDate!.isAfter(endOfToday) && inst.dueDate!.isBefore(sevenDaysFromNow)) {
+            dueThisWeekList.add(inst);
+            totalThisWeek += instAmount;
+          } else if (inst.dueDate != null && inst.dueDate!.isAfter(sevenDaysFromNow) && inst.dueDate!.isBefore(endOfMonth)) {
+            dueThisMonthList.add(inst);
+          } else {
+            futureList.add(inst);
           }
         }
 
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(storeReceivablesProvider(storeId));
+            ref.invalidate(storeInstallmentsProvider(storeId));
           },
           color: const Color(0xFF4F46E5),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── Resumen de Tesorería Proyectada ───
+                // ── Executive Dashboard ──
                 _buildSummaryDashboard(
                   totalOutstanding: totalOutstanding,
                   totalOverdue: totalOverdue,
                   totalThisWeek: totalThisWeek,
                 ),
-                
-                const SizedBox(height: 28),
 
+                const SizedBox(height: 24),
+
+                // Section header
                 Row(
                   children: [
                     Container(
@@ -71,34 +118,86 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                       child: const HugeIcon(
                         icon: HugeIcons.strokeRoundedCalendar03,
                         color: Color(0xFF4F46E5),
-                        size: 18,
+                        size: 16,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     const Text(
-                      'Calendario de Cuentas por Cobrar',
+                      'Flujo Proyectado de Cobranza',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: Color(0xFF1E293B),
-                        letterSpacing: -0.3,
+                        color: Color(0xFF0F172A),
                       ),
                     ),
                   ],
                 ),
-                
+                const SizedBox(height: 4),
+                const Text(
+                  'Cuentas por cobrar agrupadas por horizonte temporal de vencimiento.',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
                 const SizedBox(height: 16),
 
-                // ─── Listado Cronológico ───
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: installments.length,
-                  itemBuilder: (context, index) {
-                    final inst = installments[index];
-                    return _buildReceivableCard(context, inst);
-                  },
-                ),
+                // 1. Overdue Section
+                if (overdueList.isNotEmpty)
+                  _buildTimelineSection(
+                    context: context,
+                    title: 'Vencidas / En Mora',
+                    subtitle: 'Cobranza inmediata requerida',
+                    installments: overdueList,
+                    badgeColor: const Color(0xFFEF4444),
+                    badgeBgColor: const Color(0xFFFEF2F2),
+                    icon: Icons.warning_amber_rounded,
+                  ),
+
+                // 2. Due Today
+                if (dueTodayList.isNotEmpty)
+                  _buildTimelineSection(
+                    context: context,
+                    title: 'Vencen Hoy',
+                    subtitle: 'Cobros programados para el día',
+                    installments: dueTodayList,
+                    badgeColor: const Color(0xFFD97706),
+                    badgeBgColor: const Color(0xFFFFFBEB),
+                    icon: Icons.today_rounded,
+                  ),
+
+                // 3. Due This Week
+                if (dueThisWeekList.isNotEmpty)
+                  _buildTimelineSection(
+                    context: context,
+                    title: 'Esta Semana (Próximos 7 días)',
+                    subtitle: 'Ingresos proyectados a corto plazo',
+                    installments: dueThisWeekList,
+                    badgeColor: const Color(0xFF4F46E5),
+                    badgeBgColor: const Color(0xFFEEF2FF),
+                    icon: Icons.date_range_rounded,
+                  ),
+
+                // 4. Due This Month
+                if (dueThisMonthList.isNotEmpty)
+                  _buildTimelineSection(
+                    context: context,
+                    title: 'Resto de este Mes',
+                    subtitle: 'Cuotas con vencimiento este mes',
+                    installments: dueThisMonthList,
+                    badgeColor: const Color(0xFF059669),
+                    badgeBgColor: const Color(0xFFECFDF5),
+                    icon: Icons.calendar_month_rounded,
+                  ),
+
+                // 5. Future Months
+                if (futureList.isNotEmpty)
+                  _buildTimelineSection(
+                    context: context,
+                    title: 'Próximos Meses / Futuras',
+                    subtitle: 'Cartera a mediano y largo plazo',
+                    installments: futureList,
+                    badgeColor: const Color(0xFF64748B),
+                    badgeBgColor: const Color(0xFFF1F5F9),
+                    icon: Icons.schedule_rounded,
+                  ),
 
                 const SizedBox(height: 40),
               ],
@@ -142,57 +241,70 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.15),
-            blurRadius: 15,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.trending_up_rounded, color: Color(0xFF34D399), size: 16),
-              SizedBox(width: 6),
-              Text(
-                'TESORERÍA PROYECTADA',
-                style: TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'TOTAL SALDO POR COBRAR',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '\$${totalOutstanding.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedCoins01,
+                  color: Color(0xFF818CF8),
+                  size: 24,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Total por Cobrar',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
+          const SizedBox(height: 18),
+          Container(
+            height: 1,
+            color: const Color(0xFF334155),
           ),
-          const SizedBox(height: 2),
-          Text(
-            '\$${totalOutstanding.toStringAsFixed(2)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1, color: Color(0xFF334155)),
-          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: _buildMiniStat(
-                  'Por Vencer (7 días)',
+                  'Próximos 7 días',
                   '\$${totalThisWeek.toStringAsFixed(2)}',
                   const Color(0xFF60A5FA),
                 ),
@@ -237,27 +349,127 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
     );
   }
 
+  Widget _buildTimelineSection({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required List<Installment> installments,
+    required Color badgeColor,
+    required Color badgeBgColor,
+    required IconData icon,
+  }) {
+    final double subtotal = installments.fold(
+      0.0,
+      (sum, inst) => sum + (inst.amount + inst.lateFeeApplied - inst.paidAmount),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: badgeBgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: badgeColor, size: 16),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: badgeColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: badgeColor.withValues(alpha: 0.8),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Text(
+                  '\$${subtotal.toStringAsFixed(2)} (${installments.length})',
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Cards in bucket
+          ...installments.map((inst) => _buildReceivableCard(context, inst)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReceivableCard(BuildContext context, Installment installment) {
     final now = DateTime.now();
-    final isOverdue = installment.dueDate.isBefore(now);
-    final instAmount = installment.amount + installment.lateFeeApplied - installment.paidAmount;
-    final dueDateFormatted = installment.dueDate.toSlashDateString();
-    
-    // Identificar datos del cliente
     final order = installment.order;
+    final hasWaitingPayment = order?.payments.any((p) => p.status == 'WAITING_VERIFICATION') ?? false;
+    final isFirstInstallment = order?.installments.isNotEmpty == true && order!.installments.first.id == installment.id;
+    final isInReview = hasWaitingPayment || (order?.status == 'PENDING' && isFirstInstallment);
+    final isOverdue = _isOverdue(installment, now);
+    final instAmount = installment.amount + installment.lateFeeApplied - installment.paidAmount;
+    final dueDateFormatted = isInReview
+        ? (isFirstInstallment ? 'Pago inicial en verificación' : 'Comprobante en verificación')
+        : (installment.dueDate != null ? installment.dueDate!.toSlashDateString() : 'Por programar');
+
     final user = order?.user;
     final firstName = user?['firstName'] as String? ?? '';
     final lastName = user?['lastName'] as String? ?? '';
+    final phone = user?['phone'] as String? ?? '';
     String userName = '$firstName $lastName'.trim();
     if (userName.isEmpty) {
       userName = user?['name'] as String? ?? 'Cliente Desconocido';
     }
 
-    final String statusLabel = isOverdue ? 'MORA' : 'A TIEMPO';
-    final Color badgeColor = isOverdue ? const Color(0xFFEF4444) : const Color(0xFF3B82F6);
+    final String statusLabel = isInReview
+        ? 'EN REVISIÓN'
+        : (installment.dueDate == null
+            ? 'POR PROGRAMAR'
+            : (isOverdue ? 'MORA' : 'AL DÍA'));
+    final Color badgeColor = isInReview
+        ? const Color(0xFFD97706)
+        : (installment.dueDate == null
+            ? const Color(0xFF64748B)
+            : (isOverdue ? const Color(0xFFEF4444) : const Color(0xFF3B82F6)));
+
+    // Installment number text
+    String installmentText = 'Cuota';
+    if (order?.installments.isNotEmpty == true) {
+      final idx = order!.installments.indexWhere((i) => i.id == installment.id);
+      if (idx != -1) {
+        installmentText = (idx == 0 && order.isPartialPayment)
+            ? 'Pago Inicial (1/${order.installments.length})'
+            : 'Cuota ${idx + 1} de ${order.installments.length}';
+      }
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -281,7 +493,7 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
               ),
             ),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             children: [
               Row(
@@ -293,12 +505,16 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              userName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF1E293B),
+                            Flexible(
+                              child: Text(
+                                userName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Color(0xFF1E293B),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -320,16 +536,25 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Orden: #${order?.id.substring(0, 8).toUpperCase() ?? "S/ID"}',
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Text(
+                              'Orden: #${order?.id.substring(0, 8).toUpperCase() ?? "S/ID"}',
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '• $installmentText',
+                              style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             const HugeIcon(
@@ -378,15 +603,50 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                 ],
               ),
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
+                padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(height: 1, color: Color(0xFFF1F5F9)),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Cuota de \$${installment.amount.toStringAsFixed(2)} (${(installment.paidAmount / installment.amount * 100).toStringAsFixed(0)}% cubierto)',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                  Row(
+                    children: [
+                      if (phone.isNotEmpty)
+                        InkWell(
+                          onTap: () {
+                            String cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+                            if (cleanPhone.startsWith('0')) {
+                              cleanPhone = '58${cleanPhone.substring(1)}';
+                            } else if (!cleanPhone.startsWith('58') && cleanPhone.length == 10) {
+                              cleanPhone = '58$cleanPhone';
+                            }
+                            final displayOrderId = order != null && order.id.length > 6
+                                ? order.id.substring(order.id.length - 6).toUpperCase()
+                                : order?.id.toUpperCase() ?? '';
+                            final msg = isOverdue
+                                ? 'Hola $userName, le saludamos de nuestra tienda. Le recordamos cordialmente sobre la $installmentText del pedido #$displayOrderId vencida por \$${instAmount.toStringAsFixed(2)}. ¿Nos confirma si realizó el pago? ¡Gracias!'
+                                : 'Hola $userName, le saludamos de nuestra tienda sobre la $installmentText del pedido #$displayOrderId con vencimiento el $dueDateFormatted por \$${instAmount.toStringAsFixed(2)}. ¡Gracias!';
+                            final uri = Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent(msg)}');
+                            launchUrl(uri, mode: LaunchMode.externalApplication);
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF86EFAC)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF10B981), size: 12),
+                                SizedBox(width: 4),
+                                Text('WhatsApp', style: TextStyle(color: Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   if (order != null)
                     TextButton.icon(
@@ -394,7 +654,7 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => OrderDetailsScreen(orderId: order.id),
+                            builder: (context) => OrderDetailsScreen(order: order, storeId: storeId),
                           ),
                         );
                       },
@@ -441,13 +701,13 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
               ),
               child: const HugeIcon(
                 icon: HugeIcons.strokeRoundedCalendar03,
-                color: Color(0xFF64748B),
-                size: 40,
+                color: Color(0xFF94A3B8),
+                size: 48,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             const Text(
-              'No hay cuentas pendientes por cobrar',
+              'No hay cobros pendientes',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -456,7 +716,7 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Todas las cuotas de tus clientes están pagadas o no hay órdenes parcializadas activas.',
+              'Todas las cuotas de tus clientes están al día o totalmente saldadas.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF64748B),

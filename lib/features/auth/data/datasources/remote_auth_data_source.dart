@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:google_sign_in/google_sign_in.dart' as gsis;
-import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/core/utils/error_parser.dart';
 import 'package:tu_lojita_business/features/auth/domain/exceptions/auth_exceptions.dart';
 
@@ -12,6 +11,7 @@ abstract class RemoteAuthDataSource {
   Future<Map<String, dynamic>> checkHasStore();
   Future<Map<String, dynamic>> checkAuthStatus();
   Future<Map<String, dynamic>> updateProfile(String? identification, String? phone);
+  Future<void> signOut();
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
@@ -21,13 +21,29 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
   RemoteAuthDataSourceImpl(this._dio);
 
   @override
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+  }
+
+  @override
   Future<String> getGoogleIdToken() async {
     try {
-      await _googleSignIn.initialize(
-        clientId: Envs.googleAndroidClientId,
-        serverClientId: Envs.googleServerClientId,
-      );
-      final account = await _googleSignIn.authenticate();
+      gsis.GoogleSignInAccount account;
+      try {
+        account = await _googleSignIn.authenticate();
+      } catch (e) {
+        final errStr = e.toString();
+        // Fallo de reautenticación en Android
+        if (errStr.contains('16') || errStr.contains('reauth')) {
+          await _googleSignIn.signOut();
+          account = await _googleSignIn.authenticate();
+        } else {
+          rethrow;
+        }
+      }
+
       final authData = account.authentication;
       final idToken = authData.idToken;
 
@@ -38,6 +54,10 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
       return idToken;
     } catch (e) {
       if (e is GoogleSignInCancelledException) rethrow;
+      final errStr = e.toString();
+      if (errStr.contains('GoogleSignInExceptionCode.canceled')) {
+        throw GoogleSignInCancelledException();
+      }
       throw AuthException('Google Sign-In failed: $e');
     }
   }

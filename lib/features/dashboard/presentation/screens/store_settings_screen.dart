@@ -8,6 +8,7 @@ import 'settings/appearance_settings_screen.dart';
 import 'settings/partial_payments_settings_screen.dart';
 import 'settings/chat_settings_screen.dart';
 import 'settings/timezone_settings_screen.dart';
+import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
 
 class StoreSettingsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -95,6 +96,16 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => PaymentMethodsListScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedCoins01,
+                  title: 'Comisiones y Deudas',
+                  subtitle: 'Estado de deuda semanal y reporte de pagos',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => StoreDebtsScreen(storeId: widget.storeId)),
                   ),
                 ),
                 const SizedBox(height: 12),

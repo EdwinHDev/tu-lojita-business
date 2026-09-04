@@ -9,7 +9,11 @@ import 'package:tu_lojita_business/features/auth/domain/repositories/auth_reposi
 import 'package:tu_lojita_business/features/auth/data/interceptors/auth_interceptor.dart';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
-  return const FlutterSecureStorage();
+  return const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      resetOnError: true,
+    ),
+  );
 });
 
 final localAuthDataSourceProvider = Provider<LocalAuthDataSource>((ref) {

@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import 'package:tu_lojita_business/features/chat/domain/entities/chat_message.dart';
 import 'package:tu_lojita_business/features/chat/presentation/providers/chat_provider.dart';
@@ -11,6 +14,21 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_sta
 import 'package:tu_lojita_business/core/network/socket_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_helper.dart';
+import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
+import 'package:tu_lojita_business/features/chat/presentation/widgets/chat_image_preview_dialog.dart';
+
+String _formatChatImageUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return '';
+  final trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  final baseUrl = Envs.apiBaseUrlImages;
+  if (trimmed.startsWith('/')) {
+    return '$baseUrl$trimmed';
+  }
+  return '$baseUrl/$trimmed';
+}
 
 class OrderChatScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -29,7 +47,9 @@ class OrderChatScreen extends ConsumerStatefulWidget {
 class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
   late SocketService _socketService;
+  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -70,6 +90,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -91,7 +112,139 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
 
     ref.read(chatProvider(widget.orderId).notifier).sendMessage(text);
     _messageController.clear();
+    _focusNode.requestFocus();
     _scrollToBottom();
+  }
+
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    if (_isUploadingImage) return;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final imageFile = File(picked.path);
+
+      if (!mounted) return;
+      final caption = await ChatImagePreviewDialog.show(
+        context,
+        imageFile: imageFile,
+        initialCaption: _messageController.text.trim(),
+      );
+
+      if (caption == null) return;
+
+      setState(() => _isUploadingImage = true);
+
+      final imageDataSource = ref.read(imageRemoteDataSourceProvider);
+      final uploadedUrl = await imageDataSource.uploadImage(imageFile);
+
+      await ref.read(chatProvider(widget.orderId).notifier).sendMessage(
+        caption,
+        imageUrl: uploadedUrl,
+      );
+      _messageController.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir imagen: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+      }
+    }
+  }
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enviar Imagen',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickAndSendImage(ImageSource.camera);
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          HugeIcon(
+                            icon: HugeIcons.strokeRoundedCamera01,
+                            size: 32,
+                            color: Color(0xFF4F46E5),
+                          ),
+                          SizedBox(height: 8),
+                          Text('Cámara', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickAndSendImage(ImageSource.gallery);
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          HugeIcon(
+                            icon: HugeIcons.strokeRoundedImage01,
+                            size: 32,
+                            color: Color(0xFF4F46E5),
+                          ),
+                          SizedBox(height: 8),
+                          Text('Galería', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -102,7 +255,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
 
     // Obtener la orden para verificar si el chat debe ser de solo lectura
     final orderAsync = ref.watch(orderByIdProvider(widget.orderId));
-    final bool isReadOnly = orderAsync.maybeWhen(
+    final bool isReadOnly = chatState.isClosed || orderAsync.maybeWhen(
       data: (order) => order.status == 'FULLY_PAID' || order.status == 'CANCELLED',
       orElse: () => false,
     );
@@ -270,6 +423,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   Widget _buildMessageBubble(ChatMessage message, bool isMe) {
     final timeStr = message.createdAt.toTimeString(use24Hour: true);
     final bool hasError = message.hasError;
+    final bool hasImage = message.imageUrl != null && message.imageUrl!.isNotEmpty;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -294,17 +448,109 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
             ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Text(
-                message.content,
-                style: TextStyle(
-                  color: hasError 
-                      ? const Color(0xFF991B1B)
-                      : (isMe ? Colors.white : const Color(0xFF1F2937)),
-                  fontSize: 14,
+              if (hasImage) ...[
+                Builder(
+                  builder: (context) {
+                    final formattedUrl = _formatChatImageUrl(message.imageUrl);
+                    return GestureDetector(
+                      onTap: () {
+                        if (formattedUrl.isEmpty) return;
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            insetPadding: const EdgeInsets.all(12),
+                            child: Stack(
+                              alignment: Alignment.topRight,
+                              children: [
+                                InteractiveViewer(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      formattedUrl,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        padding: const EdgeInsets.all(32),
+                                        color: Colors.black54,
+                                        child: const Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.broken_image_rounded, color: Colors.white70, size: 48),
+                                            SizedBox(height: 8),
+                                            Text(
+                                              'No se pudo cargar la imagen',
+                                              style: TextStyle(color: Colors.white70, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                  onPressed: () => Navigator.pop(ctx),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: formattedUrl.isNotEmpty
+                            ? Image.network(
+                                formattedUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: 180,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    height: 180,
+                                    color: Colors.black12,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  height: 120,
+                                  color: Colors.black12,
+                                  child: const Center(
+                                    child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                height: 120,
+                                color: Colors.black12,
+                                child: const Center(
+                                  child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+                                ),
+                              ),
+                      ),
+                    );
+                  },
                 ),
-              ),
+                if (message.content.isNotEmpty && message.content != '📷 Imagen adjunta')
+                  const SizedBox(height: 6),
+              ],
+              if (message.content.isNotEmpty && message.content != '📷 Imagen adjunta')
+                Text(
+                  message.content,
+                  style: TextStyle(
+                    color: hasError 
+                        ? const Color(0xFF991B1B)
+                        : (isMe ? Colors.white : const Color(0xFF1F2937)),
+                    fontSize: 14,
+                  ),
+                ),
               const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -380,8 +626,8 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   Widget _buildMessageInput() {
     return Container(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
+        left: 12,
+        right: 16,
         top: 12,
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
@@ -397,6 +643,21 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
       ),
       child: Row(
         children: [
+          IconButton(
+            icon: _isUploadingImage
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5)),
+                  )
+                : const HugeIcon(
+                    icon: HugeIcons.strokeRoundedAttachment01,
+                    color: Color(0xFF64748B),
+                    size: 24,
+                  ),
+            onPressed: _isUploadingImage ? null : _showImageSourcePicker,
+            tooltip: 'Adjuntar imagen',
+          ),
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -407,6 +668,8 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
               ),
               child: TextField(
                 controller: _messageController,
+                focusNode: _focusNode,
+                enabled: !_isUploadingImage,
                 onChanged: (text) {
                   _socketService.emitTyping(widget.orderId, text.isNotEmpty);
                 },
@@ -419,13 +682,13 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           GestureDetector(
-            onTap: _sendMessage,
+            onTap: _isUploadingImage ? null : _sendMessage,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Color(0xFF4F46E5),
+              decoration: BoxDecoration(
+                color: _isUploadingImage ? Colors.grey : const Color(0xFF4F46E5),
                 shape: BoxShape.circle,
               ),
               child: const HugeIcon(

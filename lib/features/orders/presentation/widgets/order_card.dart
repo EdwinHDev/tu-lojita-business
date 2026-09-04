@@ -151,15 +151,47 @@ class OrderCard extends StatelessWidget {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
+                          if (order.isPartialPayment || order.feeAmount > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF2FF),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Cuotas',
+                                style: TextStyle(
+                                  color: Color(0xFF4F46E5),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      Text(
-                        '\$${order.finalAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF4F46E5),
-                          fontSize: 16,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '\$${order.finalAmount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF4F46E5),
+                              fontSize: 16,
+                            ),
+                          ),
+                          if (order.feeAmount > 0)
+                            Text(
+                              'Base: \$${order.totalAmount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),

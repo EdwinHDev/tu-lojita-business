@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'core/config/envs.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -11,7 +13,25 @@ import 'features/dashboard/presentation/providers/notifications_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Forzar iconos oscuros en la barra de estado y de navegación (Modo Claro)
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   await Envs.init();
+
+  // Inicialización global obligatoria de Google Sign-In (Credential Manager)
+  await GoogleSignIn.instance.initialize(
+    clientId: Envs.googleAndroidClientId.isNotEmpty ? Envs.googleAndroidClientId : null,
+    serverClientId: Envs.googleServerClientId.isNotEmpty ? Envs.googleServerClientId : null,
+  );
 
   // Inicializar notificaciones locales
   await NotificationHelper.init();
@@ -71,6 +91,25 @@ class _MyAppState extends ConsumerState<MyApp> {
         }),
       );
     });
+
+    // Escuchar notificaciones generales por socket (pedidos, pagos, cuotas)
+    ref.read(socketServiceProvider).notificationsStream.listen((data) {
+      final id = data['id']?.hashCode ?? DateTime.now().millisecondsSinceEpoch.hashCode;
+      final title = data['title'] ?? 'Nueva notificación';
+      final body = data['body'] ?? '';
+      final targetId = data['targetId'] ?? data['orderId'] ?? '';
+      final type = data['type'] ?? '';
+
+      NotificationHelper.showNotification(
+        id: id,
+        title: title,
+        body: body,
+        payload: jsonEncode({
+          'orderId': targetId,
+          'type': type,
+        }),
+      );
+    });
   }
 
   @override
@@ -83,6 +122,18 @@ class _MyAppState extends ConsumerState<MyApp> {
       theme: AppTheme.lightTheme,
       themeMode: ThemeMode.light,
       routerConfig: router,
+      builder: (context, child) {
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.white,
+            systemNavigationBarIconBrightness: Brightness.dark,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
