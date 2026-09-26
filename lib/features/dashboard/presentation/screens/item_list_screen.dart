@@ -745,9 +745,7 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cambiar estado: $e')),
-        );
+        NotificationService.showError(context, 'Error al cambiar estado: $e');
       }
     }
   }

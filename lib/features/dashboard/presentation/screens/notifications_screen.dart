@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/notifications_provider.dart';
+import '../providers/stores_notifier.dart';
 import '../../domain/entities/notification.dart';
+import 'settings/store_health_sheet.dart';
+import '../widgets/chat_penalty_explanation_modal.dart';
+import 'package:tu_lojita_business/features/reports/presentation/widgets/report_detail_sheet.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
+import 'package:tu_lojita_business/core/utils/achievement_image_helper.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/providers/ranking_providers.dart';
 
 enum NotificationFilter { all, unread, chats, orders }
 
@@ -19,6 +26,15 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   NotificationFilter _selectedFilter = NotificationFilter.all;
   bool _isMarkingAllAsRead = false;
+
+  @override
+  void initState() {
+    super.initState();
+    timeago.setLocaleMessages('es', timeago.EsMessages());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(notificationsProvider);
+    });
+  }
 
   Future<void> _markAllAsRead(List<AppNotification> unreadNotifications) async {
     if (unreadNotifications.isEmpty) return;
@@ -60,7 +76,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   'ORDER_CREATED',
                   'PAYMENT_REPORTED',
                   'PAYMENT_APPROVED',
-                  'PAYMENT_REJECTED'
+                  'PAYMENT_REJECTED',
+                  'MEDIATION_REQUEST',
+                  'MEDIATION_RESPONSE',
                 ].contains(n.type))
             .toList();
       case NotificationFilter.all:
@@ -208,7 +226,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               'ORDER_CREATED',
               'PAYMENT_REPORTED',
               'PAYMENT_APPROVED',
-              'PAYMENT_REJECTED'
+              'PAYMENT_REJECTED',
+              'MEDIATION_REQUEST',
             ].contains(n.type))
         .length;
 
@@ -456,10 +475,24 @@ class _PremiumNotificationTile extends ConsumerWidget {
 
   const _PremiumNotificationTile({super.key, required this.notification});
 
+  String _formatNotificationBody(String rawBody) {
+    if (rawBody.isEmpty) return rawBody;
+    var formatted = rawBody;
+    formatted = formatted.replaceAll('(ACCOUNT_REACTIVATION)', 'Reactivación de compras');
+    formatted = formatted.replaceAll('(SETTLE_DEBT)', 'Acuerdo de saldo pendiente');
+    formatted = formatted.replaceAll('(CLARIFY_MISUNDERSTANDING)', 'Aclaratoria de malentendido');
+    formatted = formatted.replaceAll('(OTHER)', 'Consulta general');
+    formatted = formatted.replaceAll('mediación Reactivación', 'mediación: Reactivación');
+    formatted = formatted.replaceAll('mediación Acuerdo', 'mediación: Acuerdo');
+    formatted = formatted.replaceAll('mediación Aclaratoria', 'mediación: Aclaratoria');
+    formatted = formatted.replaceAll('mediación Consulta', 'mediación: Consulta');
+    return formatted;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool isUnread = !notification.isRead;
-    final timeStr = notification.createdAt.toDateTimeString();
+    final timeStr = timeago.format(notification.createdAt, locale: 'es');
 
     Color iconColor;
     dynamic iconData;
@@ -491,10 +524,82 @@ class _PremiumNotificationTile extends ConsumerWidget {
         iconColor = Colors.blue.shade700;
         categoryLabel = 'Chat';
         break;
+      case 'MEDIATION_REQUEST':
+      case 'MEDIATION_RESPONSE':
+        final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
+            notification.title.toLowerCase().contains('mediacion');
+        iconData = HugeIcons.strokeRoundedAlertSquare;
+        iconColor = isCustomerMed ? Colors.purple.shade700 : const Color(0xFFE11D48);
+        categoryLabel = isCustomerMed ? 'Mediación' : 'Reclamo';
+        break;
+      case 'STRIKE_APPLIED':
+        iconData = HugeIcons.strokeRoundedAlert02;
+        iconColor = const Color(0xFFD97706);
+        categoryLabel = 'Sanción';
+        break;
+      case 'STORE_SUSPENDED':
+        iconData = HugeIcons.strokeRoundedAlertCircle;
+        iconColor = const Color(0xFFDC2626);
+        categoryLabel = 'Suspensión';
+        break;
+      case 'ITEM_HIDDEN':
+        iconData = HugeIcons.strokeRoundedViewOffSlash;
+        iconColor = const Color(0xFFEA580C);
+        categoryLabel = 'Publicación';
+        break;
+      case 'BUYER_REVIEW_PROMPT':
+        iconData = HugeIcons.strokeRoundedStar;
+        iconColor = Colors.amber.shade700;
+        categoryLabel = 'Calificar cliente';
+        break;
+      case 'ORDER_REVIEW_RECEIVED':
+        iconData = HugeIcons.strokeRoundedStar;
+        iconColor = Colors.amber.shade700;
+        categoryLabel = 'Nueva reseña';
+        break;
+      case 'ACHIEVEMENT_UNLOCKED':
+        iconData = HugeIcons.strokeRoundedAward01;
+        iconColor = Colors.amber.shade800;
+        categoryLabel = 'Logro';
+        break;
+      case 'DIVISION_UP':
+      case 'DIVISION_DOWN':
+      case 'STORE_FLAGGED':
+      case 'WEEKLY_RANKING_SUMMARY':
+      case 'STREAK_EXPIRING':
+      case 'CATEGORY_RIVALRY':
+      case 'RANK_SHIELD_EXPIRING':
+      case 'DANGER_ZONE_ALERT':
+        iconData = HugeIcons.strokeRoundedCrown;
+        iconColor = Colors.amber.shade700;
+        categoryLabel = 'Ranking';
+        break;
       default:
         iconData = HugeIcons.strokeRoundedNotification02;
         iconColor = Colors.indigo.shade600;
         categoryLabel = 'Sistema';
+    }
+
+    String? achievementBadgeUrl;
+    if (notification.type == 'ACHIEVEMENT_UNLOCKED') {
+      final titleMatch = RegExp(r'["“«](.+?)["”»]').firstMatch(notification.body);
+      final achievementName = titleMatch?.group(1);
+
+      // Check if store achievements list is already available in provider cache
+      final storeId = ref.watch(storesProvider).stores.firstOrNull?.id;
+      if (storeId != null && storeId.isNotEmpty) {
+        final achievements = ref.watch(storeAchievementsProvider(storeId)).asData?.value;
+        if (achievements != null) {
+          final match = achievements.where((a) =>
+            (notification.targetId != null && notification.targetId!.isNotEmpty && a.id == notification.targetId) ||
+            (achievementName != null && a.title.toLowerCase().trim() == achievementName.toLowerCase().trim())
+          ).firstOrNull;
+          if (match != null && match.badgeUrl != null && match.badgeUrl!.isNotEmpty) {
+            achievementBadgeUrl = resolveAchievementBadgeUrl(match.badgeUrl, achievementName: match.title);
+          }
+        }
+      }
+      achievementBadgeUrl ??= resolveAchievementBadgeUrl(null, achievementName: achievementName);
     }
 
     return Container(
@@ -537,18 +642,56 @@ class _PremiumNotificationTile extends ConsumerWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: iconColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(14),
+                    if (notification.type == 'ACHIEVEMENT_UNLOCKED' && achievementBadgeUrl != null)
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.amber.withValues(alpha: 0.35),
+                            width: 1,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        alignment: Alignment.center,
+                        child: Image.network(
+                          achievementBadgeUrl,
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => HugeIcon(
+                            icon: HugeIcons.strokeRoundedAward01,
+                            color: iconColor,
+                            size: 22,
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: iconColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: HugeIcon(
+                          icon: iconData,
+                          color: iconColor,
+                          size: 22,
+                        ),
                       ),
-                      child: HugeIcon(
-                        icon: iconData,
-                        color: iconColor,
-                        size: 22,
-                      ),
-                    ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -595,7 +738,7 @@ class _PremiumNotificationTile extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            notification.body,
+                            _formatNotificationBody(notification.body),
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.4,
@@ -634,11 +777,229 @@ class _PremiumNotificationTile extends ConsumerWidget {
     );
   }
 
-  void _handleTap(BuildContext context, WidgetRef ref) {
-    if (notification.targetId != null && notification.targetId!.isNotEmpty) {
+  void _handleTap(BuildContext context, WidgetRef ref) async {
+    if (notification.type == 'STRIKE_APPLIED' ||
+        notification.type == 'STORE_SUSPENDED') {
+      final storeId = (notification.targetId != null &&
+              notification.targetId!.isNotEmpty)
+          ? notification.targetId!
+          : (ref.read(storesProvider).stores.firstOrNull?.id ?? '');
+      if (storeId.isNotEmpty) {
+        StoreHealthSheet.show(context, storeId);
+      }
+    } else if (notification.type == 'ITEM_HIDDEN') {
+      final storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+      if (storeId != null && storeId.isNotEmpty) {
+        context.push('/dashboard/stores/$storeId/items');
+      } else {
+        context.push('/dashboard');
+      }
+    } else if (notification.type == 'REPORT_RESOLUTION') {
+      if (notification.targetId != null && notification.targetId!.isNotEmpty) {
+        ReportDetailSheet.show(context, notification.targetId!);
+      } else {
+        ChatPenaltyExplanationModal.show(
+          context,
+          title: notification.title,
+          body: notification.body,
+        );
+      }
+    } else if (notification.type == 'CHAT_PENALTY' ||
+        notification.title.toLowerCase().contains('moderación') ||
+        notification.title.toLowerCase().contains('suspensión') ||
+        notification.title.toLowerCase().contains('advertencia')) {
+      ChatPenaltyExplanationModal.show(
+        context,
+        title: notification.title,
+        body: notification.body,
+      );
+    } else if (notification.type == 'ACHIEVEMENT_UNLOCKED') {
+      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (storeId.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+
+      int bonus = 0;
+      final match = RegExp(r'\+(\d+)\s*(?:LP|PR)', caseSensitive: false)
+          .firstMatch(notification.body);
+      if (match != null) {
+        bonus = int.tryParse(match.group(1) ?? '0') ?? 0;
+      }
+
+      String achievementTitle = notification.title;
+      String achievementDesc = notification.body;
+
+      final titleMatch = RegExp(r'["“«](.+?)["”»]').firstMatch(notification.body);
+      if (titleMatch != null) {
+        achievementTitle = titleMatch.group(1) ?? notification.title;
+      }
+
+      // Initial baseline URL resolved by title
+      String badgeUrl = resolveAchievementBadgeUrl(null, achievementName: achievementTitle);
+
+      // Mostrar loader sutil mientras se descarga y precachea la imagen
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black26,
+          builder: (_) => const PopScope(
+            canPop: false,
+            child: Center(
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final achievementId = notification.targetId;
+      if (achievementId != null && achievementId.isNotEmpty) {
+        try {
+          final dio = ref.read(dioProvider);
+          final res = await dio
+              .get('/ranking/achievements/$achievementId')
+              .timeout(const Duration(seconds: 4));
+          if (res.data is Map<String, dynamic>) {
+            final data = res.data as Map<String, dynamic>;
+            if (data['name'] != null && data['name'].toString().isNotEmpty) {
+              achievementTitle = data['name'].toString();
+            }
+            if (data['description'] != null &&
+                data['description'].toString().isNotEmpty) {
+              achievementDesc = data['description'].toString();
+            }
+            if (data['lpBonus'] != null) {
+              bonus = int.tryParse(data['lpBonus'].toString()) ?? bonus;
+            }
+            final rawImg = (data['imageUrl'] ?? data['badgeUrl'])?.toString();
+            badgeUrl = resolveAchievementBadgeUrl(rawImg, achievementName: achievementTitle);
+          }
+        } catch (_) {
+          // Si falla la consulta directa, fallback sin romper el flujo
+        }
+      }
+
+      // Descargar y precachear en memoria antes de abrir la pantalla
+      if (badgeUrl.isNotEmpty && context.mounted) {
+        try {
+          await precacheImage(NetworkImage(badgeUrl), context)
+              .timeout(const Duration(seconds: 5));
+        } catch (_) {
+          // Si el precache falla o excede el timeout, continuar
+        }
+      }
+
+      // Cerrar loader
+      if (context.mounted &&
+          Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      if (context.mounted) {
+        context.push('/dashboard/ranking/achievement-unlocked', extra: {
+          'title': achievementTitle,
+          'description': achievementDesc,
+          'lpBonus': bonus,
+          'badgeUrl': badgeUrl,
+          'storeId': storeId,
+        });
+      }
+    } else if (notification.type == 'DIVISION_UP') {
+      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (storeId.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+      if (context.mounted) {
+        context.push('/dashboard/ranking/celebration', extra: {
+          'storeId': storeId,
+        });
+      }
+    } else if (notification.type == 'DIVISION_DOWN') {
+      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (storeId.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+      if (context.mounted) {
+        context.push('/dashboard/ranking/division-down', extra: {
+          'storeId': storeId,
+        });
+      }
+    } else if (notification.type == 'STORE_FLAGGED') {
+      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (storeId.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+      if (context.mounted) {
+        context.push('/dashboard/ranking/flagged', extra: {
+          'storeId': storeId,
+          'reason': notification.body,
+        });
+      }
+    } else if (notification.type == 'WEEKLY_RANKING_SUMMARY' ||
+        notification.type == 'STREAK_EXPIRING' ||
+        notification.type == 'CATEGORY_RIVALRY' ||
+        notification.type == 'RANK_SHIELD_EXPIRING' ||
+        notification.type == 'DANGER_ZONE_ALERT') {
+      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (storeId.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+      if (context.mounted) {
+        if (storeId.isNotEmpty) {
+          context.push('/dashboard/stores/$storeId/ranking');
+        } else {
+          NotificationService.showInfo(context, notification.body);
+        }
+      }
+    } else if (notification.targetId != null && notification.targetId!.isNotEmpty) {
       if (notification.type == 'CHAT_MESSAGE') {
         context.push('/dashboard/orders/${notification.targetId}/chat');
-      } else {
+      } else if (notification.type == 'MEDIATION_REQUEST' ||
+          notification.type == 'MEDIATION_RESPONSE') {
+        final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
+            notification.title.toLowerCase().contains('mediacion') ||
+            notification.body.toLowerCase().contains('solicitud de mediación') ||
+            notification.body.toLowerCase().contains('solicitud de mediacion');
+
+        if (isCustomerMed) {
+          var storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+          if (storeId == null || storeId.isEmpty) {
+            await ref.read(storesProvider.notifier).loadData();
+            storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+          }
+
+          if (context.mounted) {
+            if (storeId != null && storeId.isNotEmpty) {
+              context.push('/dashboard/stores/$storeId/mediation-requests');
+            } else {
+              NotificationService.showInfo(context, notification.body);
+            }
+          }
+        } else {
+          context.push('/dashboard/orders/${notification.targetId}?openDispute=true');
+          ref.read(notificationRepositoryProvider).markDisputeRead(notification.targetId!);
+        }
+      } else if (notification.type == 'ORDER_CREATED' ||
+          notification.type == 'ORDER_STATUS_CHANGED' ||
+          notification.type == 'PAYMENT_REPORTED' ||
+          notification.type == 'PAYMENT_APPROVED' ||
+          notification.type == 'PAYMENT_REJECTED' ||
+          notification.type == 'ORDER_REVIEW_RECEIVED' ||
+          notification.type == 'BUYER_REVIEW_PROMPT' ||
+          notification.type.startsWith('ORDER_') ||
+          notification.type.startsWith('PAYMENT_')) {
         context.push('/dashboard/orders/${notification.targetId}');
       }
     }

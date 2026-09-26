@@ -22,6 +22,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(dashboardIndexProvider);
+    final unreadDisputesCount = ref.watch(unreadBusinessDisputeOrdersCountProvider);
 
     return Scaffold(
       appBar: currentIndex == 2
@@ -63,8 +64,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onDestinationSelected: (index) {
           ref.read(dashboardIndexProvider.notifier).state = index;
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: HugeIcon(
               icon: HugeIcons.strokeRoundedHome01,
               color: Colors.grey,
@@ -76,17 +77,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             label: 'Inicio',
           ),
           NavigationDestination(
-            icon: HugeIcon(
-              icon: HugeIcons.strokeRoundedStore01,
-              color: Colors.grey,
+            icon: Badge(
+              isLabelVisible: unreadDisputesCount > 0,
+              backgroundColor: const Color(0xFFEF4444),
+              child: const HugeIcon(
+                icon: HugeIcons.strokeRoundedStore01,
+                color: Colors.grey,
+              ),
             ),
-            selectedIcon: HugeIcon(
-              icon: HugeIcons.strokeRoundedStore01,
-              color: Colors.indigo,
+            selectedIcon: Badge(
+              isLabelVisible: unreadDisputesCount > 0,
+              backgroundColor: const Color(0xFFEF4444),
+              child: const HugeIcon(
+                icon: HugeIcons.strokeRoundedStore01,
+                color: Colors.indigo,
+              ),
             ),
             label: 'Tiendas',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: HugeIcon(
               icon: HugeIcons.strokeRoundedSettings01,
               color: Colors.grey,

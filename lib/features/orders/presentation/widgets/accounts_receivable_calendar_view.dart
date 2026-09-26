@@ -620,8 +620,8 @@ class AccountsReceivableCalendarView extends ConsumerWidget {
                             } else if (!cleanPhone.startsWith('58') && cleanPhone.length == 10) {
                               cleanPhone = '58$cleanPhone';
                             }
-                            final displayOrderId = order != null && order.id.length > 6
-                                ? order.id.substring(order.id.length - 6).toUpperCase()
+                            final displayOrderId = order != null && order.id.length >= 8
+                                ? order.id.substring(0, 8).toUpperCase()
                                 : order?.id.toUpperCase() ?? '';
                             final msg = isOverdue
                                 ? 'Hola $userName, le saludamos de nuestra tienda. Le recordamos cordialmente sobre la $installmentText del pedido #$displayOrderId vencida por \$${instAmount.toStringAsFixed(2)}. ¿Nos confirma si realizó el pago? ¡Gracias!'

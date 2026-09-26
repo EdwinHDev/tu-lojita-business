@@ -20,6 +20,7 @@ class StoreSettingsState {
   final bool allowInstallmentExtensions;
   final int maxExtensionDays;
   final double? maxCreditLimit;
+  final bool isAgeRestricted;
 
   const StoreSettingsState({
     this.isLoading = false,
@@ -40,6 +41,7 @@ class StoreSettingsState {
     this.allowInstallmentExtensions = false,
     this.maxExtensionDays = 7,
     this.maxCreditLimit,
+    this.isAgeRestricted = false,
   });
 
   factory StoreSettingsState.initial() => const StoreSettingsState();
@@ -65,6 +67,7 @@ class StoreSettingsState {
     int? maxExtensionDays,
     double? maxCreditLimit,
     bool clearMaxCreditLimit = false,
+    bool? isAgeRestricted,
   }) {
     return StoreSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -85,6 +88,7 @@ class StoreSettingsState {
       allowInstallmentExtensions: allowInstallmentExtensions ?? this.allowInstallmentExtensions,
       maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
       maxCreditLimit: clearMaxCreditLimit ? null : (maxCreditLimit ?? this.maxCreditLimit),
+      isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
     );
   }
 }

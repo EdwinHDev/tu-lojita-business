@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
@@ -139,7 +140,12 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
                 pinned: true,
                 actions: [
                   IconButton(
-                    onPressed: () => ref.read(authProvider.notifier).logout(),
+                    onPressed: () async {
+                      await ref.read(authProvider.notifier).logout();
+                      if (context.mounted) {
+                        context.go('/onboarding');
+                      }
+                    },
                     icon: const HugeIcon(
                       icon: HugeIcons.strokeRoundedLogout01,
                       color: Colors.white,
@@ -178,7 +184,7 @@ class _CompanyOnboardingScreenState extends ConsumerState<CompanyOnboardingScree
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     const Text(
-                      'Bienvenido a Tu Lojita Business',
+                      'Bienvenido a Tu Lojita - Empresa',
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),

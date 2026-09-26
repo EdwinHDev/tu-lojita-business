@@ -8,6 +8,9 @@ import 'settings/appearance_settings_screen.dart';
 import 'settings/partial_payments_settings_screen.dart';
 import 'settings/chat_settings_screen.dart';
 import 'settings/timezone_settings_screen.dart';
+import 'settings/blocked_customers_screen.dart';
+import 'settings/mediation_requests_screen.dart';
+import 'settings/store_health_sheet.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
 
 class StoreSettingsScreen extends ConsumerStatefulWidget {
@@ -116,6 +119,94 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => TimezoneSettingsScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedUserBlock01,
+                  title: 'Clientes Bloqueados',
+                  subtitle: 'Gestión y desbloqueo de clientes restringidos',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => BlockedCustomersScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedMail01,
+                  title: 'Solicitudes de Mediación',
+                  subtitle: 'Buzón de apelaciones de clientes para reactivación',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => MediationRequestsScreen(storeId: widget.storeId)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildMenuTile(
+                  icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+                  title: 'Salud del Comercio y Sanciones',
+                  subtitle: 'Estado de la cuenta, strikes y cumplimiento de políticas',
+                  onTap: () => StoreHealthSheet.show(context, widget.storeId),
+                ),
+                const SizedBox(height: 24),
+                // Tarjeta de Restricción de Edad (+18)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade100),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedAlertCircle,
+                          color: Color(0xFFEF4444),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Restricción de Edad (+18)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Oculta tu tienda y productos para menores de edad',
+                              style: TextStyle(
+                                color: Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: state.isAgeRestricted,
+                        activeTrackColor: const Color(0xFFEF4444),
+                        onChanged: (val) {
+                          ref.read(storeSettingsProvider.notifier).updateAgeRestricted(val);
+                          ref.read(storeSettingsProvider.notifier).saveSettings(
+                            widget.storeId,
+                            specificData: {'isAgeRestricted': val},
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],

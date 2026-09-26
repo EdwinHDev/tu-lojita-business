@@ -417,6 +417,15 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   activeThumbColor: const Color(0xFF4F46E5),
                   onChanged: (v) => notifier.onRequiresBookingChanged(v),
                 ),
+                const Divider(height: 24),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Restricción de Edad (+18)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                  subtitle: const Text('Solo visible para compradores mayores de edad (tabaco, bebidas alcohólicas, etc.)', style: TextStyle(fontSize: 12)),
+                  value: state.isAgeRestricted,
+                  activeThumbColor: const Color(0xFFEF4444),
+                  onChanged: (v) => notifier.onIsAgeRestrictedChanged(v),
+                ),
               ]),
 
               const SizedBox(height: 24),

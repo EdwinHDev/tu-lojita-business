@@ -1,4 +1,6 @@
 import 'order_item.dart';
+import 'order_dispute.dart';
+import '../../data/models/order_dispute_model.dart';
 
 class Payment {
   final String id;
@@ -108,6 +110,7 @@ class Order {
   final Map<String, dynamic>? user;
   final List<Payment> payments;
   final String? storeId;
+  final String? storeName;
   final String? rejectionReason;
   final List<Installment> installments;
   final bool isPartialPayment;
@@ -118,6 +121,18 @@ class Order {
   final DateTime? nextDueDate;
   final int? installmentIntervalValue;
   final String? installmentIntervalUnit;
+  final List<OrderDispute> disputes;
+
+  OrderDispute? get activeDispute {
+    if (disputes.isEmpty) return null;
+    try {
+      return disputes.firstWhere((d) => !d.isResolved);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool get hasActiveDispute => activeDispute != null;
 
   Order({
     required this.id,
@@ -133,6 +148,7 @@ class Order {
     this.user,
     this.payments = const [],
     this.storeId,
+    this.storeName,
     this.rejectionReason,
     this.installments = const [],
     this.isPartialPayment = false,
@@ -143,6 +159,7 @@ class Order {
     this.nextDueDate,
     this.installmentIntervalValue,
     this.installmentIntervalUnit,
+    this.disputes = const [],
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -172,6 +189,7 @@ class Order {
               .toList() ??
           [],
       storeId: json['storeId'] ?? json['store']?['id'],
+      storeName: json['storeName'] ?? json['store']?['name'],
       rejectionReason: json['rejectionReason'] as String?,
       installments: (json['installments'] as List<dynamic>?)
               ?.map((e) => Installment.fromJson(e as Map<String, dynamic>))
@@ -185,6 +203,10 @@ class Order {
       nextDueDate: json['nextDueDate'] != null ? DateTime.tryParse(json['nextDueDate']) : null,
       installmentIntervalValue: json['installmentIntervalValue'] as int?,
       installmentIntervalUnit: json['installmentIntervalUnit'] as String?,
+      disputes: (json['disputes'] as List<dynamic>?)
+              ?.map((e) => OrderDisputeModel.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 }

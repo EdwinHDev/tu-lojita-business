@@ -3,6 +3,7 @@ import '../../domain/repositories/auth_repository.dart';
 import '../datasources/local_auth_data_source.dart';
 import '../datasources/remote_auth_data_source.dart';
 import '../models/user_model.dart';
+import '../../domain/exceptions/auth_exceptions.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final RemoteAuthDataSource _remoteDataSource;
@@ -87,5 +88,97 @@ class AuthRepositoryImpl implements AuthRepository {
     final user = UserModel.fromJson(data);
     await _localDataSource.saveUser(user);
     return user;
+  }
+
+  @override
+  Future<User> loginWithEmailPassword(String email, String password) async {
+    final data = await _remoteDataSource.loginWithEmailPassword(email, password);
+
+    final user = UserModel.fromJson(data['user']);
+    final accessToken = data['accessToken'] as String;
+    final refreshToken = data['refreshToken'] as String;
+
+    await _localDataSource.saveUser(user);
+    await _localDataSource.saveAccessToken(accessToken);
+    await _localDataSource.saveRefreshToken(refreshToken);
+
+    return user;
+  }
+
+  @override
+  Future<User> registerWithEmailPassword({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+  }) async {
+    await _remoteDataSource.registerWithEmailPassword(
+      email: email,
+      password: password,
+      firstName: firstName,
+      lastName: lastName,
+    );
+
+    return await loginWithEmailPassword(email, password);
+  }
+
+  @override
+  Future<String> requestRegistrationOtp({
+    required String email,
+    required String password,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? identification,
+  }) async {
+    final data = await _remoteDataSource.requestRegistrationOtp(
+      email: email,
+      password: password,
+      firstName: firstName,
+      lastName: lastName,
+      phone: phone,
+      identification: identification,
+      appOrigin: 'BUSINESS',
+    );
+    final token = data['registrationToken'] as String?;
+    if (token == null) {
+      throw AuthException('No se recibió el token de registro.');
+    }
+    return token;
+  }
+
+  @override
+  Future<User> verifyRegistrationOtp({
+    required String registrationToken,
+    required String otp,
+  }) async {
+    final data = await _remoteDataSource.verifyRegistrationOtp(
+      registrationToken: registrationToken,
+      otp: otp,
+    );
+
+    final user = UserModel.fromJson(data['user']);
+    final accessToken = data['accessToken'] as String;
+    final refreshToken = data['refreshToken'] as String;
+
+    await _localDataSource.saveUser(user);
+    await _localDataSource.saveAccessToken(accessToken);
+    await _localDataSource.saveRefreshToken(refreshToken);
+
+    return user;
+  }
+
+  @override
+  Future<String> resendRegistrationOtp({
+    required String registrationToken,
+  }) async {
+    final data = await _remoteDataSource.resendRegistrationOtp(
+      registrationToken: registrationToken,
+    );
+    final token = data['registrationToken'] as String?;
+    if (token == null) {
+      throw AuthException('No se recibió el token de registro renovado.');
+    }
+    return token;
   }
 }

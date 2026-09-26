@@ -64,6 +64,7 @@ class Store {
   final bool allowInstallmentExtensions;
   final int maxExtensionDays;
   final double? maxCreditLimit;
+  final bool isAgeRestricted;
 
   const Store({
     required this.id,
@@ -90,6 +91,7 @@ class Store {
     this.allowInstallmentExtensions = false,
     this.maxExtensionDays = 7,
     this.maxCreditLimit,
+    this.isAgeRestricted = false,
   });
 
   String get displayName => branchName != null && branchName!.isNotEmpty 
@@ -121,6 +123,7 @@ class Store {
     bool? allowInstallmentExtensions,
     int? maxExtensionDays,
     double? maxCreditLimit,
+    bool? isAgeRestricted,
   }) {
     return Store(
       id: id ?? this.id,
@@ -147,6 +150,7 @@ class Store {
       allowInstallmentExtensions: allowInstallmentExtensions ?? this.allowInstallmentExtensions,
       maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
       maxCreditLimit: maxCreditLimit ?? this.maxCreditLimit,
+      isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
     );
   }
 }

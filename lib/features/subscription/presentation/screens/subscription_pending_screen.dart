@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/company_subscription.dart';
 
@@ -31,11 +32,9 @@ class _SubscriptionPendingScreenState
             updated.status == SubscriptionStatus.gracePeriod)) {
       context.go('/dashboard');
     } else if (!isInitial) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tu comprobante continúa en revisión administrativa.'),
-          duration: Duration(seconds: 2),
-        ),
+      NotificationService.showInfo(
+        context,
+        'Tu comprobante continúa en revisión administrativa.',
       );
     }
   }

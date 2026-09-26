@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
 
@@ -51,15 +52,11 @@ class _SubscriptionPaywallScreenState
   Future<void> _submitPayment() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMethod == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona una cuenta receptora')),
-      );
+      NotificationService.showWarning(context, 'Selecciona una cuenta receptora');
       return;
     }
     if (_receiptFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Adjunta la foto o captura del comprobante')),
-      );
+      NotificationService.showWarning(context, 'Adjunta la foto o captura del comprobante');
       return;
     }
 
@@ -79,12 +76,7 @@ class _SubscriptionPaywallScreenState
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label copiado al portapapeles'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    NotificationService.showSuccess(context, '$label copiado al portapapeles');
   }
 
   @override
@@ -128,7 +120,7 @@ class _SubscriptionPaywallScreenState
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.3),
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -165,10 +157,10 @@ class _SubscriptionPaywallScreenState
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: Colors.white.withOpacity(0.2)),
+                                color: Colors.white.withValues(alpha: 0.2)),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -289,7 +281,7 @@ class _SubscriptionPaywallScreenState
 
                           // Selector de Método
                           DropdownButtonFormField<PlatformPaymentMethod>(
-                            value: _selectedMethod,
+                            initialValue: _selectedMethod,
                             decoration: InputDecoration(
                               labelText: 'Método Utilizado',
                               border: OutlineInputBorder(
@@ -500,7 +492,7 @@ class _SubscriptionPaywallScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(0.1),
+                  color: Colors.indigo.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

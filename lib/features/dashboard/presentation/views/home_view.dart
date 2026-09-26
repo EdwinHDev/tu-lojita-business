@@ -11,6 +11,8 @@ import 'package:tu_lojita_business/features/dashboard/presentation/providers/das
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_analytics_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/widgets/store_rank_header_card.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/widgets/daily_missions_card.dart';
 
 class HomeView extends ConsumerWidget {
   const HomeView({super.key});
@@ -53,7 +55,28 @@ class HomeView extends ConsumerWidget {
             children: [
               // 1. Header Banner
               _buildHeader(userName, companyLogoUrl),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Rango & Retención Comercial Gamificada
+              if (storesState.stores.isNotEmpty) ...[
+                Builder(
+                  builder: (context) {
+                    final activeStoreId = (analyticsState.selectedStoreId != 'all' &&
+                            analyticsState.selectedStoreId.isNotEmpty)
+                        ? analyticsState.selectedStoreId
+                        : storesState.stores.first.id;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        StoreRankHeaderCard(storeId: activeStoreId),
+                        const SizedBox(height: 16),
+                        DailyMissionsCard(storeId: activeStoreId),
+                        const SizedBox(height: 20),
+                      ],
+                    );
+                  },
+                ),
+              ],
 
               // 2. Multi-temporal & Branch Filters Bar
               _BranchAndPeriodFilters(

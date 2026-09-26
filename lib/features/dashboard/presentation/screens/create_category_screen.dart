@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:tu_lojita_business/core/utils/app_notification.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../../../items/domain/entities/property_template.dart';
 import '../../domain/entities/store_category.dart';
 import '../providers/store_category_provider.dart';
@@ -75,7 +75,7 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
     // Validate properties
     for (var prop in _properties) {
       if (prop['name'].toString().trim().isEmpty) {
-        AppNotification.showError(context, 'Todas las propiedades deben tener un nombre');
+        NotificationService.showWarning(context, 'Todas las propiedades deben tener un nombre');
         return;
       }
     }
@@ -116,7 +116,7 @@ class _CreateCategoryScreenState extends ConsumerState<CreateCategoryScreen> {
 
     ref.listen(storeCategoryProvider, (prev, next) {
       if (prev?.errorMessage != next.errorMessage && next.errorMessage != null) {
-        AppNotification.showError(context, next.errorMessage!);
+        NotificationService.showError(context, next.errorMessage!);
       }
     });
 

@@ -9,4 +9,26 @@ abstract class AuthRepository {
   Future<void> saveUser(User user);
   Future<User?> checkAuthStatus();
   Future<User> updateProfile(String? identification, String? phone);
+  Future<User> loginWithEmailPassword(String email, String password);
+  Future<User> registerWithEmailPassword({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+  });
+  Future<String> requestRegistrationOtp({
+    required String email,
+    required String password,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? identification,
+  });
+  Future<User> verifyRegistrationOtp({
+    required String registrationToken,
+    required String otp,
+  });
+  Future<String> resendRegistrationOtp({
+    required String registrationToken,
+  });
 }

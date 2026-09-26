@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
@@ -116,45 +117,84 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(40.0),
-              child: ElevatedButton(
-                onPressed: authState is AuthLoading ? null : () => ref.read(authProvider.notifier).login(),
-                child: authState is AuthLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'G',
-                                style: TextStyle(
-                                  color: Color(0xFF4285F4),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    onPressed: authState is AuthLoading ? null : () => ref.read(authProvider.notifier).login(),
+                    child: authState is AuthLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/images/google_logo.png',
+                                width: 22,
+                                height: 22,
+                              ),
+                              const SizedBox(width: 12),
+                              const Flexible(
+                                child: Text(
+                                  'Iniciar con Google',
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          const Flexible(
-                            child: Text(
-                              'Iniciar con Google',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/login'),
+                    icon: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedMail01,
+                      color: Colors.indigo,
+                      size: 20,
+                    ),
+                    label: const Text(
+                      'Iniciar con correo electrónico',
+                      style: TextStyle(
+                        color: Colors.indigo,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
                       ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 56),
+                      side: const BorderSide(color: Color(0xFFE0E7FF), width: 1.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => context.push('/register'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: RichText(
+                        text: TextSpan(
+                          text: '¿Deseas afiliar tu empresa? ',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                          children: const [
+                            TextSpan(
+                              text: 'Crear cuenta con correo',
+                              style: TextStyle(
+                                color: Colors.indigo,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

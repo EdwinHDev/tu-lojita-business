@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/envs.dart';
 import '../../domain/entities/store.dart';
 import '../providers/store_details_notifier.dart';
+import '../providers/notifications_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'settings/blocked_customers_screen.dart';
 
 class StoreDetailsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -134,14 +136,17 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
       context: context,
       backgroundColor: Colors.white,
       elevation: 0,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               const SizedBox(height: 12),
               Container(
                 width: 36,
@@ -179,6 +184,38 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                   'Gestionar Órdenes',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
+                trailing: ref.read(unreadBusinessDisputeOrderIdsProvider).isNotEmpty
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFEF4444),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Reclamos',
+                              style: TextStyle(
+                                color: Color(0xFFDC2626),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : null,
                 onTap: () {
                   context.pop();
                   context.push('/dashboard/stores/${widget.storeId}/orders');
@@ -204,6 +241,55 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                 onTap: () {
                   context.pop();
                   context.push('/dashboard/stores/${widget.storeId}/installments');
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.emoji_events_outlined,
+                    color: Color(0xFFF59E0B),
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Mi Ranking & Logros',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  context.pop();
+                  context.push('/dashboard/stores/${widget.storeId}/ranking');
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedUserBlock01,
+                    color: Color(0xFFEF4444),
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Clientes Bloqueados',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  context.pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BlockedCustomersScreen(storeId: widget.storeId),
+                    ),
+                  );
                 },
               ),
               ListTile(
@@ -274,11 +360,12 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                   context.push('/dashboard/stores/${widget.storeId}/settings');
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
             ],
           ),
-        );
-      },
+        ),
+      );
+    },
     );
   }
 

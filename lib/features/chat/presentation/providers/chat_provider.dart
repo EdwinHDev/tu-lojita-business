@@ -11,6 +11,10 @@ class ChatState {
   final bool isTyping;
   final bool isClosed;
   final String? closedReason;
+  final bool? isPermanent;
+  final String? suspendedUntil;
+  final String? suspensionReason;
+  final List<String>? suspensionEvidence;
 
   ChatState({
     this.messages = const [],
@@ -18,6 +22,10 @@ class ChatState {
     this.isTyping = false,
     this.isClosed = false,
     this.closedReason,
+    this.isPermanent,
+    this.suspendedUntil,
+    this.suspensionReason,
+    this.suspensionEvidence,
   });
 
   ChatState copyWith({
@@ -26,6 +34,10 @@ class ChatState {
     bool? isTyping,
     bool? isClosed,
     String? closedReason,
+    bool? isPermanent,
+    String? suspendedUntil,
+    String? suspensionReason,
+    List<String>? suspensionEvidence,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
@@ -33,6 +45,10 @@ class ChatState {
       isTyping: isTyping ?? this.isTyping,
       isClosed: isClosed ?? this.isClosed,
       closedReason: closedReason ?? this.closedReason,
+      isPermanent: isPermanent ?? this.isPermanent,
+      suspendedUntil: suspendedUntil ?? this.suspendedUntil,
+      suspensionReason: suspensionReason ?? this.suspensionReason,
+      suspensionEvidence: suspensionEvidence ?? this.suspensionEvidence,
     );
   }
 }
@@ -152,9 +168,17 @@ class ChatNotifier extends Notifier<ChatState> {
     // 6. Escuchar chat cerrado
     _closedSub = socketService.chatClosedStream.listen((data) {
       if (data['orderId'] != _orderId) return;
+      List<String>? evidenceList;
+      if (data['evidence'] != null && data['evidence'] is List) {
+        evidenceList = (data['evidence'] as List).map((e) => e.toString()).toList();
+      }
       state = state.copyWith(
         isClosed: true,
         closedReason: data['reason'] as String?,
+        isPermanent: data['isPermanent'] as bool?,
+        suspendedUntil: data['until'] as String?,
+        suspensionReason: data['reasonText'] as String?,
+        suspensionEvidence: evidenceList,
       );
     });
 

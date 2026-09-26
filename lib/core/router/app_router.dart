@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/auth/presentation/screens/onboarding_screen.dart';
+import 'package:tu_lojita_business/features/auth/presentation/screens/login_screen.dart';
+import 'package:tu_lojita_business/features/auth/presentation/screens/register_screen.dart';
+import 'package:tu_lojita_business/features/auth/presentation/screens/verify_otp_screen.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/screens/company_onboarding_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/company_settings_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -29,6 +32,12 @@ import 'package:tu_lojita_business/features/subscription/presentation/providers/
 import 'package:tu_lojita_business/features/subscription/presentation/screens/subscription_paywall_screen.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/screens/subscription_pending_screen.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings/mediation_requests_screen.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/screens/my_ranking_screen.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/screens/rank_celebration_screen.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/screens/division_down_screen.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/screens/achievement_unlocked_screen.dart';
+import 'package:tu_lojita_business/features/ranking/presentation/screens/flagged_notice_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -38,6 +47,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/verify-otp',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final registrationToken = extra['registrationToken'] as String? ?? '';
+          final email = extra['email'] as String? ?? '';
+          return VerifyOtpScreen(
+            registrationToken: registrationToken,
+            email: email,
+          );
+        },
       ),
       GoRoute(
         path: '/onboarding/company',
@@ -63,7 +92,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'orders/:orderId',
             builder: (context, state) {
               final orderId = state.pathParameters['orderId']!;
-              return OrderDetailsScreen(orderId: orderId, storeId: null);
+              final autoOpenDispute =
+                  state.uri.queryParameters['openDispute'] == 'true';
+              return OrderDetailsScreen(
+                orderId: orderId,
+                storeId: null,
+                autoOpenDispute: autoOpenDispute,
+              );
             },
           ),
           GoRoute(
@@ -178,20 +213,91 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return StoreDebtsScreen(storeId: storeId);
                 },
               ),
+              GoRoute(
+                path: 'mediation-requests',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return MediationRequestsScreen(storeId: storeId);
+                },
+              ),
+              GoRoute(
+                path: 'ranking',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return MyRankingScreen(storeId: storeId);
+                },
+              ),
             ],
+          ),
+          GoRoute(
+            path: 'ranking/celebration',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>? ?? {};
+              return RankCelebrationScreen(
+                division: extra['division']?.toString() ?? 'BRONCE',
+                currentLp: int.tryParse(extra['currentLp']?.toString() ?? '0') ?? 0,
+                storeId: extra['storeId']?.toString() ?? '',
+              );
+            },
+          ),
+          GoRoute(
+            path: 'ranking/division-down',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>? ?? {};
+              return DivisionDownScreen(
+                division: extra['division']?.toString() ?? 'HIERRO',
+                currentLp: int.tryParse(extra['currentLp']?.toString() ?? '0') ?? 0,
+                storeId: extra['storeId']?.toString() ?? '',
+              );
+            },
+          ),
+          GoRoute(
+            path: 'ranking/achievement-unlocked',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>? ?? {};
+              return AchievementUnlockedScreen(
+                title: extra['achievementTitle']?.toString() ?? extra['title']?.toString() ?? '¡Nuevo Logro!',
+                description: extra['description']?.toString() ?? 'Has completado un hito en tu negocio.',
+                lpBonus: int.tryParse(extra['lpBonus']?.toString() ?? '0') ?? 0,
+                badgeUrl: extra['badgeUrl']?.toString(),
+                storeId: extra['storeId']?.toString() ?? '',
+              );
+            },
+          ),
+          GoRoute(
+            path: 'ranking/flagged',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>? ?? {};
+              return FlaggedNoticeScreen(
+                reason: extra['reason']?.toString(),
+                storeId: extra['storeId']?.toString() ?? '',
+              );
+            },
           ),
         ],
       ),
     ],
     redirect: (context, state) {
       final authState = ref.read(authProvider);
-      final isLoggingIn = state.matchedLocation == '/onboarding';
+      final isAuthRoute = state.matchedLocation == '/onboarding' ||
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register' ||
+          state.matchedLocation == '/verify-otp';
       final isOnboardingCompany = state.matchedLocation == '/onboarding/company';
       final isPaywall = state.matchedLocation == '/subscription/paywall';
       final isPending = state.matchedLocation == '/subscription/pending';
 
       if (authState is! Authenticated) {
-        return (isLoggingIn || isOnboardingCompany) ? null : '/onboarding';
+        return isAuthRoute ? null : '/onboarding';
+      }
+
+      // If authenticated and currently on an auth route, navigate into app
+      if (isAuthRoute) {
+        final user = authState.user;
+        if (!user.hasCompany && user.role != 'ADMIN') {
+          return '/onboarding/company';
+        }
+        return '/dashboard';
       }
 
       // If authenticated, check if has company
@@ -220,7 +326,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      if (isLoggingIn || isOnboardingCompany || isPaywall || isPending) {
+      if (isAuthRoute || isOnboardingCompany || isPaywall || isPending) {
         return '/dashboard';
       }
 

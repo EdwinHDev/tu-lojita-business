@@ -1,4 +1,4 @@
-package com.example.tu_lojita_business
+package com.tulojita.empresa
 
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity

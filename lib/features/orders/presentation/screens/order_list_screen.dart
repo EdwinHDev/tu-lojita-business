@@ -4,6 +4,8 @@ import 'package:hugeicons/hugeicons.dart';
 import '../providers/orders_provider.dart';
 import '../widgets/order_card.dart';
 import 'order_details_screen.dart';
+import 'package:tu_lojita_business/features/chat/presentation/screens/order_chat_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 
 class OrderListScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -34,11 +36,66 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     super.dispose();
   }
 
+  Tab _buildTab(String label, bool showDot, {int? badgeCount}) {
+    return Tab(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (badgeCount != null && badgeCount > 0) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$badgeCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ] else if (showDot) ...[
+            const SizedBox(width: 6),
+            Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEF4444),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final unreadDisputeOrderIds = ref.watch(unreadBusinessDisputeOrderIdsProvider);
+    final allOrdersState = ref.watch(
+      ordersNotifierProvider((storeId: widget.storeId, status: null, hasDispute: null)),
+    );
+    final disputedOrders = allOrdersState.orders
+        .where((o) => unreadDisputeOrderIds.contains(o.id) || o.hasActiveDispute)
+        .toList();
+
+    final activeDisputesOrdersCount =
+        ref.watch(ordersWithActiveDisputesCountProvider(widget.storeId));
+
+    final hasDisputeAll = unreadDisputeOrderIds.isNotEmpty || activeDisputesOrdersCount > 0;
+    final hasDisputePending = disputedOrders.any((o) => o.status == 'PENDING');
+    final hasDisputePartiallyPaid = disputedOrders.any((o) => o.status == 'PARTIALLY_PAID');
+    final hasDisputeFullyPaid = disputedOrders.any((o) => o.status == 'FULLY_PAID');
+    final hasDisputeCancelled = disputedOrders.any((o) => o.status == 'CANCELLED');
 
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
@@ -62,21 +119,26 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
             ),
           ),
           centerTitle: false,
-          bottom: const TabBar(
+          bottom: TabBar(
             isScrollable: true,
-            labelColor: Color(0xFF4F46E5),
-            unselectedLabelColor: Color(0xFF64748B),
-            indicatorColor: Color(0xFF4F46E5),
+            labelColor: const Color(0xFF4F46E5),
+            unselectedLabelColor: const Color(0xFF64748B),
+            indicatorColor: const Color(0xFF4F46E5),
             indicatorWeight: 3,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             tabs: [
-              Tab(text: 'Todas'),
-              Tab(text: 'Pendientes'),
-              Tab(text: 'Abonadas'),
-              Tab(text: 'Pagadas'),
-              Tab(text: 'Canceladas'),
+              _buildTab('Todas', hasDisputeAll),
+              _buildTab('Pendientes', hasDisputePending),
+              _buildTab('Abonadas', hasDisputePartiallyPaid),
+              _buildTab('Pagadas', hasDisputeFullyPaid),
+              _buildTab('Canceladas', hasDisputeCancelled),
+              _buildTab(
+                'Reclamos',
+                unreadDisputeOrderIds.isNotEmpty,
+                badgeCount: activeDisputesOrdersCount,
+              ),
             ],
           ),
         ),
@@ -86,11 +148,12 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildFilteredList((storeId: widget.storeId, status: null)),
-                  _buildFilteredList((storeId: widget.storeId, status: 'PENDING')),
-                  _buildFilteredList((storeId: widget.storeId, status: 'PARTIALLY_PAID')),
-                  _buildFilteredList((storeId: widget.storeId, status: 'FULLY_PAID')),
-                  _buildFilteredList((storeId: widget.storeId, status: 'CANCELLED')),
+                  _buildFilteredList((storeId: widget.storeId, status: null, hasDispute: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: 'PENDING', hasDispute: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: 'PARTIALLY_PAID', hasDispute: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: 'FULLY_PAID', hasDispute: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: 'CANCELLED', hasDispute: null)),
+                  _buildFilteredList((storeId: widget.storeId, status: null, hasDispute: true)),
                 ],
               ),
             ),
@@ -154,6 +217,8 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     }).toList();
 
     if (filteredOrders.isEmpty) {
+      final isDisputeTab = filter.hasDispute == true;
+
       return RefreshIndicator(
         onRefresh: () async {
           await ref.read(ordersNotifierProvider(filter).notifier).refresh();
@@ -170,25 +235,45 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                     width: 76,
                     height: 76,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: isDisputeTab
+                          ? const Color(0xFFFEF2F2)
+                          : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const HugeIcon(
-                      icon: HugeIcons.strokeRoundedInvoice01,
-                      size: 32,
-                      color: Color(0xFF94A3B8),
+                    child: Center(
+                      child: isDisputeTab
+                          ? const Icon(
+                              Icons.gavel_rounded,
+                              size: 36,
+                              color: Color(0xFFEF4444),
+                            )
+                          : const HugeIcon(
+                              icon: HugeIcons.strokeRoundedInvoice01,
+                              size: 32,
+                              color: Color(0xFF94A3B8),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    _searchQuery.isNotEmpty ? 'No se encontraron resultados' : 'No hay órdenes aún',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    _searchQuery.isNotEmpty
+                        ? 'No se encontraron resultados'
+                        : (isDisputeTab
+                            ? 'No hay reclamos abiertos'
+                            : 'No hay órdenes aún'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     _searchQuery.isNotEmpty
                         ? 'Prueba con términos diferentes o ID de orden.'
-                        : 'Las órdenes en este estado aparecerán aquí.',
+                        : (isDisputeTab
+                            ? '¡Excelente! No tienes reclamos pendientes de resolución.'
+                            : 'Las órdenes en este estado aparecerán aquí.'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                   ),
@@ -224,8 +309,14 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
               );
             }
             final order = filteredOrders[index];
+            final unreadDisputeOrderIds = ref.watch(unreadBusinessDisputeOrderIdsProvider);
+            final hasUnreadDispute = unreadDisputeOrderIds.contains(order.id);
+            final hasActiveDispute = order.hasActiveDispute || hasUnreadDispute;
+
             return OrderCard(
               order: order,
+              hasActiveDispute: hasActiveDispute,
+              hasUnreadDispute: hasUnreadDispute,
               onTap: () async {
                 final result = await Navigator.push(
                   context,
@@ -233,10 +324,41 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                     builder: (_) => OrderDetailsScreen(
                       order: order,
                       storeId: widget.storeId,
+                      autoOpenDispute: hasUnreadDispute,
                     ),
                   ),
                 );
-                if ((result == true || mounted)) {
+                if (result == true || mounted) {
+                  ref.read(ordersNotifierProvider(filter).notifier).refresh();
+                }
+              },
+              onChatTap: order.status != 'CANCELLED' && order.status != 'FULLY_PAID'
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderChatScreen(
+                            orderId: order.id,
+                            userName: order.user?['firstName'] != null
+                                ? '${order.user!['firstName']} ${order.user!['lastName'] ?? ''}'.trim()
+                                : 'Cliente',
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
+              onDisputeTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderDetailsScreen(
+                      order: order,
+                      storeId: widget.storeId,
+                      autoOpenDispute: true,
+                    ),
+                  ),
+                );
+                if (result == true || mounted) {
                   ref.read(ordersNotifierProvider(filter).notifier).refresh();
                 }
               },

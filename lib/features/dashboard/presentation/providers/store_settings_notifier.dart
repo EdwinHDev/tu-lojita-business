@@ -41,6 +41,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         allowInstallmentExtensions: store.allowInstallmentExtensions,
         maxExtensionDays: store.maxExtensionDays,
         maxCreditLimit: store.maxCreditLimit,
+        isAgeRestricted: store.isAgeRestricted,
       );
     } catch (e) {
       if (!ref.mounted) return;
@@ -70,6 +71,10 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
 
   void updateTimezone(String value) {
     state = state.copyWith(timezone: value);
+  }
+
+  void updateAgeRestricted(bool value) {
+    state = state.copyWith(isAgeRestricted: value);
   }
 
   void updateAllowInstallmentExtensions(bool value) {
@@ -155,6 +160,7 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
           'allowInstallmentExtensions': state.allowInstallmentExtensions,
           'maxExtensionDays': state.maxExtensionDays,
           'maxCreditLimit': state.maxCreditLimit,
+          'isAgeRestricted': state.isAgeRestricted,
         };
       }
 

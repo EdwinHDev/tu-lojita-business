@@ -5,12 +5,14 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import '../../domain/entities/order.dart';
 import '../providers/orders_provider.dart';
 import 'order_details_screen.dart';
 import '../widgets/accounts_receivable_calendar_view.dart';
 import '../widgets/receipt_image_viewer.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/block_customer_dialog.dart';
 
 class StoreInstallmentsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -483,6 +485,9 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     final firstName = user?['firstName'] as String? ?? '';
     final lastName = user?['lastName'] as String? ?? '';
     final phone = user?['phone'] as String? ?? '';
+    final customerId = user?['id']?.toString() ?? '';
+    final customerEmail = user?['email'] as String?;
+    final customerAvatar = user?['avatar'] as String?;
     String userName = '$firstName $lastName'.trim();
     if (userName.isEmpty) {
       userName = user?['name'] as String? ?? 'Cliente Desconocido';
@@ -494,8 +499,8 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     final isOverdue = _isOverdueInstallment(installment);
     final (statusBgColor, statusTextColor, statusText) = _statusBadgeStyle(installment.status, isOverdue, isInReview);
 
-    final displayOrderId = order != null && order.id.length > 6
-        ? order.id.substring(order.id.length - 6).toUpperCase()
+    final displayOrderId = order != null && order.id.length >= 8
+        ? order.id.substring(0, 8).toUpperCase()
         : order?.id.toUpperCase() ?? '';
 
     // Contextual installment number
@@ -951,6 +956,42 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                   ),
                 ),
 
+              // 4. Restringir Cliente (en Cuotas Vencidas / Mora)
+              if (isOverdue && customerId.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    BlockCustomerDialog.show(
+                      context: context,
+                      storeId: widget.storeId,
+                      customerId: customerId,
+                      customerName: userName,
+                      customerEmail: customerEmail,
+                      customerAvatar: customerAvatar,
+                    );
+                  },
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedUserBlock01,
+                    size: 14,
+                    color: Color(0xFFDC2626),
+                  ),
+                  label: const Text(
+                    'Restringir Cliente',
+                    style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFFCA5A5)),
+                    backgroundColor: const Color(0xFFFEF2F2),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+
               // 4. Order Details Screen
               if (order != null)
                 OutlinedButton.icon(
@@ -1130,8 +1171,9 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
   ) async {
     final phone = installment.order?.user?['phone'] as String?;
     if (phone == null || phone.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El cliente no tiene un número registrado.')),
+      NotificationService.showWarning(
+        context,
+        'El cliente no tiene un número registrado.',
       );
       return;
     }
@@ -1151,14 +1193,16 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     try {
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir WhatsApp en este dispositivo.')),
+        NotificationService.showError(
+          context,
+          'No se pudo abrir WhatsApp en este dispositivo.',
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al abrir WhatsApp: $e')),
+        NotificationService.showError(
+          context,
+          'Error al abrir WhatsApp: $e',
         );
       }
     }
@@ -1291,8 +1335,9 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                           : () async {
                               final double? parsedAmount = double.tryParse(amountController.text.trim());
                               if (parsedAmount == null || parsedAmount <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Ingresa un monto válido mayor a 0.')),
+                                NotificationService.showWarning(
+                                  context,
+                                  'Ingresa un monto válido mayor a 0.',
                                 );
                                 return;
                               }
@@ -1310,18 +1355,17 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
 
                                 if (context.mounted) {
                                   Navigator.pop(modalContext);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('¡Pago de \$${parsedAmount.toStringAsFixed(2)} acreditado exitosamente!'),
-                                      backgroundColor: const Color(0xFF10B981),
-                                    ),
+                                  NotificationService.showSuccess(
+                                    context,
+                                    '¡Pago de \$${parsedAmount.toStringAsFixed(2)} acreditado exitosamente!',
                                   );
                                 }
                               } catch (e) {
                                 setModalState(() => isSubmitting = false);
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error al registrar pago: $e')),
+                                  NotificationService.showError(
+                                    context,
+                                    'Error al registrar pago: $e',
                                   );
                                 }
                               }
@@ -1451,13 +1495,17 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                   ref.invalidate(storeInstallmentsProvider(widget.storeId));
                   ref.invalidate(storeReceivablesProvider(widget.storeId));
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Pago rechazado.'), backgroundColor: Color(0xFFDC2626)),
+                    NotificationService.showWarning(
+                      context,
+                      'Pago rechazado.',
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    NotificationService.showError(
+                      context,
+                      'Error: $e',
+                    );
                   }
                 }
               },
@@ -1479,13 +1527,17 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                   ref.invalidate(storeInstallmentsProvider(widget.storeId));
                   ref.invalidate(storeReceivablesProvider(widget.storeId));
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('¡Pago verificado y aprobado!'), backgroundColor: Color(0xFF10B981)),
+                    NotificationService.showSuccess(
+                      context,
+                      '¡Pago verificado y aprobado!',
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    NotificationService.showError(
+                      context,
+                      'Error: $e',
+                    );
                   }
                 }
               },
@@ -1540,8 +1592,9 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
               onPressed: () async {
                 final comment = commentController.text.trim();
                 if (comment.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Por favor, indica un motivo de rechazo.')),
+                  NotificationService.showWarning(
+                    context,
+                    'Por favor, indica un motivo de rechazo.',
                   );
                   return;
                 }
@@ -1555,14 +1608,16 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                     'storeId': widget.storeId,
                   }).future);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Prórroga rechazada correctamente.'), backgroundColor: Color(0xFFDC2626)),
+                    NotificationService.showWarning(
+                      context,
+                      'Prórroga rechazada correctamente.',
                     );
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: ${e.toString()}')),
+                    NotificationService.showError(
+                      context,
+                      'Error: ${e.toString()}',
                     );
                   }
                 }
@@ -1588,14 +1643,16 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
         'storeId': widget.storeId,
       }).future);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Prórroga aprobada con éxito!'), backgroundColor: Color(0xFF10B981)),
+        NotificationService.showSuccess(
+          context,
+          '¡Prórroga aprobada con éxito!',
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+        NotificationService.showError(
+          context,
+          'Error: ${e.toString()}',
         );
       }
     }

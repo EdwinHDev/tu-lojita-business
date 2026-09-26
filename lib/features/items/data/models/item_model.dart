@@ -22,6 +22,7 @@ class ItemModel extends Item {
     super.allowInstallments = true,
     super.lateFeePercentage = 0,
     super.isActive = true,
+    super.isAgeRestricted = false,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -47,6 +48,7 @@ class ItemModel extends Item {
       allowInstallments: json['allowInstallments'] == true,
       lateFeePercentage: _parseDouble(json['lateFeePercentage']),
       isActive: json['isActive'] ?? true,
+      isAgeRestricted: json['isAgeRestricted'] == true,
     );
   }
 

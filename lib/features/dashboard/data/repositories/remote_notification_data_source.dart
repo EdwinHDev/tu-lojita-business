@@ -23,4 +23,13 @@ class RemoteNotificationDataSource {
       rethrow;
     }
   }
+
+  Future<void> markDisputeRead(String orderId) async {
+    try {
+      await _dio.patch('/notifications/order/$orderId/dispute-read');
+    } catch (_) {
+      // Silently catch network errors
+    }
+  }
 }
+

@@ -43,18 +43,29 @@ class NotificationHelper {
       debugPrint('Notification channel deletion skipped: $e');
     }
 
-    // Crear canal de notificaciones para Android
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'business_notifications',
-      'Business Notifications',
-      description: 'Canal para alertas de nuevos pedidos',
+    // Crear y registrar canales de notificaciones para Android
+    const AndroidNotificationChannel highImportanceChannel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      description: 'Canal para alertas prioritarias y notificaciones importantes',
       importance: Importance.max,
       playSound: true,
+      enableVibration: true,
+    );
+
+    const AndroidNotificationChannel businessChannel = AndroidNotificationChannel(
+      'business_notifications',
+      'Business Notifications',
+      description: 'Canal para alertas de nuevos pedidos y chat',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
     );
 
     await androidPlugin?.requestNotificationsPermission();
 
-    await androidPlugin?.createNotificationChannel(channel);
+    await androidPlugin?.createNotificationChannel(highImportanceChannel);
+    await androidPlugin?.createNotificationChannel(businessChannel);
   }
 
   static Future<void> showNotification({

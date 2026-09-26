@@ -26,6 +26,7 @@ class StoreModel extends Store {
     super.allowInstallmentExtensions = false,
     super.maxExtensionDays = 7,
     super.maxCreditLimit,
+    super.isAgeRestricted = false,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
@@ -57,6 +58,7 @@ class StoreModel extends Store {
       allowInstallmentExtensions: json['allowInstallmentExtensions'] as bool? ?? false,
       maxExtensionDays: json['maxExtensionDays'] as int? ?? 7,
       maxCreditLimit: json['maxCreditLimit'] != null ? double.tryParse(json['maxCreditLimit'].toString()) : null,
+      isAgeRestricted: json['isAgeRestricted'] as bool? ?? false,
     );
   }
 
@@ -86,6 +88,7 @@ class StoreModel extends Store {
       'allowInstallmentExtensions': allowInstallmentExtensions,
       'maxExtensionDays': maxExtensionDays,
       'maxCreditLimit': maxCreditLimit,
+      'isAgeRestricted': isAgeRestricted,
     };
   }
 }

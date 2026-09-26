@@ -30,6 +30,7 @@ class Item extends Equatable {
   final bool allowInstallments;
   final double lateFeePercentage;
   final bool isActive;
+  final bool isAgeRestricted;
 
   const Item({
     required this.id,
@@ -51,6 +52,7 @@ class Item extends Equatable {
     this.allowInstallments = true,
     this.lateFeePercentage = 0,
     this.isActive = true,
+    this.isAgeRestricted = false,
   });
 
   @override
@@ -74,6 +76,7 @@ class Item extends Equatable {
         allowInstallments,
         lateFeePercentage,
         isActive,
+        isAgeRestricted,
       ];
 }
 

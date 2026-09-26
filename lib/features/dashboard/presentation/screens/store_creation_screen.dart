@@ -5,7 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:tu_lojita_business/core/utils/app_notification.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
@@ -53,10 +53,7 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
     // Listen for errors
     ref.listen(storeCreationProvider.select((s) => s.errorMessage), (prev, next) {
       if (next != null && next.isNotEmpty) {
-        AppNotification.showError(context, next);
-        // We don't clear it here automatically because the SnackBar has an action,
-        // but it's good practice to clear it so it doesn't trigger again on rebuild if not careful.
-        // Actually, Riverpod's listen only triggers on change, so it's fine.
+        NotificationService.showError(context, next);
       }
     });
 
@@ -140,7 +137,7 @@ class _StoreCreationScreenState extends ConsumerState<StoreCreationScreen> {
       if (success) {
         if (context.mounted) {
           context.pop();
-          AppNotification.showSuccess(context, 'Sucursal creada con éxito');
+          NotificationService.showSuccess(context, 'Sucursal creada con éxito');
         }
       } else {
         final error = ref.read(storesProvider).errorMessage;
@@ -434,8 +431,9 @@ class _Step2OperationsState extends State<_Step2Operations> {
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor activa el servicio de ubicación')),
+        NotificationService.showWarning(
+          context,
+          'Por favor activa el servicio de ubicación',
         );
       }
       return;

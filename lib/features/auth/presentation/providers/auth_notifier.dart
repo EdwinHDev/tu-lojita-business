@@ -20,6 +20,7 @@ class AuthNotifier extends Notifier<AuthState> {
     if (localUser != null) {
       state = Authenticated(localUser);
       ref.read(socketServiceProvider).init();
+      ref.read(firebaseMessagingServiceProvider).registerDeviceToken();
     } else {
       state = const AuthLoading();
     }
@@ -29,11 +30,13 @@ class AuthNotifier extends Notifier<AuthState> {
       if (user != null) {
         state = Authenticated(user);
         ref.read(socketServiceProvider).init();
+        ref.read(firebaseMessagingServiceProvider).registerDeviceToken();
       } else if (state is! Authenticated) {
         final fallbackUser = await _repository.getSession();
         if (fallbackUser != null) {
           state = Authenticated(fallbackUser);
           ref.read(socketServiceProvider).init();
+          ref.read(firebaseMessagingServiceProvider).registerDeviceToken();
         } else {
           state = const Unauthenticated();
         }
@@ -44,6 +47,7 @@ class AuthNotifier extends Notifier<AuthState> {
         if (fallbackUser != null) {
           state = Authenticated(fallbackUser);
           ref.read(socketServiceProvider).init();
+          ref.read(firebaseMessagingServiceProvider).registerDeviceToken();
         } else {
           state = const Unauthenticated();
         }
@@ -79,6 +83,10 @@ class AuthNotifier extends Notifier<AuthState> {
         state = const Unauthenticated();
         return;
       }
+      if (e is AuthException) {
+        state = AuthError(e.message);
+        return;
+      }
       state = AuthError(e.toString());
     }
   }
@@ -86,6 +94,116 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> logout() async {
     await _repository.logout();
     state = const Unauthenticated();
+  }
+
+  Future<bool> loginWithCredentials(String email, String password) async {
+    state = const AuthLoading();
+    try {
+      await _repository.loginWithEmailPassword(email, password);
+      await checkStatus();
+      return true;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      return false;
+    }
+  }
+
+  Future<bool> registerWithCredentials({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+  }) async {
+    state = const AuthLoading();
+    try {
+      await _repository.registerWithEmailPassword(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+      );
+      await checkStatus();
+      return true;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      return false;
+    }
+  }
+
+  Future<String?> requestRegistrationOtp({
+    required String email,
+    required String password,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? identification,
+  }) async {
+    try {
+      final token = await _repository.requestRegistrationOtp(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+        identification: identification,
+      );
+      return token;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      return null;
+    }
+  }
+
+  Future<bool> verifyRegistrationOtp({
+    required String registrationToken,
+    required String otp,
+  }) async {
+    state = const AuthLoading();
+    try {
+      await _repository.verifyRegistrationOtp(
+        registrationToken: registrationToken,
+        otp: otp,
+      );
+      await checkStatus();
+      return true;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      return false;
+    }
+  }
+
+  Future<String?> resendRegistrationOtp({
+    required String registrationToken,
+  }) async {
+    try {
+      final newToken = await _repository.resendRegistrationOtp(
+        registrationToken: registrationToken,
+      );
+      return newToken;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      return null;
+    }
   }
 }
 

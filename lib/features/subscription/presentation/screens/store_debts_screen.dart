@@ -5,6 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
 
@@ -61,10 +62,9 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
         0.0;
 
     if (billingId == null && currentDebt <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tu tienda no tiene cortes ni deudas pendientes de comisiones.'),
-        ),
+      NotificationService.showInfo(
+        context,
+        'Tu tienda no tiene cortes ni deudas pendientes de comisiones.',
       );
       return;
     }
@@ -81,11 +81,9 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
         onSuccess: () {
           Navigator.of(ctx).pop();
           _loadDebtData();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Comprobante enviado. Nuestro equipo lo verificará pronto.'),
-              backgroundColor: Colors.green,
-            ),
+          NotificationService.showSuccess(
+            context,
+            'Comprobante enviado. Nuestro equipo lo verificará pronto.',
           );
         },
       ),
@@ -250,7 +248,7 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -447,15 +445,11 @@ class _ReportCommissionPaymentModalState
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMethod == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona el método de pago')),
-      );
+      NotificationService.showWarning(context, 'Selecciona el método de pago');
       return;
     }
     if (_receiptFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Adjunta el comprobante del pago')),
-      );
+      NotificationService.showWarning(context, 'Adjunta el comprobante del pago');
       return;
     }
 
@@ -478,9 +472,9 @@ class _ReportCommissionPaymentModalState
 
       widget.onSuccess();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al enviar reporte de pago')),
-      );
+      if (mounted) {
+        NotificationService.showError(context, 'Error al enviar reporte de pago');
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -518,7 +512,7 @@ class _ReportCommissionPaymentModalState
               const SizedBox(height: 16),
 
               DropdownButtonFormField<PlatformPaymentMethod>(
-                value: _selectedMethod,
+                initialValue: _selectedMethod,
                 decoration: InputDecoration(
                   labelText: 'Cuenta Destino',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

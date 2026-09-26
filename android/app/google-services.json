@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "14693683484",
+    "project_id": "tulojita-3f65d",
+    "storage_bucket": "tulojita-3f65d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14693683484:android:e673fe3d8131855787aad9",
+        "android_client_info": {
+          "package_name": "com.tulojita.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnERJm4ndb-eZMsLcMLZ-NF5_7_hkqzQQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14693683484:android:e7f8d7befe5275d387aad9",
+        "android_client_info": {
+          "package_name": "com.tulojita.empresa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnERJm4ndb-eZMsLcMLZ-NF5_7_hkqzQQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import 'package:tu_lojita_business/features/chat/domain/entities/chat_message.dart';
@@ -14,8 +15,10 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_sta
 import 'package:tu_lojita_business/core/network/socket_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_helper.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
 import 'package:tu_lojita_business/features/chat/presentation/widgets/chat_image_preview_dialog.dart';
+import 'package:tu_lojita_business/features/reports/presentation/widgets/report_dialog.dart';
 
 String _formatChatImageUrl(String? url) {
   if (url == null || url.trim().isEmpty) return '';
@@ -151,12 +154,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
       _messageController.clear();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al subir imagen: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
+        NotificationService.showError(context, 'Error al subir imagen: $e');
       }
     } finally {
       if (mounted) {
@@ -263,35 +261,6 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
     // Auto-scroll al final al recibir nuevos mensajes
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
-    Widget? readOnlyBanner;
-    if (isReadOnly) {
-      readOnlyBanner = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: const Color(0xFFF1F5F9),
-        child: Row(
-          children: [
-            HugeIcon(
-              icon: HugeIcons.strokeRoundedCircleLock01,
-              color: const Color(0xFF64748B),
-              size: 16,
-            ),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Este chat se encuentra en modo solo lectura porque el pedido ha sido completado o cancelado.',
-                style: TextStyle(
-                  color: Color(0xFF475569),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -309,8 +278,8 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
         title: () {
           final displayName = widget.userName.trim().isEmpty ? 'Cliente' : widget.userName;
           final initialLetter = displayName.substring(0, 1).toUpperCase();
-          final orderShortId = widget.orderId.length >= 6
-              ? widget.orderId.substring(widget.orderId.length - 6).toUpperCase()
+          final orderShortId = widget.orderId.length >= 8
+              ? widget.orderId.substring(0, 8).toUpperCase()
               : widget.orderId.toUpperCase();
 
           return Row(
@@ -349,7 +318,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
       ),
       body: Column(
         children: [
-          readOnlyBanner ?? const SizedBox.shrink(),
+          if (isReadOnly) _ChatStatusBanner(chatState: chatState),
           Expanded(
             child: chatState.isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
@@ -431,6 +400,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
         onTap: hasError 
             ? () => ref.read(chatProvider(widget.orderId).notifier).retryMessage(message.id)
             : null,
+        onLongPress: () => _showMessageActions(context, message, isMe),
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -702,6 +672,66 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
       ),
     );
   }
+
+  void _showMessageActions(BuildContext context, ChatMessage message, bool isMe) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            if (message.content.isNotEmpty && message.content != '📷 Imagen adjunta')
+              ListTile(
+                leading:
+                    const Icon(Icons.copy_rounded, color: Color(0xFF374151)),
+                title: const Text('Copiar texto'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  Clipboard.setData(ClipboardData(text: message.content));
+                  NotificationService.showSuccess(context, 'Mensaje copiado');
+                },
+              ),
+            if (!isMe)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Colors.red),
+                title: const Text(
+                  'Reportar mensaje',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  showDialog(
+                    context: context,
+                    builder: (dialogCtx) => ReportDialog(
+                      title: 'Reportar mensaje',
+                      reportType: 'CHAT_MESSAGE',
+                      targetChatMessageId: message.id,
+                      messageContent: message.content.isNotEmpty
+                          ? message.content
+                          : (message.imageUrl != null ? '📷 Imagen adjunta' : ''),
+                    ),
+                  );
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WhatsAppTicks extends StatelessWidget {
@@ -734,3 +764,237 @@ class _WhatsAppTicks extends StatelessWidget {
     );
   }
 }
+
+class _ChatStatusBanner extends StatelessWidget {
+  final ChatState chatState;
+
+  const _ChatStatusBanner({required this.chatState});
+
+  @override
+  Widget build(BuildContext context) {
+    if (chatState.closedReason == 'USER_CHAT_SUSPENDED') {
+      String durationText = 'Aviso administrativo';
+      if (chatState.isPermanent == true) {
+        durationText = 'Suspensión Definitiva';
+      } else if (chatState.suspendedUntil != null) {
+        final parsed = DateTime.tryParse(chatState.suspendedUntil!);
+        durationText = 'Hasta ${parsed != null ? parsed.toFriendlyDate() : chatState.suspendedUntil}';
+      }
+
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.gavel_rounded, size: 20, color: Color(0xFFDC2626)),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Acceso al chat suspendido',
+                    style: TextStyle(
+                      color: Color(0xFF991B1B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    chatState.isPermanent == true ? 'Definitiva' : 'Penalización',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sanción: $durationText',
+              style: const TextStyle(
+                color: Color(0xFF7F1D1D),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (chatState.suspensionReason != null && chatState.suspensionReason!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Motivo: ${chatState.suspensionReason}',
+                style: const TextStyle(
+                  color: Color(0xFF991B1B),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            if (chatState.suspensionEvidence != null && chatState.suspensionEvidence!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Evidencia citada por moderación:',
+                style: TextStyle(
+                  color: Color(0xFF7F1D1D),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              ...chatState.suspensionEvidence!.map((quote) {
+                final isGap = quote.contains('Se omitieron mensajes intermedios') ||
+                    quote.trim() == '[ ··· Se omitieron mensajes intermedios ··· ]';
+
+                if (isGap) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: Colors.red.shade200,
+                            thickness: 1,
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFFCA5A5),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.more_horiz_rounded,
+                                size: 14,
+                                color: Color(0xFF991B1B),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Se omitieron mensajes intermedios',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF991B1B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: Colors.red.shade200,
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(6),
+                    border: const Border(
+                      left: BorderSide(color: Color(0xFFDC2626), width: 3),
+                    ),
+                  ),
+                  child: Text(
+                    '“$quote”',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (chatState.closedReason == 'COUNTERPART_CHAT_SUSPENDED') {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3C7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFCD34D)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.person_off_rounded, size: 20, color: Color(0xFFD97706)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No puedes unirte al chat porque el otro usuario se encuentra penalizado por la administración.',
+                style: TextStyle(
+                  color: Color(0xFF92400E),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: const Color(0xFFF1F5F9),
+      child: Row(
+        children: [
+          const HugeIcon(
+            icon: HugeIcons.strokeRoundedCircleLock01,
+            color: Color(0xFF64748B),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              chatState.closedReason == 'chat_disabled'
+                  ? 'El chat ha sido deshabilitado para esta orden.'
+                  : (chatState.closedReason != null
+                      ? 'Chat cerrado: ${chatState.closedReason}'
+                      : 'Este chat se encuentra en modo solo lectura porque el pedido ha sido completado o cancelado.'),
+              style: const TextStyle(
+                color: Color(0xFF475569),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

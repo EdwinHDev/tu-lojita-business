@@ -35,6 +35,7 @@ class ItemFormState {
   final bool allowInstallments;
   final double lateFeePercentage;
   final bool isActive;
+  final bool isAgeRestricted;
   final List<Map<String, dynamic>> commissionRanges;
 
   const ItemFormState({
@@ -64,6 +65,7 @@ class ItemFormState {
     this.allowInstallments = false,
     this.lateFeePercentage = 0,
     this.isActive = true,
+    this.isAgeRestricted = false,
     this.commissionRanges = const [],
   });
 
@@ -134,6 +136,7 @@ class ItemFormState {
     bool? allowInstallments,
     double? lateFeePercentage,
     bool? isActive,
+    bool? isAgeRestricted,
     List<Map<String, dynamic>>? commissionRanges,
   }) {
     return ItemFormState(
@@ -163,6 +166,7 @@ class ItemFormState {
       allowInstallments: allowInstallments ?? this.allowInstallments,
       lateFeePercentage: lateFeePercentage ?? this.lateFeePercentage,
       isActive: isActive ?? this.isActive,
+      isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
       commissionRanges: commissionRanges ?? this.commissionRanges,
     );
   }
@@ -225,6 +229,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       allowInstallments: item.allowInstallments,
       lateFeePercentage: item.lateFeePercentage,
       isActive: item.isActive,
+      isAgeRestricted: item.isAgeRestricted,
     );
     if (item.categoryId != null) {
       loadCategoryTemplates(item.categoryId!);
@@ -237,6 +242,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onPriceTypeChanged(PriceType value) => state = state.copyWith(priceType: value);
   void onIsFeaturedChanged(bool value) => state = state.copyWith(isFeatured: value);
   void onIsActiveChanged(bool value) => state = state.copyWith(isActive: value);
+  void onIsAgeRestrictedChanged(bool value) => state = state.copyWith(isAgeRestricted: value);
   void onDiscountPriceChanged(double? value) => state = state.copyWith(discountPrice: value);
   void onItemTypeChanged(ItemType value) => state = state.copyWith(itemType: value);
   void onTrackInventoryChanged(bool value) => state = state.copyWith(trackInventory: value);
@@ -362,6 +368,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         'itemType': state.itemType.name.toUpperCase(),
         'isFeatured': state.isFeatured,
         'isActive': state.isActive,
+        'isAgeRestricted': state.isAgeRestricted,
         'discountPrice': state.discountPrice,
         'trackInventory': state.trackInventory,
         'stockQuantity': state.trackInventory ? state.stockQuantity : null,

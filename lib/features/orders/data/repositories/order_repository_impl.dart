@@ -10,7 +10,7 @@ class OrderRepositoryImpl implements OrderRepository {
   OrderRepositoryImpl({required this.dio});
 
   @override
-  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset, {String? status}) async {
+  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset, {String? status, bool? hasDispute}) async {
     try {
       final queryParams = <String, dynamic>{
         'storeId': storeId,
@@ -19,6 +19,9 @@ class OrderRepositoryImpl implements OrderRepository {
       };
       if (status != null) {
         queryParams['status'] = status;
+      }
+      if (hasDispute != null) {
+        queryParams['hasDispute'] = hasDispute;
       }
 
       final response = await dio.get(

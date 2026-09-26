@@ -42,7 +42,7 @@ class OrdersState {
   }
 }
 
-typedef OrderFilter = ({String storeId, String? status});
+typedef OrderFilter = ({String storeId, String? status, bool? hasDispute});
 
 // ------------------------------------------------------------------
 // Notifier — receives filter via constructor (Riverpod v3 pattern)
@@ -66,7 +66,13 @@ class OrdersNotifier extends Notifier<OrdersState> {
     state = const OrdersState(isLoading: true);
     try {
       final repo = ref.read(ordersRepositoryProvider);
-      final items = await repo.getOrdersPaginated(filter.storeId, _limit, 0, status: filter.status);
+      final items = await repo.getOrdersPaginated(
+        filter.storeId,
+        _limit,
+        0,
+        status: filter.status,
+        hasDispute: filter.hasDispute,
+      );
       
       if (!ref.mounted) return;
 
@@ -92,7 +98,13 @@ class OrdersNotifier extends Notifier<OrdersState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final repo = ref.read(ordersRepositoryProvider);
-      final nextItems = await repo.getOrdersPaginated(filter.storeId, _limit, _currentOffset, status: filter.status);
+      final nextItems = await repo.getOrdersPaginated(
+        filter.storeId,
+        _limit,
+        _currentOffset,
+        status: filter.status,
+        hasDispute: filter.hasDispute,
+      );
       
       if (!ref.mounted) return;
 
@@ -210,4 +222,12 @@ final registerManualPaymentProvider = FutureProvider.family<Map<String, dynamic>
   }
   return result;
 });
+
+final ordersWithActiveDisputesCountProvider = Provider.family<int, String>((ref, storeId) {
+  final disputedOrdersState = ref.watch(
+    ordersNotifierProvider((storeId: storeId, status: null, hasDispute: true)),
+  );
+  return disputedOrdersState.orders.where((o) => o.hasActiveDispute).length;
+});
+
 

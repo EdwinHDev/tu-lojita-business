@@ -1,7 +1,7 @@
 import '../entities/order.dart';
 
 abstract class OrderRepository {
-  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset, {String? status});
+  Future<List<Order>> getOrdersPaginated(String storeId, int limit, int offset, {String? status, bool? hasDispute});
   Future<Order> updateOrderStatus(String orderId, String status, {String? reason});
   Future<Order> getOrderById(String orderId);
   Future<List<Installment>> getStoreInstallments(String storeId);
