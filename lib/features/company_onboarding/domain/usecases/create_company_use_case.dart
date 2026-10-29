@@ -11,12 +11,18 @@ class CreateCompanyUseCase {
     required String rif,
     File? logoFile,
     String? existingLogoUrl,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   }) async {
     return await _repository.createCompany(
       name: name,
       rif: rif,
       logoFile: logoFile,
       existingLogoUrl: existingLogoUrl,
+      subcategoryId: subcategoryId,
+      phone: phone,
+      description: description,
     );
   }
 }

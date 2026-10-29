@@ -26,7 +26,7 @@ class SubcategoryRemoteDataSourceImpl implements SubcategoryRemoteDataSource {
     try {
       final response = await dio.get('/subcategories', queryParameters: {
         'categoryId': categoryId,
-        'search': ?search,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
         'page': ?page,
         'limit': ?limit,
       });

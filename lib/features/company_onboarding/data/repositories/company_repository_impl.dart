@@ -19,6 +19,9 @@ class CompanyRepositoryImpl implements CompanyRepository {
     required String rif,
     File? logoFile,
     String? existingLogoUrl,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   }) async {
     String? finalLogoUrl;
     bool isNewUpload = false;
@@ -39,6 +42,9 @@ class CompanyRepositoryImpl implements CompanyRepository {
         name: name,
         rif: rif,
         logo: finalLogoUrl,
+        subcategoryId: subcategoryId,
+        phone: phone,
+        description: description,
       );
       
     } catch (e) {

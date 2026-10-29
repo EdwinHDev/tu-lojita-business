@@ -1,4 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'order_detail_helpers.dart';
 
@@ -737,4 +742,519 @@ class OrderDetailDialogs {
     }
     return null;
   }
+
+  /// Modal BottomSheet para procesar y confirmar la emisión de un reembolso por parte del comercio con comprobante opcional.
+  static Future<({String reference, String? receiptImage})?> showProcessRefundBottomSheet(
+    BuildContext context, {
+    required Payment payment,
+    required Order order,
+    required WidgetRef ref,
+  }) async {
+    final refundReferenceController = TextEditingController();
+    File? selectedReceiptImage;
+    bool isUploadingImage = false;
+    final picker = ImagePicker();
+
+    final result = await showModalBottomSheet<({String reference, String? receiptImage})?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: !isUploadingImage,
+      enableDrag: !isUploadingImage,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> pickImage(ImageSource source) async {
+              try {
+                final picked = await picker.pickImage(
+                  source: source,
+                  maxWidth: 1200,
+                  maxHeight: 1200,
+                  imageQuality: 85,
+                );
+                if (picked != null) {
+                  setModalState(() {
+                    selectedReceiptImage = File(picked.path);
+                  });
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  NotificationService.showError(context, 'No se pudo seleccionar la imagen: $e');
+                }
+              }
+            }
+
+            return PopScope(
+              canPop: !isUploadingImage,
+              child: Container(
+                padding: EdgeInsets.only(
+                  top: 24,
+                  left: 20,
+                  right: 20,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.currency_exchange_rounded, color: Color(0xFF2563EB), size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Registrar Reembolso',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                ),
+                                Text(
+                                  'Confirma la devolución de fondos al cliente',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Monto a reembolsar:',
+                                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                ),
+                                Text(
+                                  '\$${payment.amount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 20, color: Color(0xFFE2E8F0)),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.info_outline, size: 16, color: Color(0xFF64748B)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    payment.reference != null && payment.reference!.isNotEmpty
+                                        ? 'Pago recibido con ref: ${payment.reference} (${payment.displayLabel})'
+                                        : 'Pago recibido vía ${payment.displayLabel}',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Builder(
+                              builder: (context) {
+                                final effectiveReason = (order.cancellationReason != null &&
+                                        order.cancellationReason!.trim().isNotEmpty)
+                                    ? order.cancellationReason!.trim()
+                                    : ((order.rejectionReason != null &&
+                                            order.rejectionReason!.trim().isNotEmpty)
+                                        ? order.rejectionReason!.trim()
+                                        : null);
+                                if (effectiveReason == null) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.cancel_outlined, size: 16, color: Color(0xFFDC2626)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Motivo cancelación: $effectiveReason',
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            if (order.cancellationNotes != null && order.cancellationNotes!.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Datos bancarios / Instrucciones del cliente:',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1D4ED8),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      order.cancellationNotes!,
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF1E3A8A)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Referencia bancaria o nota del reembolso (obligatorio):',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: refundReferenceController,
+                        maxLines: 2,
+                        enabled: !isUploadingImage,
+                        decoration: InputDecoration(
+                          hintText: 'Ej: Transf. #987654321 Banco Provincial...',
+                          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.all(12),
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Comprobante o captura del reembolso (opcional):',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                      ),
+                      const SizedBox(height: 8),
+                      if (selectedReceiptImage == null) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: isUploadingImage ? null : () => pickImage(ImageSource.camera),
+                                icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                                label: const Text('Cámara', style: TextStyle(fontSize: 13)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2563EB),
+                                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: isUploadingImage ? null : () => pickImage(ImageSource.gallery),
+                                icon: const Icon(Icons.photo_library_outlined, size: 18),
+                                label: const Text('Galería', style: TextStyle(fontSize: 13)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2563EB),
+                                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  selectedReceiptImage!,
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Comprobante adjunto',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    ),
+                                    Text(
+                                      'Optimizado para envío rápido',
+                                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: isUploadingImage
+                                    ? null
+                                    : () => setModalState(() => selectedReceiptImage = null),
+                                icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626), size: 20),
+                                tooltip: 'Quitar comprobante',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: isUploadingImage ? null : () => Navigator.pop(ctx, null),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF64748B),
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: isUploadingImage
+                                  ? null
+                                  : () async {
+                                      final noteText = refundReferenceController.text.trim();
+                                      if (noteText.isEmpty) {
+                                        if (context.mounted) {
+                                          NotificationService.showError(
+                                            context,
+                                            'Debes ingresar la referencia bancaria o nota del reembolso para que el cliente pueda verificarlo.',
+                                          );
+                                        }
+                                        return;
+                                      }
+
+                                      setModalState(() => isUploadingImage = true);
+                                      String? uploadedImageUrl;
+
+                                      if (selectedReceiptImage != null) {
+                                        try {
+                                          final imageDataSource = ref.read(imageRemoteDataSourceProvider);
+                                          uploadedImageUrl = await imageDataSource.uploadImage(selectedReceiptImage!);
+                                        } catch (e) {
+                                          setModalState(() => isUploadingImage = false);
+                                          if (context.mounted) {
+                                            NotificationService.showError(context, 'Error al subir el comprobante: $e');
+                                          }
+                                          return;
+                                        }
+                                      }
+
+                                      if (ctx.mounted) {
+                                        Navigator.pop(ctx, (reference: noteText, receiptImage: uploadedImageUrl));
+                                      }
+                                    },
+                              icon: isUploadingImage
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.check_circle_outline, size: 18),
+                              label: Text(
+                                isUploadingImage ? 'Subiendo...' : 'Confirmar Reembolso',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    return result;
+  }
+
+  /// Diálogo dedicado para confirmar que un pago nunca llegó a la cuenta del comercio.
+  static Future<String?> showMarkPaymentNotReceivedDialog(
+    BuildContext context, {
+    required Payment payment,
+  }) async {
+    final noteController = TextEditingController();
+    final confirmed = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Cerrar',
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
+        return ScaleTransition(
+          scale: curve,
+          child: FadeTransition(
+            opacity: animation,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEF2F2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.money_off_rounded, color: Color(0xFFDC2626), size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Pago No Recibido',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '¿Confirmas que no recibiste el pago de \$${payment.amount.toStringAsFixed(2)} en tus cuentas?',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Al marcarlo como no recibido, se notificará al cliente. El cliente podrá aceptarlo (si no llegó a debitársele) o adjuntar pruebas adicionales si insiste en que pagó.',
+                    style: TextStyle(color: Color(0xFF475569), height: 1.4, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: noteController,
+                    decoration: InputDecoration(
+                      labelText: 'Nota para el cliente (opcional)',
+                      hintText: 'Ej: No figura transferencia con esa referencia',
+                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDC2626)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF64748B),
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Confirmar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      final note = noteController.text.trim();
+      return note.isNotEmpty ? note : 'Pago nunca recibido en cuenta comercial';
+    }
+    return null;
+  }
 }
+

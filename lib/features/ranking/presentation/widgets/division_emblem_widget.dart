@@ -81,6 +81,7 @@ class DivisionEmblemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final slug = normalize(division);
     final serverBaseUrl = Envs.apiBaseUrl.replaceAll('/api/v1', '');
+    final imagesBaseUrl = Envs.apiBaseUrlImages.replaceAll(RegExp(r'/+$'), '');
     final placeholderUrl = '$serverBaseUrl/assets/ranking/emblems/$slug.png';
 
     // Normalize customUrl if provided
@@ -89,10 +90,18 @@ class DivisionEmblemWidget extends StatelessWidget {
       final trimmed = customUrl!.trim();
       if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
         normalizedCustomUrl = trimmed;
-      } else if (trimmed.startsWith('/')) {
+      } else if (trimmed.startsWith('/img/') || trimmed.startsWith('/uploads/')) {
+        normalizedCustomUrl = '$imagesBaseUrl$trimmed';
+      } else if (trimmed.startsWith('img/') || trimmed.startsWith('uploads/')) {
+        normalizedCustomUrl = '$imagesBaseUrl/$trimmed';
+      } else if (trimmed.startsWith('/assets/')) {
         normalizedCustomUrl = '$serverBaseUrl$trimmed';
-      } else {
+      } else if (trimmed.startsWith('assets/')) {
         normalizedCustomUrl = '$serverBaseUrl/$trimmed';
+      } else if (trimmed.startsWith('/')) {
+        normalizedCustomUrl = '$imagesBaseUrl$trimmed';
+      } else {
+        normalizedCustomUrl = '$imagesBaseUrl/$trimmed';
       }
     }
 

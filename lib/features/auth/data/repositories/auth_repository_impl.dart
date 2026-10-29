@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/local_auth_data_source.dart';
@@ -65,6 +66,12 @@ class AuthRepositoryImpl implements AuthRepository {
         role: user.role,
         hasCompany: user.hasCompany,
         avatarUrl: user.avatarUrl,
+        company: user.company,
+        identification: user.identification,
+        phone: user.phone,
+        isActive: user.isActive,
+        accountSuspendedUntil: user.accountSuspendedUntil,
+        accountSuspensionReason: user.accountSuspensionReason,
       );
       await _localDataSource.saveUser(model);
     }
@@ -77,7 +84,16 @@ class AuthRepositoryImpl implements AuthRepository {
       final user = UserModel.fromJson(data['user']);
       await _localDataSource.saveUser(user);
       return user;
-    } catch (_) {
+    } catch (e) {
+      if (e is DioException &&
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+        await _localDataSource.clearAll();
+      } else {
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('401') || errStr.contains('unauthorized')) {
+          await _localDataSource.clearAll();
+        }
+      }
       return null;
     }
   }
@@ -180,5 +196,96 @@ class AuthRepositoryImpl implements AuthRepository {
       throw AuthException('No se recibió el token de registro renovado.');
     }
     return token;
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _remoteDataSource.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<String?> requestForgotPasswordOtp(String email) async {
+    final data = await _remoteDataSource.requestForgotPasswordOtp(
+      email: email,
+      appOrigin: 'BUSINESS',
+    );
+    return data['recoveryToken'] as String?;
+  }
+
+  @override
+  Future<String> verifyForgotPasswordOtp({
+    required String recoveryToken,
+    required String otp,
+  }) async {
+    final data = await _remoteDataSource.verifyForgotPasswordOtp(
+      recoveryToken: recoveryToken,
+      otp: otp,
+    );
+    final sessionToken = data['resetSessionToken'] as String?;
+    if (sessionToken == null) {
+      throw AuthException('No se recibió el token de autorización de restablecimiento.');
+    }
+    return sessionToken;
+  }
+
+  @override
+  Future<String> resendForgotPasswordOtp(String recoveryToken) async {
+    final data = await _remoteDataSource.resendForgotPasswordOtp(
+      recoveryToken: recoveryToken,
+    );
+    final newToken = data['recoveryToken'] as String?;
+    if (newToken == null) {
+      throw AuthException('No se recibió el nuevo token de recuperación.');
+    }
+    return newToken;
+  }
+
+  @override
+  Future<void> resetPasswordWithToken({
+    required String resetSessionToken,
+    required String newPassword,
+  }) async {
+    await _remoteDataSource.resetPasswordWithToken(
+      resetSessionToken: resetSessionToken,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<User> loginWithCollaboratorCredentials(
+    String accessId,
+    String password,
+  ) async {
+    final data = await _remoteDataSource.loginWithCollaboratorCredentials(
+      accessId,
+      password,
+    );
+
+    final user = UserModel.fromJson(data);
+    final accessToken = data['accessToken'] as String;
+    final refreshToken = data['refreshToken'] as String;
+
+    await _localDataSource.saveUser(user);
+    await _localDataSource.saveAccessToken(accessToken);
+    await _localDataSource.saveRefreshToken(refreshToken);
+
+    return user;
+  }
+
+  @override
+  Future<void> changeCollaboratorPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _remoteDataSource.changeCollaboratorPassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
   }
 }

@@ -3,6 +3,7 @@ class StoreRankingData {
   final String division;
   final String divisionTitle;
   final String? divisionEmblemUrl;
+  final String? divisionFrameUrl;
   final int currentLp;
   final int currentPR;
   final int lifetimeLp;
@@ -28,6 +29,7 @@ class StoreRankingData {
     required this.division,
     required this.divisionTitle,
     this.divisionEmblemUrl,
+    this.divisionFrameUrl,
     required this.currentLp,
     required this.currentPR,
     required this.lifetimeLp,
@@ -56,6 +58,7 @@ class StoreRankingData {
       division: json['division']?.toString() ?? 'PUESTO_AMBULANTE',
       divisionTitle: json['divisionTitle']?.toString() ?? 'Puesto Ambulante',
       divisionEmblemUrl: json['divisionEmblemUrl'] as String?,
+      divisionFrameUrl: json['divisionFrameUrl'] as String?,
       currentLp: pr,
       currentPR: pr,
       lifetimeLp: json['lifetimeLp'] as int? ?? pr,
@@ -192,20 +195,39 @@ class AchievementItem {
     final ach = json['achievement'] is Map<String, dynamic>
         ? json['achievement'] as Map<String, dynamic>
         : json;
+
+    final isUnlocked = (json['isUnlocked'] as bool?) ??
+        (ach['isUnlocked'] as bool?) ??
+        (json['unlockedAt'] != null);
+
+    final inShowcase = (json['inShowcase'] as bool?) ??
+        (ach['inShowcase'] as bool?) ??
+        false;
+
+    final rawThreshold = ach['triggerThreshold'] ?? json['triggerThreshold'];
+    final int triggerThreshold = rawThreshold is num
+        ? rawThreshold.toInt()
+        : int.tryParse(rawThreshold?.toString() ?? '0') ?? 0;
+
+    final rawLpBonus = ach['lpBonus'] ?? json['lpBonus'];
+    final int lpBonus = rawLpBonus is num
+        ? rawLpBonus.toInt()
+        : int.tryParse(rawLpBonus?.toString() ?? '0') ?? 0;
+
     return AchievementItem(
       id: (ach['id'] ?? json['achievementId'] ?? json['id'])?.toString() ?? '',
-      code: (ach['code'] ?? json['code'])?.toString() ?? '',
+      code: (ach['code'] ?? json['code'] ?? ach['name'] ?? json['name'])?.toString() ?? '',
       title: (ach['title'] ?? ach['name'] ?? json['title'] ?? json['name'])?.toString() ?? '',
       description: (ach['description'] ?? json['description'])?.toString() ?? '',
       badgeUrl: (ach['badgeUrl'] ?? ach['imageUrl'] ?? json['badgeUrl'] ?? json['imageUrl']) as String?,
       triggerType: (ach['triggerType'] ?? json['triggerType'])?.toString() ?? 'ORDERS_COUNT',
-      triggerThreshold: (ach['triggerThreshold'] ?? json['triggerThreshold']) as int? ?? 0,
-      lpBonus: (ach['lpBonus'] ?? json['lpBonus']) as int? ?? 0,
-      isUnlocked: (json['isUnlocked'] as bool?) ?? (json['unlockedAt'] != null),
+      triggerThreshold: triggerThreshold,
+      lpBonus: lpBonus,
+      isUnlocked: isUnlocked,
       unlockedAt: json['unlockedAt'] != null
           ? DateTime.tryParse(json['unlockedAt'].toString())
-          : null,
-      inShowcase: json['inShowcase'] as bool? ?? false,
+          : (ach['unlockedAt'] != null ? DateTime.tryParse(ach['unlockedAt'].toString()) : null),
+      inShowcase: inShowcase,
     );
   }
 }

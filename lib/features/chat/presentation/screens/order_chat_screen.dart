@@ -251,10 +251,68 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
     final authState = ref.watch(authProvider);
     final currentUser = (authState is Authenticated) ? authState.user : null;
 
+    if (currentUser != null && !currentUser.canChatWithCustomer) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          leading: IconButton(
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              color: Color(0xFF1F2937),
+              size: 22,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Chat de Pedido',
+            style: TextStyle(color: Color(0xFF1F2937), fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 64, color: Color(0xFF94A3B8)),
+                const SizedBox(height: 16),
+                const Text(
+                  'Acceso Restringido',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'No tienes los permisos requeridos para acceder al chat con clientes.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Volver', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // Obtener la orden para verificar si el chat debe ser de solo lectura
     final orderAsync = ref.watch(orderByIdProvider(widget.orderId));
     final bool isReadOnly = chatState.isClosed || orderAsync.maybeWhen(
-      data: (order) => order.status == 'FULLY_PAID' || order.status == 'CANCELLED',
+      data: (order) {
+        final bool hasUnresolvedPayments = order.payments.any((p) =>
+            p.status != 'REFUNDED' && p.status != 'REJECTED');
+        return order.status == 'FULLY_PAID' ||
+            (order.status == 'CANCELLED' && !hasUnresolvedPayments);
+      },
       orElse: () => false,
     );
 
@@ -773,7 +831,7 @@ class _ChatStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (chatState.closedReason == 'USER_CHAT_SUSPENDED') {
-      String durationText = 'Aviso administrativo';
+      String durationText = 'Aviso de soporte';
       if (chatState.isPermanent == true) {
         durationText = 'Suspensión Definitiva';
       } else if (chatState.suspendedUntil != null) {
@@ -953,7 +1011,7 @@ class _ChatStatusBanner extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'No puedes unirte al chat porque el otro usuario se encuentra penalizado por la administración.',
+                'No puedes unirte al chat porque el otro usuario se encuentra penalizado por el equipo de soporte.',
                 style: TextStyle(
                   color: Color(0xFF92400E),
                   fontSize: 12,

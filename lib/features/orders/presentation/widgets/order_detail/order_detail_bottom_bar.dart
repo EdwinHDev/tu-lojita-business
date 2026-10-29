@@ -34,6 +34,11 @@ class OrderDetailBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!shouldShow(order)) return const SizedBox.shrink();
 
+    final bool showReject = onRejectOrder != null;
+    final bool showConfirm = onConfirmPayment != null;
+
+    if (!showReject && !showConfirm) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
@@ -50,50 +55,52 @@ class OrderDetailBottomBar extends StatelessWidget {
       child: SafeArea(
         child: Row(
           children: [
-            Expanded(
-              flex: 2,
-              child: OutlinedButton(
-                onPressed: isUpdating ? null : onRejectOrder,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFBE123C),
-                  side: const BorderSide(color: Color(0xFFBE123C)),
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+            if (showReject)
+              Expanded(
+                flex: showConfirm ? 2 : 1,
+                child: OutlinedButton(
+                  onPressed: isUpdating ? null : onRejectOrder,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFBE123C),
+                    side: const BorderSide(color: Color(0xFFBE123C)),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                ),
-                child: const Text('Rechazar', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: FilledButton.icon(
-                onPressed: isUpdating ? null : onConfirmPayment,
-                icon: isUpdating
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.check_circle_outline, size: 20),
-                label: Text(
-                  isUpdating ? 'Procesando...' : 'Confirmar Pago',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF15803D),
-                  disabledBackgroundColor: const Color(0xFF86EFAC),
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  child: const Text('Rechazar', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
-            ),
+            if (showReject && showConfirm) const SizedBox(width: 12),
+            if (showConfirm)
+              Expanded(
+                flex: showReject ? 3 : 1,
+                child: FilledButton.icon(
+                  onPressed: isUpdating ? null : onConfirmPayment,
+                  icon: isUpdating
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline, size: 20),
+                  label: Text(
+                    isUpdating ? 'Procesando...' : 'Confirmar Pago',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF15803D),
+                    disabledBackgroundColor: const Color(0xFF86EFAC),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

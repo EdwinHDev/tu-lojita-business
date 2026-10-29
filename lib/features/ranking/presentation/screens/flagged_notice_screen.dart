@@ -104,7 +104,7 @@ class FlaggedNoticeScreen extends StatelessWidget {
                     SizedBox(height: 10),
                     Text(
                       '• Tu tienda puede seguir recibiendo y despachando pedidos con normalidad.\n'
-                      '• El equipo administrativo revisará tu cuenta en un plazo de 24 a 48 horas.\n'
+                      '• El equipo de soporte revisará tu cuenta en un plazo de 24 a 48 horas.\n'
                       '• Si consideras que se trata de un error, puedes contactar a soporte técnico.',
                       style: TextStyle(
                         color: Color(0xFFCBD5E1),

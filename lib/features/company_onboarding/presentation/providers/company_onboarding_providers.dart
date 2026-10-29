@@ -52,6 +52,10 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
     return CompanyOnboardingState.initial();
   }
 
+  void reset() {
+    state = CompanyOnboardingState.initial();
+  }
+
   CheckOnboardingStatusUseCase get _checkStatusUseCase => ref.read(checkOnboardingStatusUseCaseProvider);
   CreateCompanyUseCase get _createCompanyUseCase => ref.read(createCompanyUseCaseProvider);
   UpdateStoreBranchNameUseCase get _updateBranchNameUseCase => ref.read(updateStoreBranchNameUseCaseProvider);
@@ -69,6 +73,10 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
         detectedStoreId: status.storeId,
         detectedStoreRif: status.storeRif,
         detectedStoreLogo: status.storeLogo,
+        detectedSubcategoryId: status.subcategoryId,
+        detectedSubcategoryName: status.subcategoryName,
+        detectedCategoryId: status.categoryId,
+        detectedCategoryName: status.categoryName,
       );
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
@@ -80,6 +88,9 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
     required String name,
     required String rif,
     File? logoFile,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -88,15 +99,12 @@ class CompanyOnboardingNotifier extends Notifier<CompanyOnboardingState> {
         rif: rif,
         logoFile: logoFile,
         existingLogoUrl: state.detectedStoreLogo,
+        subcategoryId: subcategoryId,
+        phone: phone,
+        description: description,
       );
       
       if (!ref.mounted) return true;
-      
-      // Si había una tienda detectada, pasamos al paso de nombre de sucursal
-      if (state.hasStore && state.detectedStoreId != null) {
-        state = state.copyWith(isLoading: false, isNamingBranch: true);
-        return false; // No terminamos aún
-      }
       
       state = state.copyWith(isLoading: false);
       return true;

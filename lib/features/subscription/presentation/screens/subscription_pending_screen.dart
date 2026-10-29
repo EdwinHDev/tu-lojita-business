@@ -26,12 +26,49 @@ class _SubscriptionPendingScreenState
   Future<void> _checkStatus({bool isInitial = false}) async {
     await ref.read(subscriptionProvider.notifier).loadSubscriptionAndMethods();
     if (!mounted) return;
-    final updated = ref.read(subscriptionProvider).subscription;
+    final subState = ref.read(subscriptionProvider);
+    final updated = subState.subscription;
+
+    // 1. Si el comprobante fue rechazado
+    if (subState.isPaymentRejected) {
+      final reason = (subState.lastRejectionReason != null &&
+              subState.lastRejectionReason!.trim().isNotEmpty)
+          ? subState.lastRejectionReason!
+          : 'El comprobante o los datos suministrados no concuerdan con los registros bancarios.';
+      NotificationService.showError(
+        context,
+        'Tu comprobante fue rechazado: $reason',
+      );
+      context.go('/subscription/rejected');
+      return;
+    }
+
+    // 2. Si la membresía está activa o en período de gracia
     if (updated != null &&
         (updated.status == SubscriptionStatus.active ||
             updated.status == SubscriptionStatus.gracePeriod)) {
+      NotificationService.showSuccess(
+        context,
+        '¡Tu membresía ha sido aprobada y activada!',
+      );
       context.go('/dashboard');
-    } else if (!isInitial) {
+      return;
+    }
+
+    // 3. Si requiere pago o está suspendida (sin comprobante pendiente)
+    if (updated != null &&
+        (updated.status == SubscriptionStatus.paymentRequired ||
+            updated.status == SubscriptionStatus.suspended)) {
+      NotificationService.showWarning(
+        context,
+        'Debes enviar un comprobante de pago válido para activar tu empresa.',
+      );
+      context.go('/subscription/paywall');
+      return;
+    }
+
+    // 4. Si continúa en verificación
+    if (!isInitial) {
       NotificationService.showInfo(
         context,
         'Tu comprobante continúa en revisión administrativa.',

@@ -65,7 +65,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                 _buildMenuTile(
                   icon: HugeIcons.strokeRoundedImageAdd02,
                   title: 'Identidad Visual',
-                  subtitle: 'Banner y logo de la tienda',
+                  subtitle: 'Banner y nombre de la sucursal',
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => AppearanceSettingsScreen(storeId: widget.storeId)),
@@ -150,64 +150,106 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                 ),
                 const SizedBox(height: 24),
                 // Tarjeta de Restricción de Edad (+18)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade100),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedAlertCircle,
-                          color: Color(0xFFEF4444),
-                          size: 24,
+                Builder(
+                  builder: (context) {
+                    final isLockedByRubro = state.store?.isCategoryOrSubcategoryRestricted == true;
+                    final isAgeRestrictedValue = isLockedByRubro || state.isAgeRestricted;
+
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isLockedByRubro ? const Color(0xFFEF4444).withValues(alpha: 0.3) : Colors.grey.shade100,
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Restricción de Edad (+18)',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Color(0xFF111827),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedAlertCircle,
+                                  color: Color(0xFFEF4444),
+                                  size: 24,
+                                ),
                               ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Oculta tu tienda y productos para menores de edad',
-                              style: TextStyle(
-                                color: Color(0xFF6B7280),
-                                fontSize: 12,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Restricción de Edad (+18)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: Color(0xFF111827),
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Oculta tu tienda y productos para menores de edad',
+                                      style: TextStyle(
+                                        color: Color(0xFF6B7280),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: isAgeRestrictedValue,
+                                activeTrackColor: const Color(0xFFEF4444),
+                                onChanged: isLockedByRubro
+                                    ? null
+                                    : (val) {
+                                        ref.read(storeSettingsProvider.notifier).updateAgeRestricted(val);
+                                        ref.read(storeSettingsProvider.notifier).saveSettings(
+                                          widget.storeId,
+                                          specificData: {'isAgeRestricted': val},
+                                        );
+                                      },
+                              ),
+                            ],
+                          ),
+                          if (isLockedByRubro) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.lock_outline, size: 14, color: Color(0xFFEF4444)),
+                                  SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Bloqueado en activado (+18): la categoría o subcategoría asignada a esta tienda es exclusivamente para adultos.',
+                                      style: TextStyle(
+                                        color: Color(0xFFEF4444),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                      Switch.adaptive(
-                        value: state.isAgeRestricted,
-                        activeTrackColor: const Color(0xFFEF4444),
-                        onChanged: (val) {
-                          ref.read(storeSettingsProvider.notifier).updateAgeRestricted(val);
-                          ref.read(storeSettingsProvider.notifier).saveSettings(
-                            widget.storeId,
-                            specificData: {'isAgeRestricted': val},
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ],
             ),

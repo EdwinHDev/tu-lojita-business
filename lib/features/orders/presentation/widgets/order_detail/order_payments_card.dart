@@ -3,14 +3,17 @@ import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import '../receipt_image_viewer.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'order_detail_helpers.dart';
+import 'refund_required_card.dart';
 
 /// Tarjeta que lista los comprobantes de pago reportados por el cliente,
-/// con previsualización, impacto en cuotas y acciones de aprobación/rechazo.
+/// con previsualización, impacto en cuotas y acciones de aprobación/rechazo o reembolso.
 class OrderPaymentsCard extends StatelessWidget {
   final Order order;
   final bool isUpdating;
   final ValueChanged<Payment>? onApprovePayment;
   final ValueChanged<Payment>? onRejectPayment;
+  final ValueChanged<Payment>? onRefundPayment;
+  final ValueChanged<Payment>? onMarkPaymentNotReceived;
 
   const OrderPaymentsCard({
     super.key,
@@ -18,27 +21,34 @@ class OrderPaymentsCard extends StatelessWidget {
     this.isUpdating = false,
     this.onApprovePayment,
     this.onRejectPayment,
+    this.onRefundPayment,
+    this.onMarkPaymentNotReceived,
   });
 
   @override
   Widget build(BuildContext context) {
     if (order.payments.isEmpty) return const SizedBox.shrink();
 
+    final isOrderCancelled = order.isCancelled;
+
     return Column(
       children: order.payments.map((payment) {
         final isApproved = payment.status == 'APPROVED';
         final isRejected = payment.status == 'REJECTED';
+        final isRefunded = payment.status == 'REFUNDED';
         final isWaiting = payment.status == 'WAITING_VERIFICATION';
         final imageUrl = OrderDetailHelpers.resolveImageUrl(payment.receiptImage ?? '');
 
-        // Contexto de cuota para pagos en revisión
-        final installmentCtx = isWaiting
+        // Contexto de cuota para pagos en revisión (solo si la orden no está cancelada)
+        final installmentCtx = (isWaiting && !isOrderCancelled)
             ? OrderDetailHelpers.getInstallmentContextForPayment(order, payment)
             : (installment: null, installmentIndex: -1, minRequired: 0.0);
         final coveredInstallment = installmentCtx.installment;
         final isSufficient = coveredInstallment != null &&
             (payment.amount * 100).round() >= ((installmentCtx.minRequired * 100).round() - 1);
-        final impacts = isWaiting ? OrderDetailHelpers.getApprovalImpact(order, payment) : <({int index, String status, double remaining})>[];
+        final impacts = (isWaiting && !isOrderCancelled)
+            ? OrderDetailHelpers.getApprovalImpact(order, payment)
+            : <({int index, String status, double remaining})>[];
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -60,70 +70,88 @@ class OrderPaymentsCard extends StatelessWidget {
             children: [
               // Encabezado del pago
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEEF2FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          size: 18,
-                          color: Color(0xFF4F46E5),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            payment.displayLabel,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Color(0xFF0F172A),
-                            ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEEF2FF),
+                            shape: BoxShape.circle,
                           ),
-                          Row(
+                          child: const Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 18,
+                            color: Color(0xFF4F46E5),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isApproved
-                                    ? 'Verificado'
-                                    : (isRejected ? 'Rechazado' : 'En revisión'),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isApproved
-                                      ? const Color(0xFF047857)
-                                      : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFC2410C)),
+                                payment.displayLabel,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: Color(0xFF0F172A),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  payment.getQuotaLabel(order),
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xFF64748B),
-                                    fontWeight: FontWeight.w600,
+                              const SizedBox(height: 2),
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 6,
+                                runSpacing: 2,
+                                children: [
+                                  Text(
+                                    isApproved
+                                        ? 'Verificado'
+                                        : (isRefunded
+                                            ? 'Reembolsado'
+                                            : (isOrderCancelled && (isWaiting || payment.status == 'PENDING' || payment.status == 'REFUND_PENDING')
+                                                ? (payment.status == 'REFUND_PENDING' ? 'Reembolso emitido (Por verificar)' : 'Reembolso requerido')
+                                                : (isRejected ? 'Rechazado' : 'En revisión'))),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isApproved
+                                          ? const Color(0xFF047857)
+                                          : (isRefunded
+                                              ? const Color(0xFF0D9488)
+                                              : (isOrderCancelled && (isWaiting || payment.status == 'PENDING' || payment.status == 'REFUND_PENDING')
+                                                  ? const Color(0xFFD97706)
+                                                  : (isRejected ? const Color(0xFFDC2626) : const Color(0xFFC2410C)))),
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      payment.getQuotaLabel(order),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '\$${payment.amount.toStringAsFixed(2)}',
                     style: const TextStyle(
@@ -178,8 +206,53 @@ class OrderPaymentsCard extends StatelessWidget {
                 ),
               ],
 
+              // Banner de reembolso si fue reembolsado
+              if (isRefunded) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF16A34A)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Reembolso Procesado:',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF16A34A),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        payment.rejectionReason != null && payment.rejectionReason!.trim().isNotEmpty
+                            ? payment.rejectionReason!
+                            : 'Reembolso emitido por el comercio',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF15803D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               // Banner de cuota asociada para pagos en revisión
-              if (isWaiting && coveredInstallment != null) ...[
+              if (isWaiting && !isOrderCancelled && coveredInstallment != null) ...[
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
@@ -343,8 +416,8 @@ class OrderPaymentsCard extends StatelessWidget {
                 ),
               ],
 
-              // Botones de acción si el pago está esperando verificación
-              if (isWaiting) ...[
+              // Botones de acción si el pago está esperando verificación y la orden NO está cancelada
+              if (isWaiting && !isOrderCancelled) ...[
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: Color(0xFFF1F5F9)),
                 const SizedBox(height: 12),
@@ -377,6 +450,17 @@ class OrderPaymentsCard extends StatelessWidget {
                       label: const Text('Aprobar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ],
+                ),
+              ],
+
+              // Reembolso requerido si la orden fue cancelada y el pago está pendiente/en revisión o esperando confirmación
+              if (isOrderCancelled && (isWaiting || payment.status == 'PENDING' || payment.status == 'REFUND_PENDING')) ...[
+                RefundRequiredCard(
+                  order: order,
+                  payment: payment,
+                  isUpdating: isUpdating,
+                  onProcessRefund: () => onRefundPayment?.call(payment),
+                  onMarkPaymentNotReceived: () => onMarkPaymentNotReceived?.call(payment),
                 ),
               ],
             ],

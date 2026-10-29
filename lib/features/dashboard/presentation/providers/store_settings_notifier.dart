@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
@@ -9,6 +10,7 @@ import '../../domain/repositories/stores_repository.dart';
 import 'dashboard_providers.dart';
 import 'store_details_notifier.dart';
 import 'store_settings_state.dart';
+import 'stores_notifier.dart';
 
 class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
   @override
@@ -29,6 +31,9 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       state = state.copyWith(
         isLoading: false,
         store: store,
+        branchName: store.branchName ?? '',
+        instagram: store.instagram ?? '',
+        tiktok: store.tiktok ?? '',
         allowPartialPayments: store.allowPartialPayments,
         feePercentage: store.partialPaymentsFeePercentage,
         minInitialPercentage: store.minInitialPaymentPercentage,
@@ -47,6 +52,18 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  void updateBranchName(String value) {
+    state = state.copyWith(branchName: value);
+  }
+
+  void updateInstagram(String value) {
+    state = state.copyWith(instagram: value);
+  }
+
+  void updateTiktok(String value) {
+    state = state.copyWith(tiktok: value);
   }
 
   void updatePartialPayments(bool value) {
@@ -74,6 +91,10 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
   }
 
   void updateAgeRestricted(bool value) {
+    if (state.store?.isCategoryOrSubcategoryRestricted == true) {
+      state = state.copyWith(isAgeRestricted: true);
+      return;
+    }
     state = state.copyWith(isAgeRestricted: value);
   }
 
@@ -146,8 +167,14 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         }
 
         // 2. Default full update
+        final ig = state.instagram.trim().replaceAll(RegExp(r'^@+'), '').trim();
+        final tt = state.tiktok.trim().replaceAll(RegExp(r'^@+'), '').trim();
+
         updateData = {
           'coverImage': coverImageUrl,
+          'branchName': state.branchName.trim(),
+          'instagram': ig.isNotEmpty ? ig : null,
+          'tiktok': tt.isNotEmpty ? tt : null,
           'allowPartialPayments': state.allowPartialPayments,
           'partialPaymentsFeePercentage': state.feePercentage,
           'minInitialPaymentPercentage': state.minInitialPercentage,
@@ -164,16 +191,41 @@ class StoreSettingsNotifier extends Notifier<StoreSettingsState> {
         };
       }
 
-      final updatedStore = await _repository.updateStore(storeId, updateData);
+      Store updatedStore;
+      try {
+        updatedStore = await _repository.updateStore(storeId, updateData);
+      } on DioException catch (dioErr) {
+        final errData = dioErr.response?.data;
+        final errMsg = (errData is Map && errData.containsKey('message'))
+            ? (errData['message'] is List
+                ? (errData['message'] as List).join(', ')
+                : errData['message'].toString())
+            : '';
+        if ((errMsg.contains('property instagram should not exist') ||
+                errMsg.contains('property tiktok should not exist')) &&
+            (updateData.containsKey('instagram') || updateData.containsKey('tiktok'))) {
+          final fallbackData = Map<String, dynamic>.from(updateData)
+            ..remove('instagram')
+            ..remove('tiktok');
+          updatedStore = await _repository.updateStore(storeId, fallbackData);
+        } else {
+          rethrow;
+        }
+      }
       
       if (!ref.mounted) return true;
-      
+
       // Sync with StoreDetails dashboard
       ref.read(storeDetailsProvider.notifier).refresh(storeId);
+      // Sync with Stores list (Mis Sucursales)
+      ref.read(storesProvider.notifier).loadData();
       
       state = state.copyWith(
         isSaving: false, 
         store: updatedStore,
+        branchName: updatedStore.branchName ?? '',
+        instagram: updatedStore.instagram ?? '',
+        tiktok: updatedStore.tiktok ?? '',
         clearBannerFile: true, // Clear local file after success
         successMessage: 'Configuraciones guardadas correctamente',
       );

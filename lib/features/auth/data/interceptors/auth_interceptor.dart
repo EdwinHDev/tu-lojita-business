@@ -6,8 +6,9 @@ import 'package:tu_lojita_business/features/auth/data/datasources/local_auth_dat
 class AuthInterceptor extends QueuedInterceptor {
   final LocalAuthDataSource _localDataSource;
   final Dio _dio; // To retry requests
+  final VoidCallback? onUnauthenticated;
 
-  AuthInterceptor(this._localDataSource, this._dio);
+  AuthInterceptor(this._localDataSource, this._dio, {this.onUnauthenticated});
 
   @override
   void onRequest(
@@ -25,16 +26,28 @@ class AuthInterceptor extends QueuedInterceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (err.response?.statusCode == 403) {
+      final data = err.response?.data;
+      if (data is Map &&
+          (data['code'] == 'ACCOUNT_SUSPENDED' ||
+              data['code'] == 'ACCOUNT_BANNED')) {
+        await _localDataSource.clearAll();
+        onUnauthenticated?.call();
+        return handler.next(err);
+      }
+    }
+
     if (err.response?.statusCode == 401) {
       // Avoid infinite loop if the 401 error is from the refresh endpoint itself
       if (err.requestOptions.path.contains('/auth/refresh')) {
         await _localDataSource.clearAll();
+        onUnauthenticated?.call();
         return handler.next(err);
       }
 
       final refreshToken = await _localDataSource.getRefreshToken();
 
-      if (refreshToken != null) {
+      if (refreshToken != null && refreshToken.trim().isNotEmpty) {
         String? newAccessToken;
         String? newRefreshToken;
 
@@ -66,6 +79,7 @@ class AuthInterceptor extends QueuedInterceptor {
           if (statusCode == 401 || statusCode == 403) {
             debugPrint('Business AuthInterceptor: Refresh token rejected with HTTP $statusCode. Clearing session...');
             await _localDataSource.clearAll();
+            onUnauthenticated?.call();
           } else {
             debugPrint('Business AuthInterceptor: Transient error during refresh ($statusCode / $dioErr). Preserving session.');
           }
@@ -73,6 +87,11 @@ class AuthInterceptor extends QueuedInterceptor {
         } catch (e, stackTrace) {
           debugPrint('Business AuthInterceptor: Unexpected error during refresh: $e');
           debugPrint(stackTrace.toString());
+          final errStr = e.toString().toLowerCase();
+          if (errStr.contains('401') || errStr.contains('unauthorized')) {
+            await _localDataSource.clearAll();
+            onUnauthenticated?.call();
+          }
           return handler.next(err);
         }
 
@@ -94,6 +113,7 @@ class AuthInterceptor extends QueuedInterceptor {
         }
       } else {
         await _localDataSource.clearAll();
+        onUnauthenticated?.call();
       }
     }
 

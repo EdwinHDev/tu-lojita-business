@@ -7,6 +7,8 @@ import '../providers/stores_state.dart';
 import '../widgets/store_list_tile.dart';
 import '../widgets/store_metric_card.dart';
 import '../widgets/store_empty_state.dart';
+import '../widgets/store_list_tile_skeleton.dart';
+import '../../../../core/widgets/shimmer_widget.dart';
 
 class StoresView extends ConsumerWidget {
   const StoresView({super.key});
@@ -16,7 +18,7 @@ class StoresView extends ConsumerWidget {
     final storesState = ref.watch(storesProvider);
 
     if (storesState.isLoading && storesState.stores.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoadingSkeleton();
     }
 
     if (storesState.errorMessage != null && storesState.stores.isEmpty) {
@@ -118,7 +120,7 @@ class StoresView extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Text(
-                      'Mis Sucursales',
+                      storesState.stores.length > 1 ? 'Mis Sucursales' : 'Mi Tienda',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -155,9 +157,125 @@ class StoresView extends ConsumerWidget {
     );
   }
 
+  Widget _buildLoadingSkeleton() {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Resumen de hoy',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildMetricsSkeleton(),
+            const SizedBox(height: 28),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Mis Sucursales',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                  color: Colors.grey.shade900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                children: [
+                  StoreListTileSkeleton(),
+                  StoreListTileSkeleton(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricsSkeleton() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          children: List.generate(
+            3,
+            (index) => Container(
+              width: 170,
+              height: 110,
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ShimmerWidget(
+                        width: 70,
+                        height: 13,
+                        borderRadius: BorderRadius.all(Radius.circular(4)),
+                      ),
+                      ShimmerWidget(
+                        width: 24,
+                        height: 24,
+                        borderRadius: BorderRadius.all(Radius.circular(6)),
+                      ),
+                    ],
+                  ),
+                  ShimmerWidget(
+                    width: 100,
+                    height: 20,
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                  ShimmerWidget(
+                    width: 50,
+                    height: 11,
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMetrics(StoresState storesState) {
     final stats = storesState.stats;
-    if (stats == null) return const SizedBox.shrink();
+    if (stats == null) return _buildMetricsSkeleton();
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -194,6 +312,5 @@ class StoresView extends ConsumerWidget {
       ),
     );
   }
-
 }
 

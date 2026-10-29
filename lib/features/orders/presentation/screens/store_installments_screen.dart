@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/utils/safe_text_controller.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import '../../domain/entities/order.dart';
 import '../providers/orders_provider.dart';
@@ -337,8 +338,9 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     required Color bgColor,
     bool isAlert = false,
   }) {
+    final cardWidth = (MediaQuery.of(context).size.width * 0.35).clamp(120.0, 160.0);
     return Container(
-      width: 130,
+      width: cardWidth,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bgColor,
@@ -354,24 +356,33 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: iconColor,
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor,
+                  ),
                 ),
               ),
+              const SizedBox(width: 4),
               HugeIcon(icon: icon, color: iconColor, size: 14),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0F172A),
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -396,6 +407,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: TextField(
         controller: _searchController,
+        selectAllOnFocus: false,
         style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
         decoration: InputDecoration(
           hintText: 'Buscar por cliente, teléfono o # orden...',
@@ -1218,7 +1230,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
     final order = installment.order;
     if (order == null) return;
 
-    final amountController = TextEditingController(text: remainingAmount.toStringAsFixed(2));
+    final amountController = createSafeController(text: remainingAmount.toStringAsFixed(2));
     final referenceController = TextEditingController();
     final notesController = TextEditingController();
     String selectedMethod = 'EFECTIVO';
@@ -1270,6 +1282,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                   const SizedBox(height: 6),
                   TextField(
                     controller: amountController,
+                    selectAllOnFocus: false,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.attach_money_rounded, size: 20, color: Color(0xFF10B981)),
@@ -1315,6 +1328,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
                   const SizedBox(height: 6),
                   TextField(
                     controller: referenceController,
+                    selectAllOnFocus: false,
                     decoration: InputDecoration(
                       hintText: 'Ej. POS-04812 o Recibo #12',
                       hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
@@ -1569,6 +1583,7 @@ class _StoreInstallmentsScreenState extends ConsumerState<StoreInstallmentsScree
               const SizedBox(height: 12),
               TextField(
                 controller: commentController,
+                selectAllOnFocus: false,
                 maxLines: 2,
                 decoration: InputDecoration(
                   hintText: 'Ej. No se permiten prórrogas consecutivas...',

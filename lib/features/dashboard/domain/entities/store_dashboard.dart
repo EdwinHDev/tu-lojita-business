@@ -46,6 +46,8 @@ class StoreRecentSale extends Equatable {
   final String time;
   final String orderId;
   final String status;
+  final String? itemTitle;
+  final String? itemImageUrl;
 
   const StoreRecentSale({
     required this.id,
@@ -55,6 +57,8 @@ class StoreRecentSale extends Equatable {
     required this.time,
     required this.orderId,
     required this.status,
+    this.itemTitle,
+    this.itemImageUrl,
   });
 
   @override
@@ -66,5 +70,7 @@ class StoreRecentSale extends Equatable {
         time,
         orderId,
         status,
+        itemTitle,
+        itemImageUrl,
       ];
 }

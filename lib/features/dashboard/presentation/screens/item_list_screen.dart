@@ -9,6 +9,8 @@ import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
 import 'package:tu_lojita_business/core/repositories/payment_methods_repository.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import '../widgets/item_creation_prerequisites_modal.dart';
 import 'dart:async';
 
@@ -28,6 +30,16 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   bool _isCheckingPrerequisites = false;
 
   Future<void> _checkPrerequisitesAndNavigate() async {
+    final authState = ref.read(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    if (user != null && !user.canEditProducts) {
+      NotificationService.showWarning(
+        context,
+        'No tienes permisos requeridos para crear artículos.',
+      );
+      return;
+    }
+
     if (_isCheckingPrerequisites) return;
     setState(() => _isCheckingPrerequisites = true);
 
@@ -119,6 +131,9 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    final canEditProducts = user?.canEditProducts ?? true;
     final storeData = ref.watch(storeDetailsProvider).forStore(widget.storeId);
     final listState = ref.watch(itemListProvider).forStore(widget.storeId);
     final items = listState.items;
@@ -183,45 +198,46 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                               ),
                             ),
                           ),
-                          SafeArea(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                              child: SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: ElevatedButton.icon(
-                                  onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
-                                  icon: _isCheckingPrerequisites
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                        )
-                                      : const HugeIcon(
-                                          icon: HugeIcons.strokeRoundedAdd01,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                  label: Text(
-                                    _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Colors.white,
+                          if (canEditProducts)
+                            SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
+                                    icon: _isCheckingPrerequisites
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                          )
+                                        : const HugeIcon(
+                                            icon: HugeIcons.strokeRoundedAdd01,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                    label: Text(
+                                      _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF4F46E5),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      elevation: 0,
                                     ),
-                                    elevation: 0,
                                   ),
                                 ),
                               ),
                             ),
-                          ),
                         ],
                       ),
           ),
@@ -394,6 +410,9 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    final canEditProducts = user?.canEditProducts ?? true;
     final listState = ref.watch(itemListProvider).forStore(widget.storeId);
     final hasFilters = _searchController.text.isNotEmpty || listState.selectedCategoryId != null || listState.onlyInStock;
 
@@ -428,11 +447,13 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
             Text(
               hasFilters
                   ? 'Prueba con una búsqueda diferente o restablece los filtros para ver tus artículos.'
-                  : 'Agrega tu primer producto o servicio para organizar tu inventario y comenzar a vender.',
+                  : (canEditProducts
+                      ? 'Agrega tu primer producto o servicio para organizar tu inventario y comenzar a vender.'
+                      : 'Actualmente no hay artículos registrados en el catálogo de esta sucursal.'),
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFF6B7280), height: 1.4, fontSize: 14),
             ),
-            if (!hasFilters) ...[
+            if (!hasFilters && canEditProducts) ...[
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
@@ -471,6 +492,9 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   Widget _buildItemCard(Item item) {
+    final authState = ref.watch(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    final canEditProducts = user?.canEditProducts ?? true;
     final imageUrl = _resolveImageUrl(item.mainImage);
     return Material(
       color: Colors.transparent,
@@ -548,7 +572,7 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                               style: TextStyle(color: Color(0xFFDC2626), fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           )
-                        else if (item.trackInventory && (item.stockQuantity == null || item.stockQuantity! <= 0))
+                        else if (item.isOutOfStock)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
@@ -574,24 +598,72 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                               style: TextStyle(color: Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           ),
+                        if (item.hasVariants && item.variants.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFC7D2FE)),
+                            ),
+                            child: Text(
+                              '🟣 ${item.variants.length} var.',
+                              style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "\$${item.price.toStringAsFixed(2)}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Color(0xFF111827),
-                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          item.hasDifferentVariantPrices
+                              ? "Desde \$${item.variantPriceRange.min.toStringAsFixed(2)}"
+                              : "\$${item.price.toStringAsFixed(2)}",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        if (item.favoritesCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFECACA)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.favorite, color: Color(0xFFEF4444), size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '${item.favoritesCount}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFDC2626),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
-                onPressed: () => _showItemActions(context, item),
-              ),
+              if (canEditProducts)
+                IconButton(
+                  icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
+                  onPressed: () => _showItemActions(context, item),
+                ),
             ],
           ),
         ),
@@ -600,6 +672,16 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   void _showItemActions(BuildContext context, Item item) {
+    final authState = ref.read(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    if (user != null && !user.canEditProducts) {
+      NotificationService.showWarning(
+        context,
+        'No tienes permisos requeridos para modificar artículos.',
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -636,13 +718,28 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  "\$${item.price.toStringAsFixed(2)}",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade600,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      "\$${item.price.toStringAsFixed(2)}",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.favorite, color: Colors.red.shade400, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${item.favoritesCount} favoritos',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 ListTile(

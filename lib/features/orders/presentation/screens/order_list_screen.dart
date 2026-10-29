@@ -6,6 +6,8 @@ import '../widgets/order_card.dart';
 import 'order_details_screen.dart';
 import 'package:tu_lojita_business/features/chat/presentation/screens/order_chat_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 
 class OrderListScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -95,7 +97,7 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
     final hasDisputeCancelled = disputedOrders.any((o) => o.status == 'CANCELLED');
 
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
@@ -139,6 +141,7 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                 unreadDisputeOrderIds.isNotEmpty,
                 badgeCount: activeDisputesOrdersCount,
               ),
+              _buildTab('Agenda Citas', false),
             ],
           ),
         ),
@@ -154,6 +157,7 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                   _buildFilteredList((storeId: widget.storeId, status: 'FULLY_PAID', hasDispute: null)),
                   _buildFilteredList((storeId: widget.storeId, status: 'CANCELLED', hasDispute: null)),
                   _buildFilteredList((storeId: widget.storeId, status: null, hasDispute: true)),
+                  _buildAppointmentsCalendarView(allOrdersState),
                 ],
               ),
             ),
@@ -309,6 +313,9 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
               );
             }
             final order = filteredOrders[index];
+            final authState = ref.watch(authProvider);
+            final user = authState is Authenticated ? authState.user : null;
+            final canChat = user?.canChatWithCustomer ?? true;
             final unreadDisputeOrderIds = ref.watch(unreadBusinessDisputeOrderIdsProvider);
             final hasUnreadDispute = unreadDisputeOrderIds.contains(order.id);
             final hasActiveDispute = order.hasActiveDispute || hasUnreadDispute;
@@ -332,7 +339,13 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
                   ref.read(ordersNotifierProvider(filter).notifier).refresh();
                 }
               },
-              onChatTap: order.status != 'CANCELLED' && order.status != 'FULLY_PAID'
+              onChatTap: canChat &&
+                      order.status != 'FULLY_PAID' &&
+                      (order.status != 'CANCELLED' ||
+                          order.payments.any((p) =>
+                              p.status == 'WAITING_VERIFICATION' ||
+                              p.status == 'REFUND_PENDING' ||
+                              p.status == 'PENDING'))
                   ? () {
                       Navigator.push(
                         context,
@@ -365,6 +378,164 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildAppointmentsCalendarView(OrdersState allOrdersState) {
+    final bookingOrders = allOrdersState.orders.where((o) => o.hasSlotBookings).toList();
+
+    if (allOrdersState.isLoading && bookingOrders.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (bookingOrders.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          ref.read(ordersNotifierProvider((storeId: widget.storeId, status: null, hasDispute: null)).notifier).refresh();
+        },
+        child: ListView(
+          padding: const EdgeInsets.all(32),
+          children: [
+            const SizedBox(height: 48),
+            Container(
+              width: 64,
+              height: 64,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF5F3FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.calendar_today, size: 32, color: Color(0xFF7C3AED)),
+            ),
+            const Text(
+              'No hay citas agendadas',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Cuando los clientes reserven turnos para tus servicios, aparecerán organizados cronológicamente aquí.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.read(ordersNotifierProvider((storeId: widget.storeId, status: null, hasDispute: null)).notifier).refresh();
+      },
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: bookingOrders.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final order = bookingOrders[index];
+          final customer = order.user != null ? '${order.user!['firstName'] ?? ''} ${order.user!['lastName'] ?? ''}'.trim() : 'Cliente';
+          final firstItem = order.orderItems.isNotEmpty ? order.orderItems.first.title : 'Servicio';
+
+          return Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderDetailsScreen(
+                      order: order,
+                      storeId: widget.storeId,
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.event_available, color: Color(0xFF7C3AED), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer.isNotEmpty ? customer : 'Cliente',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                              ),
+                              Text(
+                                firstItem,
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: order.status == 'FULLY_PAID' ? const Color(0xFFD1FAE5) : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            order.status == 'FULLY_PAID' ? 'PAGADO' : 'PENDIENTE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: order.status == 'FULLY_PAID' ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    ...order.slotBookings.map((sb) {
+                      final slot = sb['slot'] is Map ? sb['slot'] : {};
+                      final date = sb['bookingDate']?.toString() ?? '-';
+                      final start = slot['startTime']?.toString() ?? '';
+                      final end = slot['endTime']?.toString() ?? '';
+                      final label = slot['label']?.toString() ?? 'Turno';
+
+                      return Row(
+                        children: [
+                          const Icon(Icons.schedule, size: 16, color: Color(0xFF7C3AED)),
+                          const SizedBox(width: 8),
+                          Text(
+                            date,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF5B21B6)),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$label ($start - $end)',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF6D28D9)),
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -78,12 +78,16 @@ class DailyMissionsCard extends ConsumerWidget {
                               color: Color(0xFF64748B),
                             ),
                             const SizedBox(width: 3),
-                            const Text(
-                              'Se reinician a las 00:00',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF64748B),
+                            const Flexible(
+                              child: Text(
+                                'Se reinician a las 12:00 AM',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
+                                ),
                               ),
                             ),
                           ],
@@ -221,8 +225,10 @@ class DailyMissionsCard extends ConsumerWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF16A34A),
                 foregroundColor: Colors.white,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

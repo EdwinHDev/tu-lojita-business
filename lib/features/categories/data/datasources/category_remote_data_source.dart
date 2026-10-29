@@ -25,7 +25,7 @@ class CategoryRemoteDataSourceImpl implements CategoryRemoteDataSource {
       final response = await dio.get(
         '/categories',
         queryParameters: {
-          'search': ?search,
+          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
           'page': ?page,
           'limit': ?limit,
         },

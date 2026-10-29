@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum StoreType { physical, virtual }
@@ -20,6 +21,7 @@ class StoreCreationState {
   final double latitude;
   final double longitude;
   final String timezone;
+  final File? coverImageFile;
 
   StoreCreationState({
     this.currentStep = 0,
@@ -38,6 +40,7 @@ class StoreCreationState {
     this.latitude = 10.4806,
     this.longitude = -66.9036,
     this.timezone = 'America/Caracas',
+    this.coverImageFile,
   });
 
   StoreCreationState copyWith({
@@ -57,6 +60,7 @@ class StoreCreationState {
     double? latitude,
     double? longitude,
     String? timezone,
+    File? Function()? coverImageFile,
   }) {
     return StoreCreationState(
       currentStep: currentStep ?? this.currentStep,
@@ -75,6 +79,7 @@ class StoreCreationState {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       timezone: timezone ?? this.timezone,
+      coverImageFile: coverImageFile != null ? coverImageFile() : this.coverImageFile,
     );
   }
 }
@@ -96,6 +101,7 @@ class StoreCreationNotifier extends Notifier<StoreCreationState> {
   void updateBranchName(String value) => state = state.copyWith(branchName: value);
   void updatePhone(String value) => state = state.copyWith(phone: value);
   void updateDescription(String value) => state = state.copyWith(description: value);
+  void setCoverImage(File? file) => state = state.copyWith(coverImageFile: () => file);
   void updateType(StoreType value) => state = state.copyWith(type: value);
   void updateStreet(String value) => state = state.copyWith(street: value);
   void updateCity(String value) => state = state.copyWith(city: value);

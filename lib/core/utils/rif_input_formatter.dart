@@ -73,9 +73,33 @@ class RifTextInputFormatter extends TextInputFormatter {
     }
 
     final formattedText = buffer.toString();
+
+    // Calcular la posición del cursor de forma segura preservando la ubicación del usuario
+    int newOffset = formattedText.length;
+    if (newValue.selection.isValid && newValue.selection.extentOffset >= 0) {
+      final rawOffset = newValue.selection.extentOffset.clamp(0, newValue.text.length);
+      final rawAlphanumericBeforeCursor = newValue.text
+          .substring(0, rawOffset)
+          .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+          .length;
+
+      int formattedCount = 0;
+      int targetOffset = 0;
+      for (int k = 0; k < formattedText.length; k++) {
+        if (RegExp(r'[a-zA-Z0-9]').hasMatch(formattedText[k])) {
+          formattedCount++;
+        }
+        targetOffset = k + 1;
+        if (formattedCount == rawAlphanumericBeforeCursor) {
+          break;
+        }
+      }
+      newOffset = targetOffset.clamp(0, formattedText.length);
+    }
+
     return TextEditingValue(
       text: formattedText,
-      selection: TextSelection.collapsed(offset: formattedText.length),
+      selection: TextSelection.collapsed(offset: newOffset),
     );
   }
 }

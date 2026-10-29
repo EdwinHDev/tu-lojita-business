@@ -26,6 +26,19 @@ class ItemRepositoryImpl implements ItemRepository {
   }
 
   @override
+  Future<Item> getItemById(String id) async {
+    try {
+      final response = await _dio.get('/items/$id');
+      final data = response.data is Map<String, dynamic>
+          ? response.data
+          : Map<String, dynamic>.from(response.data as Map);
+      return ItemModel.fromJson(data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
   Future<({List<Item> items, int total})> getItemsPaginated({
     required String storeId,
     int limit = 50,
@@ -91,6 +104,8 @@ class ItemRepositoryImpl implements ItemRepository {
       itemData['mainImage'] = imageUrls[mainImageIndex];
       itemData['images'] = imageUrls;
 
+      _replaceImageIndices(itemData, imageUrls);
+
       // 3. Create item in backend
       final response = await _dio.post('/items', data: itemData);
       return ItemModel.fromJson(response.data);
@@ -132,12 +147,63 @@ class ItemRepositoryImpl implements ItemRepository {
         }
       }
 
+      _replaceImageIndices(itemData, allImages);
+
       final response = await _dio.patch('/items/$id', data: itemData);
       return ItemModel.fromJson(response.data);
     } catch (e) {
       rethrow;
     }
   }
+
+  void _replaceImageIndices(Map<String, dynamic> itemData, List<String> imageUrls) {
+    if (itemData['variantAxes'] is List) {
+      for (var a in itemData['variantAxes']) {
+        if (a is Map && a['values'] is List) {
+          a['values'] = (a['values'] as List).map((val) {
+            if (val is String && val.contains('|img_idx:')) {
+              final parts = val.split('|img_idx:');
+              final idx = int.tryParse(parts[1]);
+              if (idx != null && idx < imageUrls.length) {
+                return '${parts[0]}|${imageUrls[idx]}';
+              }
+            }
+            return val;
+          }).toList();
+        }
+      }
+    }
+    if (itemData['variants'] is List) {
+      for (var v in itemData['variants']) {
+        if (v is Map) {
+          if (v['axisValues'] is Map) {
+            final newMap = <String, dynamic>{};
+            (v['axisValues'] as Map).forEach((k, val) {
+              if (val is String && val.contains('|img_idx:')) {
+                final parts = val.split('|img_idx:');
+                final idx = int.tryParse(parts[1]);
+                if (idx != null && idx < imageUrls.length) {
+                  newMap[k] = '${parts[0]}|${imageUrls[idx]}';
+                } else {
+                  newMap[k] = val;
+                }
+              } else {
+                newMap[k] = val;
+              }
+            });
+            v['axisValues'] = newMap;
+          }
+          if (v['imageUrl'] is String && (v['imageUrl'] as String).startsWith('img_idx:')) {
+            final idx = int.tryParse((v['imageUrl'] as String).replaceFirst('img_idx:', ''));
+            if (idx != null && idx < imageUrls.length) {
+              v['imageUrl'] = imageUrls[idx];
+            }
+          }
+        }
+      }
+    }
+  }
+
 
   @override
   Future<void> deleteItem(String id) async {

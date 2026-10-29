@@ -8,19 +8,25 @@ class SubcategoryModel extends Subcategory {
     required super.description,
     required super.imageUrl,
     required super.isActive,
+    super.isAgeRestricted = false,
     super.category,
   });
 
   factory SubcategoryModel.fromJson(Map<String, dynamic> json) {
+    final category = json['category'] != null
+        ? CategoryModel.fromJson(json['category'])
+        : null;
+    final isAgeRestricted = json['isAgeRestricted'] == true ||
+        (category != null && category.isAgeRestricted);
+
     return SubcategoryModel(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       description: json['description'] ?? '',
-      imageUrl: json['imageUrl'] ?? '',
+      imageUrl: json['imageUrl'] ?? json['image'] ?? '',
       isActive: json['isActive'] ?? true,
-      category: json['category'] != null
-          ? CategoryModel.fromJson(json['category'])
-          : null,
+      isAgeRestricted: isAgeRestricted,
+      category: category,
     );
   }
 
@@ -31,6 +37,7 @@ class SubcategoryModel extends Subcategory {
       'description': description,
       'imageUrl': imageUrl,
       'isActive': isActive,
+      'isAgeRestricted': isAgeRestricted,
       if (category != null) 'category': (category as CategoryModel).toJson(),
     };
   }

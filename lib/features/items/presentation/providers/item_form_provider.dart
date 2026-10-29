@@ -37,6 +37,11 @@ class ItemFormState {
   final bool isActive;
   final bool isAgeRestricted;
   final List<Map<String, dynamic>> commissionRanges;
+  final bool hasVariants;
+  final List<VariantAxis> variantAxes;
+  final List<ItemVariant> variants;
+  final Map<String, dynamic> slotConfig;
+  final Map<String, dynamic> preorderConfig;
 
   const ItemFormState({
     this.selectedImages = const [],
@@ -60,6 +65,22 @@ class ItemFormState {
     this.trackInventory = true,
     this.stockQuantity,
     this.requiresBooking = false,
+    this.slotConfig = const {
+      'minNoticeHours': 2,
+      'serviceDurationMinutes': 60,
+      'allowSameDay': true,
+      'maxConcurrentBookings': 1,
+      'serviceLocationType': 'ON_SITE',
+      'slots': <Map<String, dynamic>>[],
+    },
+    this.preorderConfig = const {
+      'depositType': 'PERCENTAGE',
+      'depositValue': 50.0,
+      'estimatedLeadDaysMin': 7,
+      'estimatedLeadDaysMax': 15,
+      'maxPreOrderUnits': 50,
+      'settlementWindowHours': 48,
+    },
     this.categoryId,
     this.customizationGroups = const [],
     this.allowInstallments = false,
@@ -67,6 +88,9 @@ class ItemFormState {
     this.isActive = true,
     this.isAgeRestricted = false,
     this.commissionRanges = const [],
+    this.hasVariants = false,
+    this.variantAxes = const [],
+    this.variants = const [],
   });
 
   double get effectivePrice =>
@@ -138,6 +162,11 @@ class ItemFormState {
     bool? isActive,
     bool? isAgeRestricted,
     List<Map<String, dynamic>>? commissionRanges,
+    bool? hasVariants,
+    List<VariantAxis>? variantAxes,
+    List<ItemVariant>? variants,
+    Map<String, dynamic>? slotConfig,
+    Map<String, dynamic>? preorderConfig,
   }) {
     return ItemFormState(
       selectedImages: selectedImages ?? this.selectedImages,
@@ -161,6 +190,8 @@ class ItemFormState {
       trackInventory: trackInventory ?? this.trackInventory,
       stockQuantity: stockQuantity ?? this.stockQuantity,
       requiresBooking: requiresBooking ?? this.requiresBooking,
+      slotConfig: slotConfig ?? this.slotConfig,
+      preorderConfig: preorderConfig ?? this.preorderConfig,
       categoryId: categoryId ?? this.categoryId,
       customizationGroups: customizationGroups ?? this.customizationGroups,
       allowInstallments: allowInstallments ?? this.allowInstallments,
@@ -168,6 +199,9 @@ class ItemFormState {
       isActive: isActive ?? this.isActive,
       isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
       commissionRanges: commissionRanges ?? this.commissionRanges,
+      hasVariants: hasVariants ?? this.hasVariants,
+      variantAxes: variantAxes ?? this.variantAxes,
+      variants: variants ?? this.variants,
     );
   }
 }
@@ -194,7 +228,18 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     } catch (_) {}
   }
 
-  void initForEditing(Item item) => initFromItem(item);
+  void initForEditing(Item item) {
+    initFromItem(item);
+    loadFullItem(item.id);
+  }
+
+  Future<void> loadFullItem(String itemId) async {
+    try {
+      final repository = ref.read(itemRepositoryProvider);
+      final fullItem = await repository.getItemById(itemId);
+      initFromItem(fullItem);
+    } catch (_) {}
+  }
 
   void initFromItem(Item item) {
     Map<String, dynamic> mappedAttributes = {};
@@ -210,6 +255,19 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       }
     }
 
+    Map<String, dynamic> mappedSlotConfig = Map<String, dynamic>.from(state.slotConfig);
+    if (item.slotConfig != null) {
+      mappedSlotConfig = Map<String, dynamic>.from(item.slotConfig!);
+      if (mappedSlotConfig['slots'] is List) {
+        mappedSlotConfig['slots'] = (mappedSlotConfig['slots'] as List)
+            .whereType<Map>()
+            .map((s) => Map<String, dynamic>.from(s))
+            .toList();
+      } else {
+        mappedSlotConfig['slots'] = <Map<String, dynamic>>[];
+      }
+    }
+
     state = state.copyWith(
       itemId: item.id,
       title: item.title,
@@ -222,6 +280,8 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       trackInventory: item.trackInventory,
       stockQuantity: item.stockQuantity,
       requiresBooking: item.requiresBooking,
+      slotConfig: mappedSlotConfig,
+      preorderConfig: item.preorderConfig ?? state.preorderConfig,
       categoryId: item.categoryId,
       existingImages: item.images,
       attributes: mappedAttributes,
@@ -230,6 +290,9 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       lateFeePercentage: item.lateFeePercentage,
       isActive: item.isActive,
       isAgeRestricted: item.isAgeRestricted,
+      hasVariants: item.hasVariants,
+      variantAxes: item.variantAxes,
+      variants: item.variants,
     );
     if (item.categoryId != null) {
       loadCategoryTemplates(item.categoryId!);
@@ -244,10 +307,16 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onIsActiveChanged(bool value) => state = state.copyWith(isActive: value);
   void onIsAgeRestrictedChanged(bool value) => state = state.copyWith(isAgeRestricted: value);
   void onDiscountPriceChanged(double? value) => state = state.copyWith(discountPrice: value);
-  void onItemTypeChanged(ItemType value) => state = state.copyWith(itemType: value);
+  void onItemTypeChanged(ItemType value) => state = state.copyWith(
+        itemType: value,
+        trackInventory: value == ItemType.service ? false : state.trackInventory,
+        requiresBooking: value == ItemType.service ? true : state.requiresBooking,
+      );
   void onTrackInventoryChanged(bool value) => state = state.copyWith(trackInventory: value);
   void onStockQuantityChanged(double? value) => state = state.copyWith(stockQuantity: value);
   void onRequiresBookingChanged(bool value) => state = state.copyWith(requiresBooking: value);
+  void onSlotConfigChanged(Map<String, dynamic> value) => state = state.copyWith(slotConfig: value);
+  void onPreorderConfigChanged(Map<String, dynamic> value) => state = state.copyWith(preorderConfig: value);
   void onAllowInstallmentsChanged(bool value) => state = state.copyWith(allowInstallments: value);
   void onLateFeePercentageChanged(double value) => state = state.copyWith(lateFeePercentage: value);
   
@@ -323,6 +392,139 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     state = state.copyWith(customizationGroups: value);
   }
 
+  void toggleVariants(bool enabled) {
+    state = state.copyWith(hasVariants: enabled);
+    if (enabled && state.variants.isEmpty && state.variantAxes.isNotEmpty) {
+      _regenerateVariants(state.variantAxes);
+    }
+  }
+
+  void addAxis(String name, [List<String>? initialValues]) {
+    if (state.variantAxes.length >= 3) return;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final newAxes = List<VariantAxis>.from(state.variantAxes);
+    newAxes.add(VariantAxis(
+      name: trimmed,
+      values: initialValues ?? [],
+      position: newAxes.length,
+    ));
+    _regenerateVariants(newAxes);
+  }
+
+  void removeAxis(int index) {
+    if (index < 0 || index >= state.variantAxes.length) return;
+    final newAxes = List<VariantAxis>.from(state.variantAxes);
+    newAxes.removeAt(index);
+    for (int i = 0; i < newAxes.length; i++) {
+      newAxes[i] = newAxes[i].copyWith(position: i);
+    }
+    _regenerateVariants(newAxes);
+  }
+
+  void updateAxisValues(int axisIndex, List<String> values) {
+    if (axisIndex < 0 || axisIndex >= state.variantAxes.length) return;
+    final seen = <String>{};
+    final deduped = <String>[];
+    for (final val in values) {
+      final base = val.contains('|') ? val.split('|')[0].trim().toLowerCase() : val.trim().toLowerCase();
+      if (base.isNotEmpty && !seen.contains(base)) {
+        seen.add(base);
+        deduped.add(val);
+      }
+    }
+    final newAxes = List<VariantAxis>.from(state.variantAxes);
+    newAxes[axisIndex] = newAxes[axisIndex].copyWith(values: deduped);
+    _regenerateVariants(newAxes);
+  }
+
+  void updateVariant(int index, ItemVariant updated) {
+    if (index < 0 || index >= state.variants.length) return;
+    final newVariants = List<ItemVariant>.from(state.variants);
+    newVariants[index] = updated;
+    state = state.copyWith(variants: newVariants);
+  }
+
+  void batchUpdatePrice(double? price, [bool onlyActive = true]) {
+    final newVariants = state.variants.map((v) {
+      if (!onlyActive || v.isActive) {
+        return v.copyWith(price: price);
+      }
+      return v;
+    }).toList();
+    state = state.copyWith(variants: newVariants);
+  }
+
+  void batchUpdateStock(double stock, [bool onlyActive = true]) {
+    final newVariants = state.variants.map((v) {
+      if (!onlyActive || v.isActive) {
+        return v.copyWith(stockQuantity: stock);
+      }
+      return v;
+    }).toList();
+    state = state.copyWith(variants: newVariants);
+  }
+
+  void toggleAllVariants(bool active) {
+    final newVariants = state.variants.map((v) => v.copyWith(isActive: active)).toList();
+    state = state.copyWith(variants: newVariants);
+  }
+
+  void _regenerateVariants(List<VariantAxis> axes) {
+    final validAxes = axes.where((a) => a.values.isNotEmpty).toList();
+    if (validAxes.isEmpty) {
+      state = state.copyWith(variantAxes: axes, variants: []);
+      return;
+    }
+
+    List<Map<String, String>> combinations = [{}];
+    for (final axis in validAxes) {
+      final List<Map<String, String>> nextCombos = [];
+      for (final combo in combinations) {
+        for (final val in axis.values) {
+          nextCombos.add({...combo, axis.name: val});
+        }
+      }
+      combinations = nextCombos;
+    }
+
+    if (combinations.length > 100) {
+      combinations = combinations.sublist(0, 100);
+    }
+
+    final List<ItemVariant> newVariants = combinations.map((combo) {
+      final existing = state.variants.cast<ItemVariant?>().firstWhere(
+        (v) => v != null && _areAxisValuesEqual(v.axisValues, combo),
+        orElse: () => null,
+      );
+
+      if (existing != null) {
+        return existing.copyWith(axisValues: combo);
+      }
+
+      return ItemVariant(
+        axisValues: combo,
+        price: state.price > 0 ? state.price : null,
+        stockQuantity: 0,
+        isActive: true,
+      );
+    }).toList();
+
+    state = state.copyWith(variantAxes: axes, variants: newVariants);
+  }
+
+  bool _areAxisValuesEqual(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      final bVal = b[entry.key];
+      if (bVal == null) return false;
+      final cleanA = entry.value.contains('|') ? entry.value.split('|')[0].trim().toLowerCase() : entry.value.trim().toLowerCase();
+      final cleanB = bVal.contains('|') ? bVal.split('|')[0].trim().toLowerCase() : bVal.trim().toLowerCase();
+      if (cleanA != cleanB) return false;
+    }
+    return true;
+  }
+
   Future<void> submit(String storeId) async {
     final validImages = state.selectedImages.where((f) => f.existsSync()).toList();
     if (validImages.isEmpty && state.existingImages.isEmpty) {
@@ -335,7 +537,25 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       return;
     }
 
-    if (state.trackInventory) {
+    if (state.hasVariants) {
+      if (state.variantAxes.isEmpty || state.variantAxes.every((a) => a.values.isEmpty)) {
+        state = state.copyWith(errorMessage: 'Debes definir al menos un eje con opciones para las variantes.');
+        return;
+      }
+      final activeVariants = state.variants.where((v) => v.isActive).toList();
+      if (activeVariants.isEmpty) {
+        state = state.copyWith(errorMessage: 'Debes tener al menos una variante activa.');
+        return;
+      }
+      if (state.trackInventory) {
+        for (final v in activeVariants) {
+          if (v.stockQuantity < 0) {
+            state = state.copyWith(errorMessage: 'El stock de las variantes activas no puede ser negativo.');
+            return;
+          }
+        }
+      }
+    } else if (state.trackInventory) {
       if (state.stockQuantity == null || state.stockQuantity! <= 0) {
         state = state.copyWith(
           errorMessage: 'Debes especificar una cantidad de stock mayor a 0 al activar el control de inventario.',
@@ -370,9 +590,20 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         'isActive': state.isActive,
         'isAgeRestricted': state.isAgeRestricted,
         'discountPrice': state.discountPrice,
-        'trackInventory': state.trackInventory,
-        'stockQuantity': state.trackInventory ? state.stockQuantity : null,
+        'trackInventory': state.itemType == ItemType.service ? false : state.trackInventory,
+        'stockQuantity': state.itemType == ItemType.service
+            ? null
+            : (state.trackInventory ? state.stockQuantity : null),
         'requiresBooking': state.requiresBooking,
+        if (state.requiresBooking) ...{
+          'bookingType': state.itemType == ItemType.service ? 'TIME_SLOT' : 'PRE_ORDER',
+          if (state.itemType == ItemType.service)
+            'slotConfig': _sanitizeSlotConfig(state.slotConfig),
+          if (state.itemType == ItemType.product)
+            'preorderConfig': _sanitizePreorderConfig(state.preorderConfig),
+        } else ...{
+          'bookingType': 'NONE',
+        },
         'categoryId': state.categoryId,
         'attributes': {
           'properties': properties,
@@ -380,6 +611,11 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         'customizationGroups': state.customizationGroups.map((c) => c.toJson()).toList(),
         'allowInstallments': state.allowInstallments,
         'lateFeePercentage': state.lateFeePercentage,
+        'hasVariants': state.hasVariants,
+        if (state.hasVariants) ...{
+          'variantAxes': state.variantAxes.map((a) => a.toJson()).toList(),
+          'variants': state.variants.map((v) => v.toJson()).toList(),
+        },
         if (state.existingImages.isNotEmpty) 'existingImages': state.existingImages,
       };
 
@@ -416,6 +652,57 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       }
       state = state.copyWith(isLoading: false, errorMessage: message);
     }
+  }
+
+  Map<String, dynamic> _sanitizeSlotConfig(Map<String, dynamic> raw) {
+    final rawSlots = raw['slots'] as List? ?? [];
+    final cleanSlots = rawSlots.whereType<Map>().map((s) {
+      final slotMap = <String, dynamic>{
+        'startTime': s['startTime']?.toString() ?? '09:00',
+        'endTime': s['endTime']?.toString() ?? '10:00',
+        'label': s['label']?.toString() ?? 'Turno',
+      };
+      if (s['id'] != null && s['id'].toString().isNotEmpty) {
+        slotMap['id'] = s['id'].toString();
+      }
+      if (s['dayOfWeek'] != null) {
+        final dow = int.tryParse(s['dayOfWeek'].toString());
+        if (dow != null) slotMap['dayOfWeek'] = dow;
+      }
+      if (s['specificDate'] != null && s['specificDate'].toString().isNotEmpty) {
+        slotMap['specificDate'] = s['specificDate'].toString();
+      }
+      if (s['isActive'] != null) {
+        slotMap['isActive'] = s['isActive'] == true || s['isActive'] == 'true';
+      }
+      return slotMap;
+    }).toList();
+
+    return {
+      if (raw['id'] != null && raw['id'].toString().isNotEmpty) 'id': raw['id'].toString(),
+      'minNoticeHours': int.tryParse(raw['minNoticeHours']?.toString() ?? '2') ?? 2,
+      'serviceDurationMinutes': int.tryParse(raw['serviceDurationMinutes']?.toString() ?? '60') ?? 60,
+      'allowSameDay': raw['allowSameDay'] == true || raw['allowSameDay'] == 'true',
+      'maxConcurrentBookings': int.tryParse(raw['maxConcurrentBookings']?.toString() ?? '1') ?? 1,
+      'serviceLocationType': raw['serviceLocationType']?.toString() ?? 'ON_SITE',
+      'slots': cleanSlots,
+    };
+  }
+
+  Map<String, dynamic> _sanitizePreorderConfig(Map<String, dynamic> raw) {
+    return {
+      if (raw['id'] != null && raw['id'].toString().isNotEmpty) 'id': raw['id'].toString(),
+      'depositType': raw['depositType']?.toString() ?? 'PERCENTAGE',
+      'depositValue': double.tryParse(raw['depositValue']?.toString() ?? '50') ?? 50.0,
+      if (raw['estimatedLeadDaysMin'] != null)
+        'estimatedLeadDaysMin': int.tryParse(raw['estimatedLeadDaysMin'].toString()),
+      if (raw['estimatedLeadDaysMax'] != null)
+        'estimatedLeadDaysMax': int.tryParse(raw['estimatedLeadDaysMax'].toString()),
+      if (raw['maxPreOrderUnits'] != null)
+        'maxPreOrderUnits': int.tryParse(raw['maxPreOrderUnits'].toString()),
+      if (raw['settlementWindowHours'] != null)
+        'settlementWindowHours': int.tryParse(raw['settlementWindowHours'].toString()),
+    };
   }
 }
 

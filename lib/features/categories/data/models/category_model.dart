@@ -6,6 +6,7 @@ class CategoryModel extends Category {
     required super.name,
     required super.description,
     required super.image,
+    super.isAgeRestricted = false,
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -14,6 +15,7 @@ class CategoryModel extends Category {
       name: json['name'],
       description: json['description'] ?? '',
       image: json['image'] ?? '',
+      isAgeRestricted: json['isAgeRestricted'] == true,
     );
   }
 
@@ -23,6 +25,7 @@ class CategoryModel extends Category {
       'name': name,
       'description': description,
       'image': image,
+      'isAgeRestricted': isAgeRestricted,
     };
   }
 }

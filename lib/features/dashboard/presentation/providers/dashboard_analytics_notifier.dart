@@ -7,8 +7,17 @@ import 'dashboard_providers.dart';
 class DashboardAnalyticsNotifier extends Notifier<DashboardAnalyticsState> {
   @override
   DashboardAnalyticsState build() {
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next is! Authenticated) {
+        reset();
+      }
+    });
     Future.microtask(() => loadAnalytics());
     return const DashboardAnalyticsState();
+  }
+
+  void reset() {
+    state = const DashboardAnalyticsState();
   }
 
   Future<void> loadAnalytics({bool isRefresh = false}) async {

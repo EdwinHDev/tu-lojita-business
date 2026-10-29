@@ -8,6 +8,7 @@ import 'package:tu_lojita_business/features/company_onboarding/presentation/prov
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
+import '../widgets/platform_qr_dialog.dart';
 
 class StoreDebtsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -512,7 +513,9 @@ class _ReportCommissionPaymentModalState
               const SizedBox(height: 16),
 
               DropdownButtonFormField<PlatformPaymentMethod>(
-                initialValue: _selectedMethod,
+                initialValue: widget.methods.any((m) => m.id == _selectedMethod?.id)
+                    ? widget.methods.firstWhere((m) => m.id == _selectedMethod?.id)
+                    : null,
                 decoration: InputDecoration(
                   labelText: 'Cuenta Destino',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -526,6 +529,53 @@ class _ReportCommissionPaymentModalState
                 onChanged: (val) => setState(() => _selectedMethod = val),
                 validator: (val) => val == null ? 'Selecciona método' : null,
               ),
+
+              if (_selectedMethod?.qrImageUrl != null &&
+                  _selectedMethod!.qrImageUrl!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: InkWell(
+                    onTap: () => PlatformQrDialog.show(
+                      context,
+                      qrImageUrl: _selectedMethod!.qrImageUrl!,
+                      title: _selectedMethod!.title,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          HugeIcon(
+                            icon: HugeIcons.strokeRoundedQrCode,
+                            color: Color(0xFF4F46E5),
+                            size: 16,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Ver Código QR de esta cuenta',
+                            style: TextStyle(
+                              color: Color(0xFF4F46E5),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.open_in_full_rounded, size: 12, color: Color(0xFF4F46E5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 12),
 

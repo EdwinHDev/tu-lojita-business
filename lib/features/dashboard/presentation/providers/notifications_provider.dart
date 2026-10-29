@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../auth/presentation/providers/auth_notifier.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/presentation/providers/auth_state.dart';
 import '../../domain/entities/notification.dart';
 import '../../domain/repositories/notification_repository.dart';
 import '../../data/repositories/remote_notification_data_source.dart';
@@ -19,6 +21,16 @@ final firebaseMessagingServiceProvider =
       ref.read(notificationRepositoryProvider).markAsRead(id).then((_) {
         ref.invalidate(notificationsProvider);
       }).catchError((_) {});
+    },
+    onNotificationReceived: () {
+      ref.invalidate(notificationsProvider);
+    },
+    hasPermission: (perm) {
+      final authState = ref.read(authProvider);
+      if (authState is Authenticated) {
+        return authState.user.hasPermission(perm);
+      }
+      return false;
     },
   );
   service.init();
@@ -61,9 +73,9 @@ final unreadBusinessDisputeOrderIdsProvider = Provider<Set<String>>((ref) {
   return notifications
       .where((n) =>
           !n.isRead &&
-          (n.type == 'MEDIATION_REQUEST' || n.type == 'MEDIATION_RESPONSE') &&
-          !n.title.toLowerCase().contains('mediación') &&
-          !n.title.toLowerCase().contains('mediacion'))
+          (n.type == 'MEDIATION_REQUEST' ||
+              n.type == 'MEDIATION_RESPONSE' ||
+              n.type == 'DISPUTE_ESCALATED'))
       .map((n) => n.targetId ?? '')
       .where((id) => id.isNotEmpty)
       .toSet();

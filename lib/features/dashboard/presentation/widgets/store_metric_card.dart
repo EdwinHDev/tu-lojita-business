@@ -33,8 +33,11 @@ class StoreMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = (screenWidth * 0.42).clamp(140.0, 200.0);
+
     return Container(
-      width: 165,
+      width: cardWidth,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -68,18 +71,22 @@ class StoreMetricCard extends StatelessWidget {
                 ),
               ),
               if (subtitle != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _resolvedBgColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    subtitle!,
-                    style: TextStyle(
-                      color: _resolvedTextColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _resolvedBgColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _resolvedTextColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),

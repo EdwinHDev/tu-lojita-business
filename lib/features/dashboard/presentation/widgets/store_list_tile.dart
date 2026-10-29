@@ -68,9 +68,7 @@ class StoreListTile extends StatelessWidget {
               : null,
         ),
         title: Text(
-          (store.branchName != null && store.branchName!.isNotEmpty)
-              ? store.branchName!
-              : store.name,
+          store.shouldShowBranch ? store.branchLabel : store.name,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -80,7 +78,7 @@ class StoreListTile extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (store.branchName != null && store.branchName!.isNotEmpty)
+            if (store.shouldShowBranch)
               Padding(
                 padding: const EdgeInsets.only(top: 2, bottom: 4),
                 child: Text(

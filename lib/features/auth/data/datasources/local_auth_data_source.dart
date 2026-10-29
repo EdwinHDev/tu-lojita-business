@@ -11,6 +11,14 @@ abstract class LocalAuthDataSource {
   Future<void> saveUser(UserModel user);
   Future<UserModel?> getUser();
   Future<void> clearAll();
+  Future<void> savePendingRegistration({
+    required String registrationToken,
+    required String email,
+    DateTime? expiresAt,
+  });
+  Future<Map<String, dynamic>?> getPendingRegistration();
+  Future<void> clearPendingRegistration();
+  Future<void> ensureCleanInstall();
 }
 
 class LocalAuthDataSourceImpl implements LocalAuthDataSource {
@@ -25,6 +33,25 @@ class LocalAuthDataSourceImpl implements LocalAuthDataSource {
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
   static const _userKey = 'user_data';
+  static const _firstRunKey = 'business_app_has_run_before';
+
+  @override
+  Future<void> ensureCleanInstall() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasRunBefore = prefs.getBool(_firstRunKey) ?? false;
+      if (!hasRunBefore) {
+        await _storage.deleteAll();
+        await prefs.remove(_accessTokenKey);
+        await prefs.remove(_refreshTokenKey);
+        await prefs.remove(_userKey);
+        await prefs.setBool(_firstRunKey, true);
+        _cachedAccessToken = null;
+        _cachedRefreshToken = null;
+        _cachedUser = null;
+      }
+    } catch (_) {}
+  }
 
   @override
   Future<void> saveAccessToken(String token) async {
@@ -142,6 +169,9 @@ class LocalAuthDataSourceImpl implements LocalAuthDataSource {
     _cachedRefreshToken = null;
     _cachedUser = null;
     try {
+      await _storage.deleteAll();
+    } catch (_) {}
+    try {
       await _storage.delete(key: _accessTokenKey);
       await _storage.delete(key: _refreshTokenKey);
       await _storage.delete(key: _userKey);
@@ -151,6 +181,62 @@ class LocalAuthDataSourceImpl implements LocalAuthDataSource {
       await prefs.remove(_accessTokenKey);
       await prefs.remove(_refreshTokenKey);
       await prefs.remove(_userKey);
+    } catch (_) {}
+  }
+  static const _pendingRegTokenKey = 'pending_reg_token';
+  static const _pendingRegEmailKey = 'pending_reg_email';
+  static const _pendingRegExpiresAtKey = 'pending_reg_expires_at';
+
+  @override
+  Future<void> savePendingRegistration({
+    required String registrationToken,
+    required String email,
+    DateTime? expiresAt,
+  }) async {
+    final exp = expiresAt ?? DateTime.now().add(const Duration(minutes: 10));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingRegTokenKey, registrationToken);
+      await prefs.setString(_pendingRegEmailKey, email);
+      await prefs.setString(_pendingRegExpiresAtKey, exp.toIso8601String());
+    } catch (_) {}
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getPendingRegistration() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_pendingRegTokenKey);
+      final email = prefs.getString(_pendingRegEmailKey);
+      final expiresAtStr = prefs.getString(_pendingRegExpiresAtKey);
+
+      if (token == null || token.isEmpty || email == null || expiresAtStr == null) {
+        return null;
+      }
+
+      final expiresAt = DateTime.tryParse(expiresAtStr);
+      if (expiresAt == null || expiresAt.isBefore(DateTime.now())) {
+        await clearPendingRegistration();
+        return null;
+      }
+
+      return {
+        'registrationToken': token,
+        'email': email,
+        'expiresAt': expiresAt,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> clearPendingRegistration() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pendingRegTokenKey);
+      await prefs.remove(_pendingRegEmailKey);
+      await prefs.remove(_pendingRegExpiresAtKey);
     } catch (_) {}
   }
 }

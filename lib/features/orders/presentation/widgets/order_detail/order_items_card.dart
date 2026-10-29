@@ -48,7 +48,8 @@ class OrderItemsCard extends StatelessWidget {
   }
 
   Widget _buildOrderItemTile(BuildContext context, OrderItem item) {
-    final rawImagePath = item.item?.mainImage ??
+    final rawImagePath = item.resolvedThumbnail ??
+        item.item?.mainImage ??
         (item.item?.images.isNotEmpty == true ? item.item!.images.first : '');
     final imageUrl = OrderDetailHelpers.resolveImageUrl(rawImagePath);
 
@@ -102,6 +103,25 @@ class OrderItemsCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (item.variantLabel != null && item.variantLabel!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF2FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFC7D2FE)),
+                        ),
+                        child: Text(
+                          item.variantLabel!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF4F46E5),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Row(
                       children: [

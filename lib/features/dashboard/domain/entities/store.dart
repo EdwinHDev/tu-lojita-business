@@ -1,3 +1,5 @@
+import 'package:tu_lojita_business/features/categories/domain/entities/subcategory.dart';
+
 class StoreInstallmentFrequency {
   final int value;
   final String unit;
@@ -65,6 +67,10 @@ class Store {
   final int maxExtensionDays;
   final double? maxCreditLimit;
   final bool isAgeRestricted;
+  final bool hasMultipleBranches;
+  final Subcategory? subcategory;
+  final String? instagram;
+  final String? tiktok;
 
   const Store({
     required this.id,
@@ -92,11 +98,28 @@ class Store {
     this.maxExtensionDays = 7,
     this.maxCreditLimit,
     this.isAgeRestricted = false,
+    this.hasMultipleBranches = false,
+    this.subcategory,
+    this.instagram,
+    this.tiktok,
   });
 
-  String get displayName => branchName != null && branchName!.isNotEmpty 
-    ? '$branchName ($name)' 
-    : name;
+  bool get isCategoryOrSubcategoryRestricted =>
+      (subcategory?.isAgeRestricted == true) ||
+      (subcategory?.category?.isAgeRestricted == true);
+
+  bool get shouldShowBranch =>
+      hasMultipleBranches && branchName != null && branchName!.trim().isNotEmpty;
+
+  String get branchLabel =>
+      shouldShowBranch ? 'Sucursal ${branchName!.trim()}' : '';
+
+  String get combinedDisplayName =>
+      shouldShowBranch ? '$name ($branchLabel)' : name;
+
+  String get displayName => shouldShowBranch 
+      ? '$branchLabel ($name)' 
+      : name;
 
   Store copyWith({
     String? id,
@@ -124,6 +147,10 @@ class Store {
     int? maxExtensionDays,
     double? maxCreditLimit,
     bool? isAgeRestricted,
+    bool? hasMultipleBranches,
+    Subcategory? subcategory,
+    String? instagram,
+    String? tiktok,
   }) {
     return Store(
       id: id ?? this.id,
@@ -151,6 +178,10 @@ class Store {
       maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
       maxCreditLimit: maxCreditLimit ?? this.maxCreditLimit,
       isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
+      hasMultipleBranches: hasMultipleBranches ?? this.hasMultipleBranches,
+      subcategory: subcategory ?? this.subcategory,
+      instagram: instagram ?? this.instagram,
+      tiktok: tiktok ?? this.tiktok,
     );
   }
 }

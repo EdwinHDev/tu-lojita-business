@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
@@ -309,6 +310,12 @@ class _OrderDisputeBottomSheetState extends ConsumerState<OrderDisputeBottomShee
                               (activeDispute.canEscalate || activeDispute.merchantCanMarkResolved)) ...[
                             const SizedBox(height: 16),
                             _buildBilateralActionsSection(activeDispute, actionState),
+                          ],
+
+                          // 3b. AVISO DE MEDIACIÓN ADMINISTRATIVA
+                          if (activeDispute.status == DisputeStatus.adminReview) ...[
+                            const SizedBox(height: 16),
+                            _buildAdminReviewNoticeCard(),
                           ],
 
                           // 4. RESOLUCIÓN DE ADMINISTRACIÓN (Si aplica)
@@ -1132,6 +1139,76 @@ class _OrderDisputeBottomSheetState extends ConsumerState<OrderDisputeBottomShee
               style: const TextStyle(fontSize: 13, color: Color(0xFF047857), height: 1.4),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminReviewNoticeCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F3FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDD6FE), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF7C3AED), size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Pedido en mediación con Soporte',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF5B21B6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Este caso fue escalado a una disputa y está en proceso de revisión por el equipo de soporte. Es posible que el soporte se ponga en contacto contigo para resolver el caso.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF6D28D9),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.push('/orders/${widget.orderId}/support-chat');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7C3AED),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(
+                Icons.support_agent_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
+              label: const Text(
+                'Hablar con Soporte',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+              ),
+            ),
+          ),
         ],
       ),
     );

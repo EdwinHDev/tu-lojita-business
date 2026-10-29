@@ -7,6 +7,7 @@ class ChatMessage {
   final User sender;
   final String content;
   final String? imageUrl;
+  final String? channelType;
   final DateTime createdAt;
   final bool isRead;
   final bool isDelivered;
@@ -18,6 +19,7 @@ class ChatMessage {
     required this.sender,
     required this.content,
     this.imageUrl,
+    this.channelType,
     required this.createdAt,
     this.isRead = false,
     this.isDelivered = false,
@@ -30,6 +32,7 @@ class ChatMessage {
     User? sender,
     String? content,
     String? imageUrl,
+    String? channelType,
     DateTime? createdAt,
     bool? isRead,
     bool? isDelivered,
@@ -41,6 +44,7 @@ class ChatMessage {
       sender: sender ?? this.sender,
       content: content ?? this.content,
       imageUrl: imageUrl ?? this.imageUrl,
+      channelType: channelType ?? this.channelType,
       createdAt: createdAt ?? this.createdAt,
       isRead: isRead ?? this.isRead,
       isDelivered: isDelivered ?? this.isDelivered,
@@ -64,6 +68,7 @@ class ChatMessage {
           : const User(id: '', email: '', firstName: '', lastName: '', role: 'USER'),
       content: json['content'] ?? '',
       imageUrl: json['imageUrl'] as String?,
+      channelType: json['channelType'] as String?,
       createdAt: json['createdAt'] != null 
           ? DateTime.parse(json['createdAt']) 
           : DateTime.now(),
@@ -80,6 +85,7 @@ class ChatMessage {
       'sender': sender.toJson(),
       'content': content,
       'imageUrl': imageUrl,
+      'channelType': channelType,
       'createdAt': createdAt.toIso8601String(),
       'isRead': isRead,
       'isDelivered': isDelivered,

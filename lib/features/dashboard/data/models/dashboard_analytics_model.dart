@@ -11,6 +11,7 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
     required super.salesChart,
     required super.storesPerformance,
     required super.topProducts,
+    super.topDesiredProducts = const [],
     required super.paymentMethods,
   });
 
@@ -78,6 +79,21 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
             ))
         .toList();
 
+    final topDesiredProducts = (json['topDesiredProducts'] as List<dynamic>? ?? [])
+        .map((td) => TopDesiredProduct(
+              itemId: td['itemId']?.toString() ?? '',
+              title: td['title']?.toString() ?? '',
+              mainImage: td['mainImage']?.toString(),
+              favoritesCount: int.tryParse(td['favoritesCount']?.toString() ?? '0') ?? 0,
+              price: double.tryParse(td['price']?.toString() ?? '0') ?? 0.0,
+              stockQuantity: td['stockQuantity'] != null
+                  ? double.tryParse(td['stockQuantity']?.toString() ?? '0')
+                  : null,
+              trackInventory: td['trackInventory'] == true,
+              hasVariants: td['hasVariants'] == true,
+            ))
+        .toList();
+
     return DashboardAnalyticsModel(
       period: json['period']?.toString() ?? 'month',
       startDate: json['startDate']?.toString() ?? '',
@@ -88,6 +104,7 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
       salesChart: salesChart,
       storesPerformance: storesPerformance,
       topProducts: topProducts,
+      topDesiredProducts: topDesiredProducts,
       paymentMethods: paymentMethods,
     );
   }

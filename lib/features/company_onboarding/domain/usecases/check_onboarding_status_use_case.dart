@@ -16,6 +16,10 @@ class CheckOnboardingStatusUseCase {
       storeId: storeStatus['storeId'] as String?,
       storeRif: storeStatus['storeRif'] as String?,
       storeLogo: storeStatus['storeLogo'] as String?,
+      subcategoryId: storeStatus['subcategoryId'] as String?,
+      subcategoryName: storeStatus['subcategoryName'] as String?,
+      categoryId: storeStatus['categoryId'] as String?,
+      categoryName: storeStatus['categoryName'] as String?,
     );
   }
 }
@@ -27,6 +31,10 @@ class OnboardingStatus {
   final String? storeId;
   final String? storeRif;
   final String? storeLogo;
+  final String? subcategoryId;
+  final String? subcategoryName;
+  final String? categoryId;
+  final String? categoryName;
 
   OnboardingStatus({
     required this.hasCompany,
@@ -35,5 +43,9 @@ class OnboardingStatus {
     this.storeId,
     this.storeRif,
     this.storeLogo,
+    this.subcategoryId,
+    this.subcategoryName,
+    this.categoryId,
+    this.categoryName,
   });
 }

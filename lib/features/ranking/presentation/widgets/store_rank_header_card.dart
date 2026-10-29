@@ -179,52 +179,68 @@ class StoreRankHeaderCard extends ConsumerWidget {
                       const Icon(Icons.warning_amber_rounded,
                           color: Color(0xFFEF4444), size: 14),
                       const SizedBox(width: 4),
-                      const Text(
-                        '¡Zona de Peligro! Vende hoy',
-                        style: TextStyle(
-                          color: Color(0xFFEF4444),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                      const Flexible(
+                        child: Text(
+                          '¡Zona de Peligro! Vende hoy',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ] else if (ranking.isShieldActive) ...[
                       const Icon(Icons.shield_outlined,
                           color: Color(0xFF10B981), size: 14),
                       const SizedBox(width: 4),
-                      const Text(
-                        'Escudo de Rango activo (48h)',
-                        style: TextStyle(
-                          color: Color(0xFF10B981),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      const Flexible(
+                        child: Text(
+                          'Escudo de Rango activo (48h)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFF10B981),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ] else if (ranking.nextDivisionTitle != null) ...[
-                      Text(
-                        'A ${ranking.pointsToNextTier} PR de ${ranking.nextDivisionTitle}',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                      Flexible(
+                        child: Text(
+                          'A ${ranking.pointsToNextTier} PR de ${ranking.nextDivisionTitle}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ] else ...[
-                      Text(
-                        '¡Rango Máximo Alcanzado!',
-                        style: TextStyle(
-                          color: Colors.amber.shade300,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          '¡Rango Máximo Alcanzado!',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.amber.shade300,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text(
                       'Ver detalles',
                       style: TextStyle(
                         color: Colors.amber.shade300,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],

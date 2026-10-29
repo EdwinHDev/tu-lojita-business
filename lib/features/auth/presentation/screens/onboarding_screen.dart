@@ -53,6 +53,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     ref.listen(authProvider, (previous, next) {
       if (next is AuthError) {
+        if (next.code == 'ACCOUNT_SUSPENDED' ||
+            next.code == 'ACCOUNT_BANNED' ||
+            next.message.toLowerCase().contains('suspendida')) {
+          context.go('/account-suspended', extra: {'reason': next.message});
+          return;
+        }
         NotificationService.showError(context, next.message);
       }
     });

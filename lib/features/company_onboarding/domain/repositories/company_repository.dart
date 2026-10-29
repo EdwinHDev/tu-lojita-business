@@ -6,6 +6,9 @@ abstract class CompanyRepository {
     required String rif,
     File? logoFile,
     String? existingLogoUrl,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   });
   Future<void> updateStoreBranchName({
     required String storeId,

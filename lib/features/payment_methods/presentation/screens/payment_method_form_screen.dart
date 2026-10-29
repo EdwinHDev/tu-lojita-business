@@ -6,6 +6,7 @@ import '../../../../core/repositories/bank_repository.dart';
 import '../../../../core/repositories/payment_methods_repository.dart';
 import '../../../../core/models/bank.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/utils/safe_text_controller.dart';
 
 class PaymentMethodFormScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -75,22 +76,22 @@ class _PaymentMethodFormScreenState
   void initState() {
     super.initState();
     _selectedType = widget.method?.type ?? PaymentMethodType.pagoMovil;
-    _titleController = TextEditingController(text: widget.method?.title);
-    _holderController = TextEditingController(
+    _titleController = createSafeController(text: widget.method?.title);
+    _holderController = createSafeController(
       text: widget.method?.accountHolder,
     );
     _idNumberController =
-        TextEditingController(text: widget.method?.idNumber);
-    _accountNumberController = TextEditingController(
+        createSafeController(text: widget.method?.idNumber);
+    _accountNumberController = createSafeController(
       text: widget.method?.accountNumber,
     );
     _phoneController =
-        TextEditingController(text: widget.method?.phoneNumber);
-    _emailController = TextEditingController(text: widget.method?.email);
-    _walletController = TextEditingController(
+        createSafeController(text: widget.method?.phoneNumber);
+    _emailController = createSafeController(text: widget.method?.email);
+    _walletController = createSafeController(
       text: widget.method?.walletAddress,
     );
-    _instructionsController = TextEditingController(
+    _instructionsController = createSafeController(
       text: widget.method?.instructions,
     );
     _selectedBankId = widget.method?.bank?.id;
@@ -719,6 +720,7 @@ class _PaymentMethodFormScreenState
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          selectAllOnFocus: false,
           keyboardType: keyboardType,
           maxLines: maxLines,
           validator: validator,
@@ -773,7 +775,7 @@ class _PaymentMethodFormScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Banco',
+          'Nombre de banco o código',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -840,144 +842,13 @@ class _PaymentMethodFormScreenState
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        String searchQuery = '';
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filteredBanks = banks.where((bank) {
-              final nameMatch = bank.name.toLowerCase().contains(
-                searchQuery.toLowerCase(),
-              );
-              final codeMatch = bank.code.contains(searchQuery);
-              return nameMatch || codeMatch;
-            }).toList();
-
-            final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
-              padding: EdgeInsets.only(bottom: bottomPadding),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text(
-                      'Selecciona un Banco',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: TextField(
-                      autofocus: false,
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por nombre o código...',
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFFF9FAFB),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onChanged: (value) {
-                        setModalState(() => searchQuery = value);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: filteredBanks.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No se encontraron bancos',
-                              style:
-                                  TextStyle(color: Color(0xFF6B7280)),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                            itemCount: filteredBanks.length,
-                            separatorBuilder: (_, _) => const Divider(
-                              height: 1,
-                              color: Color(0xFFF3F4F6),
-                            ),
-                            itemBuilder: (context, index) {
-                              final bank = filteredBanks[index];
-                              final isSelected =
-                                  bank.id == _selectedBankId;
-
-                              return ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  vertical: 4,
-                                ),
-                                title: Text(
-                                  bank.name,
-                                  style: TextStyle(
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: isSelected
-                                        ? const Color(0xFF4F46E5)
-                                        : const Color(0xFF111827),
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Código: ${bank.code}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF6B7280),
-                                  ),
-                                ),
-                                trailing: isSelected
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Color(0xFF4F46E5),
-                                      )
-                                    : null,
-                                onTap: () {
-                                  setState(
-                                      () => _selectedBankId = bank.id);
-                                  Navigator.pop(context);
-                                },
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => _BankPickerBottomSheet(
+        banks: banks,
+        selectedBankId: _selectedBankId,
+        onBankSelected: (bankId) {
+          setState(() => _selectedBankId = bankId);
+        },
+      ),
     );
   }
 
@@ -1018,6 +889,197 @@ class _PaymentMethodFormScreenState
                   ),
                 ),
         ),
+      ),
+    );
+  }
+}
+
+class _BankPickerBottomSheet extends StatefulWidget {
+  final List<Bank> banks;
+  final String? selectedBankId;
+  final ValueChanged<String> onBankSelected;
+
+  const _BankPickerBottomSheet({
+    required this.banks,
+    required this.selectedBankId,
+    required this.onBankSelected,
+  });
+
+  @override
+  State<_BankPickerBottomSheet> createState() => _BankPickerBottomSheetState();
+}
+
+class _BankPickerBottomSheetState extends State<_BankPickerBottomSheet> {
+  late final TextEditingController _searchController;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _normalize(String text) {
+    return text
+        .trim()
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedQuery = _normalize(_searchQuery);
+    final filteredBanks = widget.banks.where((bank) {
+      if (normalizedQuery.isEmpty) return true;
+      final normalizedName = _normalize(bank.name);
+      final cleanCode = bank.code.trim().toLowerCase();
+      final nameMatch = normalizedName.contains(normalizedQuery);
+      final codeMatch = cleanCode.contains(normalizedQuery);
+      return nameMatch || codeMatch;
+    }).toList();
+
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text(
+              'Selecciona un Banco',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _searchController,
+              autofocus: false,
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre de banco o código...',
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: Color(0xFF9CA3AF),
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.clear,
+                          color: Color(0xFF9CA3AF),
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFF9FAFB),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value);
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: filteredBanks.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No se encontraron bancos',
+                      style: TextStyle(color: Color(0xFF6B7280)),
+                    ),
+                  )
+                : ListView.separated(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    itemCount: filteredBanks.length,
+                    separatorBuilder: (_, _) => const Divider(
+                      height: 1,
+                      color: Color(0xFFF3F4F6),
+                    ),
+                    itemBuilder: (context, index) {
+                      final bank = filteredBanks[index];
+                      final isSelected = bank.id == widget.selectedBankId;
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                        ),
+                        title: Text(
+                          bank.name,
+                          style: TextStyle(
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? const Color(0xFF4F46E5)
+                                : const Color(0xFF111827),
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Código: ${bank.code}',
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF4F46E5),
+                              )
+                            : null,
+                        onTap: () {
+                          widget.onBankSelected(bank.id);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

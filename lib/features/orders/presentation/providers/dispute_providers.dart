@@ -36,7 +36,7 @@ final activeStoreDisputeProvider =
       for (final dispute in disputes) {
         if (dispute.status.isActive) return dispute;
       }
-      return disputes.first;
+      return null;
     },
     loading: () => null,
     error: (err, stack) => null,

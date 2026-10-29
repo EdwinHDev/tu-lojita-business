@@ -13,7 +13,11 @@ final storeEventsProvider =
     FutureProvider.family<List<RankingEventItem>, String>((ref, storeId) async {
   final dio = ref.watch(dioProvider);
   final response = await dio.get('/ranking/stores/$storeId/events?limit=30');
-  final items = response.data['items'] as List<dynamic>? ?? [];
+  final rawData = response.data;
+  final items = (rawData is Map<String, dynamic>
+          ? (rawData['events'] ?? rawData['items'])
+          : rawData) as List<dynamic>? ??
+      [];
   return items
       .map((item) => RankingEventItem.fromJson(item as Map<String, dynamic>))
       .toList();

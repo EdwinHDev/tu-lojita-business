@@ -47,6 +47,7 @@ class SettingsInputField extends StatelessWidget {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
+          selectAllOnFocus: false,
           keyboardType: keyboardType,
           onChanged: onChanged,
           decoration: InputDecoration(

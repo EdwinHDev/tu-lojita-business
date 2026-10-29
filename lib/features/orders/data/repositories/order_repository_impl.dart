@@ -112,7 +112,13 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Order> verifyPayment(String paymentId, String status, String orderId, {String? rejectionReason}) async {
+  Future<Order> verifyPayment(
+    String paymentId,
+    String status,
+    String orderId, {
+    String? rejectionReason,
+    String? receiptImage,
+  }) async {
     try {
       final response = await dio.post(
         '/payment/$paymentId/verify',
@@ -120,6 +126,8 @@ class OrderRepositoryImpl implements OrderRepository {
           'status': status,
           if (rejectionReason != null && rejectionReason.isNotEmpty)
             'rejectionReason': rejectionReason,
+          if (receiptImage != null && receiptImage.isNotEmpty)
+            'receiptImage': receiptImage,
         },
       );
 
@@ -193,5 +201,20 @@ class OrderRepositoryImpl implements OrderRepository {
       throw ServerException(ErrorParser.parse(e));
     }
   }
+
+  @override
+  Future<Order> markPreOrderStockArrived(String orderId) async {
+    try {
+      final response = await dio.patch('/order/$orderId/preorder-stock-arrived');
+      if (response.statusCode == 200) {
+        return Order.fromJson(response.data);
+      } else {
+        throw ServerException('Error al notificar llegada de mercancía');
+      }
+    } catch (e) {
+      throw ServerException(ErrorParser.parse(e));
+    }
+  }
 }
+
 

@@ -1,3 +1,4 @@
+import 'package:tu_lojita_business/features/categories/data/models/subcategory_model.dart';
 import '../../domain/entities/store.dart';
 
 class StoreModel extends Store {
@@ -27,9 +28,21 @@ class StoreModel extends Store {
     super.maxExtensionDays = 7,
     super.maxCreditLimit,
     super.isAgeRestricted = false,
+    super.hasMultipleBranches = false,
+    super.subcategory,
+    super.instagram,
+    super.tiktok,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
+    final subcategory = json['subcategory'] != null
+        ? SubcategoryModel.fromJson(json['subcategory'] as Map<String, dynamic>)
+        : null;
+
+    final isRestrictedByRubro =
+        (subcategory?.isAgeRestricted == true) ||
+        (subcategory?.category?.isAgeRestricted == true);
+
     return StoreModel(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -58,7 +71,11 @@ class StoreModel extends Store {
       allowInstallmentExtensions: json['allowInstallmentExtensions'] as bool? ?? false,
       maxExtensionDays: json['maxExtensionDays'] as int? ?? 7,
       maxCreditLimit: json['maxCreditLimit'] != null ? double.tryParse(json['maxCreditLimit'].toString()) : null,
-      isAgeRestricted: json['isAgeRestricted'] as bool? ?? false,
+      isAgeRestricted: isRestrictedByRubro || (json['isAgeRestricted'] as bool? ?? false),
+      hasMultipleBranches: json['hasMultipleBranches'] == true,
+      subcategory: subcategory,
+      instagram: json['instagram'] as String?,
+      tiktok: json['tiktok'] as String?,
     );
   }
 
@@ -89,6 +106,9 @@ class StoreModel extends Store {
       'maxExtensionDays': maxExtensionDays,
       'maxCreditLimit': maxCreditLimit,
       'isAgeRestricted': isAgeRestricted,
+      'hasMultipleBranches': hasMultipleBranches,
+      'instagram': instagram,
+      'tiktok': tiktok,
     };
   }
 }

@@ -1,3 +1,4 @@
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -54,6 +55,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isLoading = false);
 
     if (registrationToken != null) {
+      final localAuth = ref.read(localAuthDataSourceProvider);
+      await localAuth.savePendingRegistration(
+        registrationToken: registrationToken,
+        email: email,
+      );
+      if (!mounted) return;
       NotificationService.showSuccess(
         context,
         'Te enviamos un código de verificación a tu correo corporativo.',

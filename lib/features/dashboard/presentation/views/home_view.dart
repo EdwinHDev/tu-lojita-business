@@ -11,8 +11,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/providers/das
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_analytics_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
-import 'package:tu_lojita_business/features/ranking/presentation/widgets/store_rank_header_card.dart';
-import 'package:tu_lojita_business/features/ranking/presentation/widgets/daily_missions_card.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 
 class HomeView extends ConsumerWidget {
   const HomeView({super.key});
@@ -37,14 +36,20 @@ class HomeView extends ConsumerWidget {
 
     final currencyFormatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
+    final user = authState is Authenticated ? authState.user : null;
+    final canViewFinancials = user?.canViewFinancialMetrics ?? true;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: () async {
-          await Future.wait([
-            ref.read(dashboardAnalyticsProvider.notifier).loadAnalytics(isRefresh: true),
+          final futures = <Future>[
             ref.read(storesProvider.notifier).loadData(),
-          ]);
+          ];
+          if (canViewFinancials) {
+            futures.add(ref.read(dashboardAnalyticsProvider.notifier).loadAnalytics(isRefresh: true));
+          }
+          await Future.wait(futures);
         },
         color: const Color(0xFF4F46E5),
         child: SingleChildScrollView(
@@ -54,99 +59,107 @@ class HomeView extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. Header Banner
-              _buildHeader(userName, companyLogoUrl),
+              _buildHeader(
+                userName,
+                companyLogoUrl,
+                isCollaborator: user?.isCollaborator ?? false,
+                collaboratorRole: user?.collaboratorRole,
+              ),
               const SizedBox(height: 16),
 
-              // Rango & Retención Comercial Gamificada
-              if (storesState.stores.isNotEmpty) ...[
-                Builder(
-                  builder: (context) {
-                    final activeStoreId = (analyticsState.selectedStoreId != 'all' &&
-                            analyticsState.selectedStoreId.isNotEmpty)
-                        ? analyticsState.selectedStoreId
-                        : storesState.stores.first.id;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        StoreRankHeaderCard(storeId: activeStoreId),
-                        const SizedBox(height: 16),
-                        DailyMissionsCard(storeId: activeStoreId),
-                        const SizedBox(height: 20),
-                      ],
-                    );
+              // Modo Operativo Básico (para colaboradores sin permiso de métricas monetarias)
+              if (!canViewFinancials) ...[
+                _buildBasicOperationalCard(context, ref, authState, storesState.stores),
+                const SizedBox(height: 24),
+              ] else ...[
+                // 2. Multi-temporal & Branch Filters Bar
+                _BranchAndPeriodFilters(
+                  selectedPeriod: analyticsState.selectedPeriod,
+                  selectedStoreId: analyticsState.selectedStoreId,
+                  customStartDate: analyticsState.customStartDate,
+                  customEndDate: analyticsState.customEndDate,
+                  stores: (authState is Authenticated &&
+                          authState.user.isCollaborator &&
+                          !authState.user.hasFullBranchAccess)
+                      ? storesState.stores
+                          .where((s) => authState.user.canAccessBranch(s.id))
+                          .toList()
+                      : storesState.stores,
+                  canSelectAllBranches: !(authState is Authenticated &&
+                      authState.user.isCollaborator &&
+                      !authState.user.hasFullBranchAccess),
+                  onPeriodSelected: (period) {
+                    ref.read(dashboardAnalyticsProvider.notifier).setPeriod(period);
+                  },
+                  onStoreSelected: (storeId) {
+                    ref.read(dashboardAnalyticsProvider.notifier).setStoreId(storeId);
+                  },
+                  onCustomRangeSelected: (start, end) {
+                    ref.read(dashboardAnalyticsProvider.notifier).setCustomDateRange(start, end);
                   },
                 ),
-              ],
+                const SizedBox(height: 24),
 
-              // 2. Multi-temporal & Branch Filters Bar
-              _BranchAndPeriodFilters(
-                selectedPeriod: analyticsState.selectedPeriod,
-                selectedStoreId: analyticsState.selectedStoreId,
-                customStartDate: analyticsState.customStartDate,
-                customEndDate: analyticsState.customEndDate,
-                stores: storesState.stores,
-                onPeriodSelected: (period) {
-                  ref.read(dashboardAnalyticsProvider.notifier).setPeriod(period);
-                },
-                onStoreSelected: (storeId) {
-                  ref.read(dashboardAnalyticsProvider.notifier).setStoreId(storeId);
-                },
-                onCustomRangeSelected: (start, end) {
-                  ref.read(dashboardAnalyticsProvider.notifier).setCustomDateRange(start, end);
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // 3. Analytics KPI Metrics Grid
-              if (analyticsState.status == DashboardAnalyticsStatus.loading &&
-                  analyticsState.analytics == null)
-                _buildLoadingShimmer()
-              else if (analyticsState.status == DashboardAnalyticsStatus.error &&
-                  analyticsState.analytics == null)
-                _buildErrorWidget(ref, analyticsState.errorMessage)
-              else if (analyticsState.analytics != null) ...[
-                _KpiCardsGrid(
-                  kpis: analyticsState.analytics!.kpis,
-                  currencyFormatter: currencyFormatter,
-                ),
-                const SizedBox(height: 28),
-
-                // 4. Sales Trend Timeline Chart
-                if (analyticsState.analytics!.salesChart.isNotEmpty) ...[
-                  _SalesTrendChartSection(
-                    salesChart: analyticsState.analytics!.salesChart,
-                    currencyFormatter: currencyFormatter,
-                    period: analyticsState.selectedPeriod,
-                  ),
-                  const SizedBox(height: 28),
-                ],
-
-                // 5. Branch Office Performance (if more than 1 store or all selected)
-                if (analyticsState.selectedStoreId == 'all' &&
-                    analyticsState.analytics!.storesPerformance.isNotEmpty) ...[
-                  _BranchPerformanceSection(
-                    performanceList: analyticsState.analytics!.storesPerformance,
+                // 3. Analytics KPI Metrics Grid
+                if (analyticsState.status == DashboardAnalyticsStatus.loading &&
+                    analyticsState.analytics == null)
+                  _buildLoadingShimmer()
+                else if (analyticsState.status == DashboardAnalyticsStatus.error &&
+                    analyticsState.analytics == null)
+                  _buildErrorWidget(ref, analyticsState.errorMessage)
+                else if (analyticsState.analytics != null) ...[
+                  _KpiCardsGrid(
+                    kpis: analyticsState.analytics!.kpis,
                     currencyFormatter: currencyFormatter,
                   ),
                   const SizedBox(height: 28),
-                ],
 
-                // 6. Top 5 Best-Selling Products
-                if (analyticsState.analytics!.topProducts.isNotEmpty) ...[
-                  _TopProductsSection(
-                    topProducts: analyticsState.analytics!.topProducts,
-                    currencyFormatter: currencyFormatter,
-                  ),
-                  const SizedBox(height: 28),
-                ],
+                  // 4. Sales Trend Timeline Chart
+                  if (analyticsState.analytics!.salesChart.isNotEmpty) ...[
+                    _SalesTrendChartSection(
+                      salesChart: analyticsState.analytics!.salesChart,
+                      currencyFormatter: currencyFormatter,
+                      period: analyticsState.selectedPeriod,
+                    ),
+                    const SizedBox(height: 28),
+                  ],
 
-                // 7. Payment Methods Distribution
-                if (analyticsState.analytics!.paymentMethods.isNotEmpty) ...[
-                  _PaymentMethodsSection(
-                    paymentMethods: analyticsState.analytics!.paymentMethods,
-                    currencyFormatter: currencyFormatter,
-                  ),
-                  const SizedBox(height: 28),
+                  // 5. Branch Office Performance (if more than 1 store or all selected)
+                  if (analyticsState.selectedStoreId == 'all' &&
+                      analyticsState.analytics!.storesPerformance.isNotEmpty) ...[
+                    _BranchPerformanceSection(
+                      performanceList: analyticsState.analytics!.storesPerformance,
+                      currencyFormatter: currencyFormatter,
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // 6. Top 5 Best-Selling Products
+                  if (analyticsState.analytics!.topProducts.isNotEmpty) ...[
+                    _TopProductsSection(
+                      topProducts: analyticsState.analytics!.topProducts,
+                      currencyFormatter: currencyFormatter,
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // 6.1 Top 5 Artículos Más Deseados (Wishlist / Favoritos)
+                  if (analyticsState.analytics!.topDesiredProducts.isNotEmpty) ...[
+                    _TopDesiredProductsSection(
+                      desiredProducts: analyticsState.analytics!.topDesiredProducts,
+                      currencyFormatter: currencyFormatter,
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // 7. Payment Methods Distribution
+                  if (analyticsState.analytics!.paymentMethods.isNotEmpty) ...[
+                    _PaymentMethodsSection(
+                      paymentMethods: analyticsState.analytics!.paymentMethods,
+                      currencyFormatter: currencyFormatter,
+                    ),
+                    const SizedBox(height: 28),
+                  ],
                 ],
               ],
 
@@ -160,7 +173,12 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(String userName, String companyLogoUrl) {
+  Widget _buildHeader(
+    String userName,
+    String companyLogoUrl, {
+    bool isCollaborator = false,
+    String? collaboratorRole,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -179,7 +197,11 @@ class HomeView extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Rendimiento y control de ventas en tiempo real.',
+                isCollaborator
+                    ? (collaboratorRole != null
+                        ? 'Rol: $collaboratorRole • Panel Operativo'
+                        : 'Panel Operativo en Sucursales')
+                    : 'Rendimiento y control de ventas en tiempo real.',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade600,
@@ -203,6 +225,126 @@ class HomeView extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildBasicOperationalCard(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState authState,
+    List<Store> stores,
+  ) {
+    final user = authState is Authenticated ? authState.user : null;
+    final accessibleCount = (user != null && user.isCollaborator && !user.hasFullBranchAccess)
+        ? stores.where((s) => user.canAccessBranch(s.id)).length
+        : stores.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedStore01,
+                  color: Color(0xFF4F46E5),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Panel Operativo de Sucursales',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tienes $accessibleCount sucursal(es) autorizada(s) para operar.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => ref.read(dashboardIndexProvider.notifier).state = 1,
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedStore01,
+                    color: Color(0xFF4F46E5),
+                    size: 18,
+                  ),
+                  label: const Text('Ver Tiendas'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4F46E5),
+                    side: const BorderSide(color: Color(0xFF4F46E5)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go('/dashboard/notifications'),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedNotification01,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  label: const Text('Alertas'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -276,6 +418,7 @@ class _BranchAndPeriodFilters extends StatelessWidget {
   final DateTime? customStartDate;
   final DateTime? customEndDate;
   final List<dynamic> stores;
+  final bool canSelectAllBranches;
   final ValueChanged<String> onPeriodSelected;
   final ValueChanged<String> onStoreSelected;
   final void Function(DateTime start, DateTime end) onCustomRangeSelected;
@@ -286,18 +429,35 @@ class _BranchAndPeriodFilters extends StatelessWidget {
     required this.customStartDate,
     required this.customEndDate,
     required this.stores,
+    this.canSelectAllBranches = true,
     required this.onPeriodSelected,
     required this.onStoreSelected,
     required this.onCustomRangeSelected,
   });
 
   String get _selectedStoreLabel {
-    if (selectedStoreId == 'all') return 'Todas las sucursales';
+    final multipleBranches = stores.length > 1;
+    if (selectedStoreId == 'all') {
+      if (!canSelectAllBranches && stores.isNotEmpty) {
+        final first = stores.first;
+        return (first is Store && first.shouldShowBranch)
+            ? first.combinedDisplayName
+            : first.name.toString();
+      }
+      return multipleBranches ? 'Todas las sucursales' : 'Consolidado';
+    }
     final store = stores.where((s) => s.id == selectedStoreId).firstOrNull;
     if (store != null) {
-      return store.branchName.isNotEmpty ? '${store.name} (${store.branchName})' : store.name;
+      if (store is Store) {
+        return store.shouldShowBranch ? store.combinedDisplayName : store.name;
+      }
+      final bool hasMultiple = (store.hasMultipleBranches == true) || multipleBranches;
+      final bool hasBranch = store.branchName != null && store.branchName.toString().trim().isNotEmpty;
+      return (hasMultiple && hasBranch)
+          ? '${store.name} (Sucursal ${store.branchName.toString().trim()})'
+          : store.name.toString();
     }
-    return 'Sucursal seleccionada';
+    return multipleBranches ? 'Sucursal seleccionada' : 'Tienda seleccionada';
   }
 
   @override
@@ -502,6 +662,7 @@ class _BranchAndPeriodFilters extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
+        final multipleBranches = stores.length > 1;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
@@ -512,9 +673,9 @@ class _BranchAndPeriodFilters extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Filtrar por Sucursal',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    Text(
+                      multipleBranches ? 'Filtrar por Sucursal' : 'Seleccionar Tienda',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
@@ -523,28 +684,40 @@ class _BranchAndPeriodFilters extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFEEF2FF),
-                    child: HugeIcon(icon: HugeIcons.strokeRoundedStore01, color: Color(0xFF4F46E5)),
+                if (canSelectAllBranches) ...[
+                  ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFEEF2FF),
+                      child: HugeIcon(icon: HugeIcons.strokeRoundedStore01, color: Color(0xFF4F46E5)),
+                    ),
+                    title: Text(
+                      multipleBranches ? 'Todas las sucursales' : 'Mi Tienda',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      multipleBranches ? 'Consolidado de toda la empresa' : 'Resumen general',
+                    ),
+                    trailing: selectedStoreId == 'all'
+                        ? const Icon(Icons.check_circle, color: Color(0xFF4F46E5))
+                        : null,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onTap: () {
+                      onStoreSelected('all');
+                      Navigator.pop(ctx);
+                    },
                   ),
-                  title: const Text(
-                    'Todas las sucursales',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: const Text('Consolidado de toda la empresa'),
-                  trailing: selectedStoreId == 'all'
-                      ? const Icon(Icons.check_circle, color: Color(0xFF4F46E5))
-                      : null,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  onTap: () {
-                    onStoreSelected('all');
-                    Navigator.pop(ctx);
-                  },
-                ),
-                const Divider(),
+                  const Divider(),
+                ],
                 ...stores.map((store) {
                   final isSelected = selectedStoreId == store.id;
+                  final bool showBranch = (store is Store)
+                      ? store.shouldShowBranch
+                      : ((store.hasMultipleBranches == true || multipleBranches) &&
+                          store.branchName != null &&
+                          store.branchName.toString().trim().isNotEmpty);
+                  final String? branchSubtitle =
+                      showBranch ? 'Sucursal ${store.branchName.toString().trim()}' : null;
+
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: const Color(0xFFF1F5F9),
@@ -557,7 +730,7 @@ class _BranchAndPeriodFilters extends StatelessWidget {
                       store.name,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    subtitle: Text(store.branchName.isNotEmpty ? store.branchName : 'Sede principal'),
+                    subtitle: branchSubtitle != null ? Text(branchSubtitle) : null,
                     trailing: isSelected
                         ? const Icon(Icons.check_circle, color: Color(0xFF4F46E5))
                         : null,
@@ -595,88 +768,95 @@ class _KpiCardsGrid extends StatelessWidget {
     final growthBadge = salesGrowth >= 0 ? '+${salesGrowth.toStringAsFixed(1)}%' : '${salesGrowth.toStringAsFixed(1)}%';
     final isPositive = salesGrowth >= 0;
 
-    return GridView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.14,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      children: [
-        // 1. Ventas Totales
-        _MetricCard(
-          title: 'Ventas Totales',
-          value: currencyFormatter.format(kpis.totalSales),
-          icon: HugeIcons.strokeRoundedMoney01,
-          badgeText: growthBadge,
-          badgeColor: isPositive ? const Color(0xFF047857) : const Color(0xFFDC2626),
-          badgeBgColor: isPositive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-          accentColor: const Color(0xFF047857),
-          accentBgColor: const Color(0xFFECFDF5),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double aspectRatio = constraints.maxWidth < 360
+            ? 1.0
+            : (constraints.maxWidth > 420 ? 1.25 : 1.14);
+        return GridView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: aspectRatio.clamp(0.95, 1.4),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          children: [
+            // 1. Ventas Totales
+            _MetricCard(
+              title: 'Ventas Totales',
+              value: currencyFormatter.format(kpis.totalSales),
+              icon: HugeIcons.strokeRoundedMoney01,
+              badgeText: growthBadge,
+              badgeColor: isPositive ? const Color(0xFF047857) : const Color(0xFFDC2626),
+              badgeBgColor: isPositive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+              accentColor: const Color(0xFF047857),
+              accentBgColor: const Color(0xFFECFDF5),
+            ),
 
-        // 2. Ingresos Recaudados (Bancos)
-        _MetricCard(
-          title: 'Recaudado en Bancos',
-          value: currencyFormatter.format(kpis.totalCollected),
-          icon: HugeIcons.strokeRoundedBank,
-          badgeText: 'Cobrado',
-          badgeColor: const Color(0xFF1D4ED8),
-          badgeBgColor: const Color(0xFFEFF6FF),
-          accentColor: const Color(0xFF1D4ED8),
-          accentBgColor: const Color(0xFFEFF6FF),
-        ),
+            // 2. Ingresos Recaudados (Bancos)
+            _MetricCard(
+              title: 'Recaudado en Bancos',
+              value: currencyFormatter.format(kpis.totalCollected),
+              icon: HugeIcons.strokeRoundedBank,
+              badgeText: 'Cobrado',
+              badgeColor: const Color(0xFF1D4ED8),
+              badgeBgColor: const Color(0xFFEFF6FF),
+              accentColor: const Color(0xFF1D4ED8),
+              accentBgColor: const Color(0xFFEFF6FF),
+            ),
 
-        // 3. Saldo por Cobrar (Cuotas)
-        _MetricCard(
-          title: 'Por Cobrar (Cuotas)',
-          value: currencyFormatter.format(kpis.accountsReceivable),
-          icon: HugeIcons.strokeRoundedHourglass,
-          badgeText: 'Cartera activa',
-          badgeColor: const Color(0xFFC2410C),
-          badgeBgColor: const Color(0xFFFFF7ED),
-          accentColor: const Color(0xFFC2410C),
-          accentBgColor: const Color(0xFFFFF7ED),
-        ),
+            // 3. Saldo por Cobrar (Cuotas)
+            _MetricCard(
+              title: 'Por Cobrar (Cuotas)',
+              value: currencyFormatter.format(kpis.accountsReceivable),
+              icon: HugeIcons.strokeRoundedHourglass,
+              badgeText: 'Cartera activa',
+              badgeColor: const Color(0xFFC2410C),
+              badgeBgColor: const Color(0xFFFFF7ED),
+              accentColor: const Color(0xFFC2410C),
+              accentBgColor: const Color(0xFFFFF7ED),
+            ),
 
-        // 4. Total de Órdenes
-        _MetricCard(
-          title: 'Total Pedidos',
-          value: '${kpis.totalOrders}',
-          icon: HugeIcons.strokeRoundedPackage,
-          badgeText: '${kpis.completedOrders} pagadas',
-          badgeColor: const Color(0xFF7E22CE),
-          badgeBgColor: const Color(0xFFFAF5FF),
-          accentColor: const Color(0xFF7E22CE),
-          accentBgColor: const Color(0xFFFAF5FF),
-        ),
+            // 4. Total de Órdenes
+            _MetricCard(
+              title: 'Total Pedidos',
+              value: '${kpis.totalOrders}',
+              icon: HugeIcons.strokeRoundedPackage,
+              badgeText: '${kpis.completedOrders} pagadas',
+              badgeColor: const Color(0xFF7E22CE),
+              badgeBgColor: const Color(0xFFFAF5FF),
+              accentColor: const Color(0xFF7E22CE),
+              accentBgColor: const Color(0xFFFAF5FF),
+            ),
 
-        // 5. Ticket Promedio
-        _MetricCard(
-          title: 'Ticket Promedio',
-          value: currencyFormatter.format(kpis.averageTicket),
-          icon: HugeIcons.strokeRoundedTarget01,
-          badgeText: 'Por pedido',
-          badgeColor: const Color(0xFF0F766E),
-          badgeBgColor: const Color(0xFFF0FDFA),
-          accentColor: const Color(0xFF0F766E),
-          accentBgColor: const Color(0xFFF0FDFA),
-        ),
+            // 5. Ticket Promedio
+            _MetricCard(
+              title: 'Ticket Promedio',
+              value: currencyFormatter.format(kpis.averageTicket),
+              icon: HugeIcons.strokeRoundedTarget01,
+              badgeText: 'Por pedido',
+              badgeColor: const Color(0xFF0F766E),
+              badgeBgColor: const Color(0xFFF0FDFA),
+              accentColor: const Color(0xFF0F766E),
+              accentBgColor: const Color(0xFFF0FDFA),
+            ),
 
-        // 6. Modalidad en Cuotas
-        _MetricCard(
-          title: '% en Cuotas',
-          value: '${kpis.installmentRatio.installmentPercentage.toStringAsFixed(0)}%',
-          icon: HugeIcons.strokeRoundedCreditCard,
-          badgeText: '${kpis.installmentRatio.singlePaymentPercentage.toStringAsFixed(0)}% único',
-          badgeColor: const Color(0xFF4338CA),
-          badgeBgColor: const Color(0xFFEEF2FF),
-          accentColor: const Color(0xFF4338CA),
-          accentBgColor: const Color(0xFFEEF2FF),
-        ),
-      ],
+            // 6. Modalidad en Cuotas
+            _MetricCard(
+              title: '% en Cuotas',
+              value: '${kpis.installmentRatio.installmentPercentage.toStringAsFixed(0)}%',
+              icon: HugeIcons.strokeRoundedCreditCard,
+              badgeText: '${kpis.installmentRatio.singlePaymentPercentage.toStringAsFixed(0)}% único',
+              badgeColor: const Color(0xFF4338CA),
+              badgeBgColor: const Color(0xFFEEF2FF),
+              accentColor: const Color(0xFF4338CA),
+              accentBgColor: const Color(0xFFEEF2FF),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1169,6 +1349,230 @@ class _TopProductsSection extends StatelessWidget {
   }
 }
 
+/// TOP 5 ARTÍCULOS MÁS DESEADOS (WISHLIST / FAVORITOS)
+/// ---------------------------------------------------------
+class _TopDesiredProductsSection extends StatelessWidget {
+  final List<TopDesiredProduct> desiredProducts;
+  final NumberFormat currencyFormatter;
+
+  const _TopDesiredProductsSection({
+    required this.desiredProducts,
+    required this.currencyFormatter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Artículos Más Deseados',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.favorite, size: 12, color: Color(0xFFEF4444)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Demanda',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: desiredProducts.asMap().entries.map((entry) {
+              final index = entry.key;
+              final prod = entry.value;
+              final isLast = index == desiredProducts.length - 1;
+
+              final imageUrl = prod.mainImage != null && prod.mainImage!.isNotEmpty
+                  ? (prod.mainImage!.startsWith('http')
+                      ? prod.mainImage!
+                      : '${Envs.apiBaseUrlImages}/${prod.mainImage!.startsWith('/') ? prod.mainImage!.substring(1) : prod.mainImage}')
+                  : '';
+
+              return Container(
+                padding: EdgeInsets.only(
+                  bottom: isLast ? 0 : 12.0,
+                  top: index == 0 ? 0 : 12.0,
+                ),
+                decoration: BoxDecoration(
+                  border: isLast
+                      ? null
+                      : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                ),
+                child: Row(
+                  children: [
+                    // Rank badge
+                    Container(
+                      width: 24,
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: index == 0
+                            ? const Color(0xFFFEE2E2)
+                            : const Color(0xFFF1F5F9),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '#${index + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: index == 0
+                              ? const Color(0xFFDC2626)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Thumbnail
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        image: imageUrl.isNotEmpty
+                            ? DecorationImage(
+                                image: NetworkImage(imageUrl),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: imageUrl.isEmpty
+                          ? const HugeIcon(
+                              icon: HugeIcons.strokeRoundedPackage,
+                              color: Color(0xFF94A3B8),
+                              size: 20,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Title + stock warning if low
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            prod.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                currencyFormatter.format(prod.price),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF4F46E5),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (prod.isOutOfStock) ...[
+                                const SizedBox(width: 6),
+                                const Text(
+                                  '• Agotado',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFFDC2626),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Favorites Count Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.favorite,
+                            size: 13,
+                            color: Color(0xFFEF4444),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${prod.favoritesCount}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// ---------------------------------------------------------
 /// DISTRIBUCIÓN POR MÉTODO DE PAGO
 /// ---------------------------------------------------------
@@ -1299,41 +1703,89 @@ class _QuickActionsPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        GridView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 2.1,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          children: [
-            _QuickActionCard(
-              title: 'Nueva Sucursal',
-              subtitle: 'Crear sedes físicas/virtuales',
-              icon: HugeIcons.strokeRoundedAdd01,
-              onTap: () => context.go('/dashboard/stores/create'),
-            ),
-            _QuickActionCard(
-              title: 'Notificaciones',
-              subtitle: 'Revisar alertas activas',
-              icon: HugeIcons.strokeRoundedNotification01,
-              onTap: () => context.go('/dashboard/notifications'),
-            ),
-            _QuickActionCard(
-              title: 'Ajustes Empresa',
-              subtitle: 'Editar detalles generales',
-              icon: HugeIcons.strokeRoundedSettings01,
-              onTap: () => context.go('/dashboard/settings/company'),
-            ),
-            _QuickActionCard(
-              title: 'Ajustes de Perfil',
-              subtitle: 'Gestionar mi cuenta',
-              icon: HugeIcons.strokeRoundedUser02,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 2,
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final double quickActionsRatio = constraints.maxWidth < 360 ? 1.8 : 2.1;
+            final authState = ref.watch(authProvider);
+            final user = authState is Authenticated ? authState.user : null;
+            final isCollaborator = user?.isCollaborator ?? false;
+
+            return GridView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: quickActionsRatio,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              children: isCollaborator
+                  ? [
+                      _QuickActionCard(
+                        title: 'Mis Tiendas',
+                        subtitle: 'Gestionar pedidos y stock',
+                        icon: HugeIcons.strokeRoundedStore01,
+                        onTap: () =>
+                            ref.read(dashboardIndexProvider.notifier).state = 1,
+                      ),
+                      _QuickActionCard(
+                        title: 'Notificaciones',
+                        subtitle: 'Alertas y avisos activos',
+                        icon: HugeIcons.strokeRoundedNotification01,
+                        onTap: () => context.go('/dashboard/notifications'),
+                      ),
+                      _QuickActionCard(
+                        title: user?.canManageTeam == true
+                            ? 'Equipo y Roles'
+                            : 'Mi Perfil',
+                        subtitle: user?.canManageTeam == true
+                            ? 'Gestionar personal'
+                            : 'Credenciales y acceso',
+                        icon: user?.canManageTeam == true
+                            ? HugeIcons.strokeRoundedUserGroup
+                            : HugeIcons.strokeRoundedUser,
+                        onTap: () => user?.canManageTeam == true
+                            ? context.push('/dashboard/settings/team')
+                            : context.push(
+                                '/dashboard/settings/collaborator-profile'),
+                      ),
+                      _QuickActionCard(
+                        title: 'Mi Cuenta',
+                        subtitle: 'Sesión y ajustes',
+                        icon: HugeIcons.strokeRoundedUser02,
+                        onTap: () =>
+                            ref.read(dashboardIndexProvider.notifier).state = 2,
+                      ),
+                    ]
+                  : [
+                      _QuickActionCard(
+                        title: 'Nueva Sucursal',
+                        subtitle: 'Crear sedes físicas/virtuales',
+                        icon: HugeIcons.strokeRoundedAdd01,
+                        onTap: () => context.go('/dashboard/stores/create'),
+                      ),
+                      _QuickActionCard(
+                        title: 'Notificaciones',
+                        subtitle: 'Revisar alertas activas',
+                        icon: HugeIcons.strokeRoundedNotification01,
+                        onTap: () => context.go('/dashboard/notifications'),
+                      ),
+                      _QuickActionCard(
+                        title: 'Ajustes Empresa',
+                        subtitle: 'Editar detalles generales',
+                        icon: HugeIcons.strokeRoundedSettings01,
+                        onTap: () => context.go('/dashboard/settings/company'),
+                      ),
+                      _QuickActionCard(
+                        title: 'Ajustes de Perfil',
+                        subtitle: 'Gestionar mi cuenta',
+                        icon: HugeIcons.strokeRoundedUser02,
+                        onTap: () =>
+                            ref.read(dashboardIndexProvider.notifier).state = 2,
+                      ),
+                    ],
+            );
+          },
         ),
       ],
     );

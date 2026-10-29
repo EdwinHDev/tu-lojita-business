@@ -10,8 +10,20 @@ class AppTimezone {
 }
 
 extension DateTimeFormatting on DateTime {
-  /// Retorna la fecha ajustada a la zona horaria elegida (UTC-4 por ahora).
-  DateTime get local => toUtc().add(AppTimezone.offset);
+  DateTime get local {
+    if (!isUtc) return this;
+    final venezuelaUtc = toUtc().add(AppTimezone.offset);
+    return DateTime(
+      venezuelaUtc.year,
+      venezuelaUtc.month,
+      venezuelaUtc.day,
+      venezuelaUtc.hour,
+      venezuelaUtc.minute,
+      venezuelaUtc.second,
+      venezuelaUtc.millisecond,
+      venezuelaUtc.microsecond,
+    );
+  }
 
   /// Retorna un formato amigable largo: "21 de mayo de 2026"
   String toFriendlyDate() {

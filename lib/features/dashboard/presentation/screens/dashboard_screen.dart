@@ -30,32 +30,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           : AppBar(
               title: const Text('Dashboard'),
               actions: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ref.watch(notificationsProvider).maybeWhen(
-                    data: (notifications) {
-                      final unreadCount = notifications.where((n) => !n.isRead).length;
-                      return Badge(
-                        label: Text(unreadCount.toString()),
+                ref.watch(notificationsProvider).maybeWhen(
+                  data: (notifications) {
+                    final unreadCount = notifications.where((n) => !n.isRead).length;
+                    return IconButton(
+                      icon: Badge(
                         isLabelVisible: unreadCount > 0,
-                        child: IconButton(
-                          icon: const HugeIcon(
-                            icon: HugeIcons.strokeRoundedNotification01,
-                            color: Colors.indigo,
-                          ),
-                          onPressed: () => context.go('/dashboard/notifications'),
+                        label: Text('$unreadCount'),
+                        backgroundColor: Colors.redAccent,
+                        child: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedNotification01,
+                          color: Colors.indigo,
+                          size: 24,
                         ),
-                      );
-                    },
-                    orElse: () => IconButton(
-                      icon: const HugeIcon(
-                        icon: HugeIcons.strokeRoundedNotification01,
-                        color: Colors.indigo,
                       ),
                       onPressed: () => context.go('/dashboard/notifications'),
+                    );
+                  },
+                  orElse: () => IconButton(
+                    icon: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedNotification01,
+                      color: Colors.indigo,
+                      size: 24,
                     ),
+                    onPressed: () => context.go('/dashboard/notifications'),
                   ),
                 ),
+                const SizedBox(width: 8),
               ],
             ),
       body: SafeArea(child: IndexedStack(index: currentIndex, children: _views)),
@@ -97,14 +98,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const NavigationDestination(
             icon: HugeIcon(
-              icon: HugeIcons.strokeRoundedSettings01,
+              icon: HugeIcons.strokeRoundedUserAccount,
               color: Colors.grey,
             ),
             selectedIcon: HugeIcon(
-              icon: HugeIcons.strokeRoundedSettings01,
+              icon: HugeIcons.strokeRoundedUserAccount,
               color: Colors.indigo,
             ),
-            label: 'Configuración',
+            label: 'Mi Cuenta',
           ),
         ],
       ),

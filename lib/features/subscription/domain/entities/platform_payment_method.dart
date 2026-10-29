@@ -28,4 +28,14 @@ class PlatformPaymentMethod {
       isActive: json['isActive'] ?? true,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlatformPaymentMethod &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

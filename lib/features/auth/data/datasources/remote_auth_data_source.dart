@@ -35,6 +35,33 @@ abstract class RemoteAuthDataSource {
   Future<Map<String, dynamic>> resendRegistrationOtp({
     required String registrationToken,
   });
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+  Future<Map<String, dynamic>> requestForgotPasswordOtp({
+    required String email,
+    String appOrigin = 'BUSINESS',
+  });
+  Future<Map<String, dynamic>> verifyForgotPasswordOtp({
+    required String recoveryToken,
+    required String otp,
+  });
+  Future<Map<String, dynamic>> resendForgotPasswordOtp({
+    required String recoveryToken,
+  });
+  Future<void> resetPasswordWithToken({
+    required String resetSessionToken,
+    required String newPassword,
+  });
+  Future<Map<String, dynamic>> loginWithCollaboratorCredentials(
+    String accessId,
+    String password,
+  );
+  Future<void> changeCollaboratorPassword({
+    required String currentPassword,
+    required String newPassword,
+  });
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
@@ -125,6 +152,26 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
 
       return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        final data = e.response?.data;
+        if (data is Map &&
+            (data['code'] == 'ACCOUNT_SUSPENDED' ||
+                data['code'] == 'ACCOUNT_BANNED' ||
+                (data['message']?.toString().toLowerCase().contains('suspendida') ?? false))) {
+          final isPermanent = data['isPermanent'] == true ||
+              data['code'] == 'ACCOUNT_BANNED' ||
+              data['suspendedUntil'] == null;
+          throw AccountSuspendedException(
+            message: data['message']?.toString() ??
+                (isPermanent
+                    ? 'Tu cuenta comercial ha sido suspendida permanentemente.'
+                    : 'Tu cuenta comercial está suspendida temporalmente.'),
+            suspendedUntil: data['suspendedUntil']?.toString(),
+            reason: data['reason']?.toString(),
+            isPermanent: isPermanent,
+          );
+        }
+      }
       throw BackendAuthenticationException(ErrorParser.parse(e));
     }
   }
@@ -205,6 +252,26 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         throw BackendAuthenticationException('Las credenciales ingresadas no son válidas.');
+      }
+      if (e.response?.statusCode == 403) {
+        final data = e.response?.data;
+        if (data is Map &&
+            (data['code'] == 'ACCOUNT_SUSPENDED' ||
+                data['code'] == 'ACCOUNT_BANNED' ||
+                (data['message']?.toString().toLowerCase().contains('suspendida') ?? false))) {
+          final isPermanent = data['isPermanent'] == true ||
+              data['code'] == 'ACCOUNT_BANNED' ||
+              data['suspendedUntil'] == null;
+          throw AccountSuspendedException(
+            message: data['message']?.toString() ??
+                (isPermanent
+                    ? 'Tu cuenta comercial ha sido suspendida permanentemente.'
+                    : 'Tu cuenta comercial está suspendida temporalmente.'),
+            suspendedUntil: data['suspendedUntil']?.toString(),
+            reason: data['reason']?.toString(),
+            isPermanent: isPermanent,
+          );
+        }
       }
       throw BackendAuthenticationException(ErrorParser.parse(e));
     } catch (e) {
@@ -309,6 +376,164 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
     } on DioException catch (e) {
       throw BackendAuthenticationException(ErrorParser.parse(e));
     } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.patch(
+        '/auth/change-password',
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      );
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestForgotPasswordOtp({
+    required String email,
+    String appOrigin = 'BUSINESS',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/forgot-password/request-otp',
+        data: {
+          'email': email.trim(),
+          'appOrigin': appOrigin,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> verifyForgotPasswordOtp({
+    required String recoveryToken,
+    required String otp,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/forgot-password/verify-otp',
+        data: {
+          'recoveryToken': recoveryToken,
+          'otp': otp.trim(),
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendForgotPasswordOtp({
+    required String recoveryToken,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/forgot-password/resend-otp',
+        data: {
+          'recoveryToken': recoveryToken,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> resetPasswordWithToken({
+    required String resetSessionToken,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/forgot-password/reset-password',
+        data: {
+          'resetSessionToken': resetSessionToken,
+          'newPassword': newPassword,
+        },
+      );
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw AuthException('Error al restablecer la contraseña.');
+      }
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> loginWithCollaboratorCredentials(
+    String accessId,
+    String password,
+  ) async {
+    try {
+      final response = await _dio.post(
+        '/auth/collaborator-login',
+        data: {
+          'accessId': accessId.trim(),
+          'password': password,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        throw BackendAuthenticationException('Credenciales inválidas. Revisa tu ID de 8 dígitos y contraseña.');
+      }
+      if (e.response?.statusCode == 403) {
+        throw BackendAuthenticationException('Tu cuenta de colaborador ha sido desactivada por la empresa.');
+      }
+      if (e.response?.statusCode == 429) {
+        throw BackendAuthenticationException(
+          'Demasiados intentos fallidos. Tu acceso está temporalmente bloqueado por 15 minutos.',
+        );
+      }
+      throw AuthException(ErrorParser.parse(e));
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> changeCollaboratorPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.post(
+        '/auth/collaborator-change-password',
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      );
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      if (e is AuthException) rethrow;
       throw AuthException(e.toString());
     }
   }

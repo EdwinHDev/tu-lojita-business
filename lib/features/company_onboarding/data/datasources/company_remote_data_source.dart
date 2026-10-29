@@ -6,6 +6,9 @@ abstract class CompanyRemoteDataSource {
     required String name,
     required String rif,
     required String logo,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   });
   Future<void> updateStoreBranchName(String storeId, String branchName);
   Future<void> updateCompany({
@@ -26,6 +29,9 @@ class CompanyRemoteDataSourceImpl implements CompanyRemoteDataSource {
     required String name,
     required String rif,
     required String logo,
+    String? subcategoryId,
+    String? phone,
+    String? description,
   }) async {
     try {
       final response = await _dio.post(
@@ -34,6 +40,12 @@ class CompanyRemoteDataSourceImpl implements CompanyRemoteDataSource {
           'name': name,
           'rif': rif,
           'logo': logo,
+          // ignore: use_null_aware_elements
+          if (subcategoryId != null) 'subcategoryId': subcategoryId,
+          // ignore: use_null_aware_elements
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          // ignore: use_null_aware_elements
+          if (description != null && description.isNotEmpty) 'description': description,
         },
       );
       

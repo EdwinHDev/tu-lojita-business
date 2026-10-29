@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/utils/safe_text_controller.dart';
 import '../../providers/store_settings_notifier.dart';
 import '../../providers/store_settings_state.dart';
 import '../../../domain/entities/store.dart';
@@ -56,7 +57,7 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
 
     if (store != null && !_isCreditLimitControllerInitialized) {
       final initialVal = state.maxCreditLimit;
-      _creditLimitController.text = initialVal != null ? initialVal.toStringAsFixed(0) : '';
+      _creditLimitController.safeSetText(initialVal != null ? initialVal.toStringAsFixed(0) : '');
       _isCreditLimitControllerInitialized = true;
     }
 
@@ -809,7 +810,7 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
                 onChanged: (val) {
                   if (val) {
                     ref.read(storeSettingsProvider.notifier).updateMaxCreditLimit(500.0);
-                    _creditLimitController.text = '500';
+                    _creditLimitController.safeSetText('500');
                   } else {
                     ref.read(storeSettingsProvider.notifier).updateMaxCreditLimit(null);
                     _creditLimitController.clear();
@@ -828,6 +829,12 @@ class _PartialPaymentsSettingsScreenState extends ConsumerState<PartialPaymentsS
             TextField(
               controller: _creditLimitController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              selectAllOnFocus: false,
+              onTap: () {
+                if (_creditLimitController.selection.baseOffset != _creditLimitController.selection.extentOffset) {
+                  _creditLimitController.collapseToEnd();
+                }
+              },
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF111827)),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.attach_money, color: Color(0xFF4F46E5)),

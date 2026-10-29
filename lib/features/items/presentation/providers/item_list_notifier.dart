@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import '../../domain/repositories/item_repository.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import 'item_list_state.dart';
@@ -6,7 +8,16 @@ import 'item_list_state.dart';
 class ItemListNotifier extends Notifier<ItemListState> {
   @override
   ItemListState build() {
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next is! Authenticated) {
+        reset();
+      }
+    });
     return const ItemListState();
+  }
+
+  void reset() {
+    state = const ItemListState();
   }
 
   ItemRepository get _repository => ref.read(itemRepositoryProvider);

@@ -38,7 +38,8 @@ class OrderCard extends StatelessWidget {
         order.user?['profileImage']?.toString();
 
     final firstItem = order.orderItems.isNotEmpty ? order.orderItems.first : null;
-    final rawImagePath = firstItem?.item?.mainImage ??
+    final rawImagePath = firstItem?.resolvedThumbnail ??
+        firstItem?.item?.mainImage ??
         (firstItem?.item?.images.isNotEmpty == true
             ? firstItem!.item!.images.first
             : '');

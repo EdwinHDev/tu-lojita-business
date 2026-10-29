@@ -23,6 +23,13 @@ class ItemModel extends Item {
     super.lateFeePercentage = 0,
     super.isActive = true,
     super.isAgeRestricted = false,
+    super.hasVariants = false,
+    super.bookingType,
+    super.slotConfig,
+    super.preorderConfig,
+    super.favoritesCount = 0,
+    super.variantAxes = const [],
+    super.variants = const [],
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -42,6 +49,9 @@ class ItemModel extends Item {
       trackInventory: json['trackInventory'] == true,
       stockQuantity: json['stockQuantity'] != null ? _parseDouble(json['stockQuantity']) : null,
       requiresBooking: json['requiresBooking'] == true,
+      bookingType: json['bookingType']?.toString(),
+      slotConfig: _parseSlotConfig(json['slotConfig']),
+      preorderConfig: json['preorderConfig'] is Map ? Map<String, dynamic>.from(json['preorderConfig']) : null,
       attributes: _parseAttributes(json['attributes']),
       categoryId: _parseCategoryId(json['category']),
       customizationGroups: _extractCustomizationGroups(json),
@@ -49,7 +59,39 @@ class ItemModel extends Item {
       lateFeePercentage: _parseDouble(json['lateFeePercentage']),
       isActive: json['isActive'] ?? true,
       isAgeRestricted: json['isAgeRestricted'] == true,
+      hasVariants: json['hasVariants'] == true,
+      favoritesCount: json['favoritesCount'] is num
+          ? (json['favoritesCount'] as num).toInt()
+          : (int.tryParse(json['favoritesCount']?.toString() ?? '0') ?? 0),
+      variantAxes: _parseVariantAxes(json['variantAxes']),
+      variants: _parseItemVariants(json['variants']),
     );
+  }
+
+  static List<VariantAxis> _parseVariantAxes(dynamic value) {
+    if (value == null) return const [];
+    if (value is List) {
+      return value.map((a) {
+        if (a is Map) {
+          return VariantAxis.fromJson(Map<String, dynamic>.from(a));
+        }
+        return const VariantAxis(name: '', values: []);
+      }).toList();
+    }
+    return const [];
+  }
+
+  static List<ItemVariant> _parseItemVariants(dynamic value) {
+    if (value == null) return const [];
+    if (value is List) {
+      return value.map((v) {
+        if (v is Map) {
+          return ItemVariant.fromJson(Map<String, dynamic>.from(v));
+        }
+        return const ItemVariant();
+      }).toList();
+    }
+    return const [];
   }
 
   static double _parseDouble(dynamic value) {
@@ -77,6 +119,20 @@ class ItemModel extends Item {
       case 'SERVICE': return ItemType.service;
       default: return ItemType.product;
     }
+  }
+
+  static Map<String, dynamic>? _parseSlotConfig(dynamic value) {
+    if (value == null || value is! Map) return null;
+    final map = Map<String, dynamic>.from(value);
+    if (map['slots'] is List) {
+      map['slots'] = (map['slots'] as List)
+          .whereType<Map>()
+          .map((s) => Map<String, dynamic>.from(s))
+          .toList();
+    } else {
+      map['slots'] = <Map<String, dynamic>>[];
+    }
+    return map;
   }
 
   static Map<String, dynamic>? _parseAttributes(dynamic value) {

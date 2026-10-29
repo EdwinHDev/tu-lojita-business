@@ -12,6 +12,8 @@ class SubscriptionState {
   final CompanySubscription? subscription;
   final List<PlatformPaymentMethod> paymentMethods;
   final bool isReportingPayment;
+  final bool isPaymentRejected;
+  final String? lastRejectionReason;
 
   const SubscriptionState({
     this.isLoading = false,
@@ -19,6 +21,8 @@ class SubscriptionState {
     this.subscription,
     this.paymentMethods = const [],
     this.isReportingPayment = false,
+    this.isPaymentRejected = false,
+    this.lastRejectionReason,
   });
 
   SubscriptionState copyWith({
@@ -27,6 +31,8 @@ class SubscriptionState {
     CompanySubscription? subscription,
     List<PlatformPaymentMethod>? paymentMethods,
     bool? isReportingPayment,
+    bool? isPaymentRejected,
+    String? lastRejectionReason,
   }) {
     return SubscriptionState(
       isLoading: isLoading ?? this.isLoading,
@@ -34,6 +40,8 @@ class SubscriptionState {
       subscription: subscription ?? this.subscription,
       paymentMethods: paymentMethods ?? this.paymentMethods,
       isReportingPayment: isReportingPayment ?? this.isReportingPayment,
+      isPaymentRejected: isPaymentRejected ?? this.isPaymentRejected,
+      lastRejectionReason: lastRejectionReason ?? this.lastRejectionReason,
     );
   }
 }
@@ -51,23 +59,34 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
 
   Dio get _dio => ref.read(dioProvider);
 
-  Future<void> loadSubscriptionAndMethods() async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+  Future<void> loadPaymentMethods() async {
     try {
-      final subRes = await _dio.get('/subscriptions/my-subscription');
       final methodsRes = await _dio.get('/platform-payment-methods');
-
-      final subData = subRes.data['subscription'] as Map<String, dynamic>;
-      final subscription = CompanySubscription.fromJson(subData);
-
       final methodsList = (methodsRes.data as List)
           .map((m) => PlatformPaymentMethod.fromJson(m))
           .toList();
+      state = state.copyWith(paymentMethods: methodsList);
+    } catch (_) {}
+  }
+
+  Future<void> loadSubscriptionAndMethods() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      await loadPaymentMethods();
+
+      final subRes = await _dio.get('/subscriptions/my-subscription');
+      final subData = subRes.data['subscription'] as Map<String, dynamic>;
+      final subscription = CompanySubscription.fromJson(subData);
+      final isPaymentRejected =
+          subRes.data['isPaymentRejected'] as bool? ?? false;
+      final lastRejectionReason =
+          subRes.data['lastRejectionReason'] as String?;
 
       state = state.copyWith(
         isLoading: false,
         subscription: subscription,
-        paymentMethods: methodsList,
+        isPaymentRejected: isPaymentRejected,
+        lastRejectionReason: lastRejectionReason,
       );
     } catch (e) {
       state = state.copyWith(
@@ -83,7 +102,11 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
     required String referenceNumber,
     required File receiptFile,
   }) async {
-    state = state.copyWith(isReportingPayment: true, errorMessage: null);
+    state = state.copyWith(
+      isReportingPayment: true,
+      errorMessage: null,
+      isPaymentRejected: false,
+    );
     try {
       // 1. Subir imagen del comprobante
       final imageDataSource = ref.read(imageRemoteDataSourceProvider);

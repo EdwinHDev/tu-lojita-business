@@ -177,12 +177,14 @@ final verifyPaymentProvider = FutureProvider.family<Order, Map<String, dynamic>>
   final status = params['status'] as String;
   final orderId = params['orderId'] as String;
   final rejectionReason = params['rejectionReason'] as String?;
+  final receiptImage = params['receiptImage'] as String?;
   
   final updatedOrder = await repo.verifyPayment(
     paymentId,
     status,
     orderId,
     rejectionReason: rejectionReason,
+    receiptImage: receiptImage,
   );
   ref.invalidate(orderByIdProvider(orderId));
   return updatedOrder;

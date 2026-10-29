@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 
 class CreateItemScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -16,6 +19,22 @@ class _CreateItemScreenState extends ConsumerState<CreateItemScreen> {
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = ref.read(authProvider);
+      final user = authState is Authenticated ? authState.user : null;
+      if (user != null && !user.canEditProducts) {
+        NotificationService.showWarning(
+          context,
+          'No tienes permisos requeridos para crear artículos.',
+        );
+        Navigator.of(context).pop(false);
+      }
+    });
+  }
 
   @override
   void dispose() {

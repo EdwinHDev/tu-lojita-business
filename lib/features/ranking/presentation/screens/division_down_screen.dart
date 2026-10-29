@@ -186,7 +186,7 @@ class DivisionDownScreen extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                '${ev.lpDelta} LP',
+                                '${ev.lpDelta} PR',
                                 style: const TextStyle(
                                   color: Colors.redAccent,
                                   fontWeight: FontWeight.bold,
@@ -222,7 +222,7 @@ class DivisionDownScreen extends ConsumerWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Consejo: Completa pedidos a tiempo y responde las reseñas de tus clientes para recuperar LP rápidamente.',
+                        'Consejo: Completa pedidos a tiempo y responde las reseñas de tus clientes para recuperar PR rápidamente.',
                         style: TextStyle(color: Colors.amber, fontSize: 12, height: 1.3),
                       ),
                     ),

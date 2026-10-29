@@ -8,6 +8,7 @@ class DashboardAnalytics {
   final List<SalesChartPoint> salesChart;
   final List<StorePerformance> storesPerformance;
   final List<TopProduct> topProducts;
+  final List<TopDesiredProduct> topDesiredProducts;
   final List<PaymentMethodShare> paymentMethods;
 
   const DashboardAnalytics({
@@ -20,6 +21,7 @@ class DashboardAnalytics {
     required this.salesChart,
     required this.storesPerformance,
     required this.topProducts,
+    this.topDesiredProducts = const [],
     required this.paymentMethods,
   });
 }
@@ -131,5 +133,30 @@ class PaymentMethodShare {
     required this.totalAmount,
     required this.percentage,
     required this.transactionCount,
+  });
+}
+
+class TopDesiredProduct {
+  final String itemId;
+  final String title;
+  final String? mainImage;
+  final int favoritesCount;
+  final double price;
+  final double? stockQuantity;
+  final bool trackInventory;
+  final bool hasVariants;
+
+  bool get isOutOfStock =>
+      trackInventory && (stockQuantity == null || stockQuantity! <= 0);
+
+  const TopDesiredProduct({
+    required this.itemId,
+    required this.title,
+    this.mainImage,
+    required this.favoritesCount,
+    required this.price,
+    this.stockQuantity,
+    required this.trackInventory,
+    this.hasVariants = false,
   });
 }

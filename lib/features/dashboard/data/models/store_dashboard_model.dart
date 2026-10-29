@@ -46,6 +46,8 @@ class StoreRecentSaleModel extends StoreRecentSale {
     required super.time,
     required super.orderId,
     required super.status,
+    super.itemTitle,
+    super.itemImageUrl,
   });
 
   factory StoreRecentSaleModel.fromJson(Map<String, dynamic> json) {
@@ -57,6 +59,8 @@ class StoreRecentSaleModel extends StoreRecentSale {
       time: json['time'] as String,
       orderId: json['orderId'] as String,
       status: json['status'] as String,
+      itemTitle: json['itemTitle'] as String?,
+      itemImageUrl: json['itemImageUrl'] as String?,
     );
   }
 }

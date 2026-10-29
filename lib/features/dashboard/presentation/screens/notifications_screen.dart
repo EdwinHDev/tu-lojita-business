@@ -10,7 +10,9 @@ import '../../domain/entities/notification.dart';
 import 'settings/store_health_sheet.dart';
 import '../widgets/chat_penalty_explanation_modal.dart';
 import 'package:tu_lojita_business/features/reports/presentation/widgets/report_detail_sheet.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/core/utils/achievement_image_helper.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/providers/ranking_providers.dart';
 
@@ -69,7 +71,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       case NotificationFilter.unread:
         return notifications.where((n) => !n.isRead).toList();
       case NotificationFilter.chats:
-        return notifications.where((n) => n.type == 'CHAT_MESSAGE').toList();
+        return notifications
+            .where((n) => n.type == 'CHAT_MESSAGE' || n.type == 'SUPPORT_CHAT_MESSAGE')
+            .toList();
       case NotificationFilter.orders:
         return notifications
             .where((n) => [
@@ -77,8 +81,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   'PAYMENT_REPORTED',
                   'PAYMENT_APPROVED',
                   'PAYMENT_REJECTED',
+                  'REFUND_REPORTED',
+                  'REFUND_CONFIRMED',
                   'MEDIATION_REQUEST',
                   'MEDIATION_RESPONSE',
+                  'DISPUTE_ESCALATED',
                 ].contains(n.type))
             .toList();
       case NotificationFilter.all:
@@ -220,14 +227,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Widget _buildFilterChips(List<AppNotification> notifications) {
     final unreadCount = notifications.where((n) => !n.isRead).length;
-    final chatsCount = notifications.where((n) => n.type == 'CHAT_MESSAGE').length;
+    final chatsCount = notifications
+        .where((n) => n.type == 'CHAT_MESSAGE' || n.type == 'SUPPORT_CHAT_MESSAGE')
+        .length;
     final ordersCount = notifications
         .where((n) => [
               'ORDER_CREATED',
               'PAYMENT_REPORTED',
               'PAYMENT_APPROVED',
               'PAYMENT_REJECTED',
+              'REFUND_REPORTED',
+              'REFUND_CONFIRMED',
               'MEDIATION_REQUEST',
+              'MEDIATION_RESPONSE',
+              'DISPUTE_ESCALATED',
             ].contains(n.type))
         .length;
 
@@ -519,14 +532,26 @@ class _PremiumNotificationTile extends ConsumerWidget {
         iconColor = const Color(0xFFE11D48);
         categoryLabel = 'Pago rechazado';
         break;
+      case 'REFUND_REPORTED':
+      case 'REFUND_CONFIRMED':
+        iconData = HugeIcons.strokeRoundedDollarReceive01;
+        iconColor = Colors.purple.shade600;
+        categoryLabel = 'Reembolso';
+        break;
       case 'CHAT_MESSAGE':
-        iconData = HugeIcons.strokeRoundedMessage01;
-        iconColor = Colors.blue.shade700;
-        categoryLabel = 'Chat';
+      case 'SUPPORT_CHAT_MESSAGE':
+        final isSupportMsg = notification.type == 'SUPPORT_CHAT_MESSAGE' ||
+            notification.title.toLowerCase().contains('soporte') ||
+            notification.body.toLowerCase().contains('soporte');
+        iconData = isSupportMsg ? Icons.support_agent_rounded : HugeIcons.strokeRoundedMessage01;
+        iconColor = isSupportMsg ? const Color(0xFF7C3AED) : Colors.blue.shade700;
+        categoryLabel = isSupportMsg ? 'Soporte' : 'Chat';
         break;
       case 'MEDIATION_REQUEST':
       case 'MEDIATION_RESPONSE':
-        final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
+      case 'DISPUTE_ESCALATED':
+        final isCustomerMed = notification.type == 'DISPUTE_ESCALATED' ||
+            notification.title.toLowerCase().contains('mediación') ||
             notification.title.toLowerCase().contains('mediacion');
         iconData = HugeIcons.strokeRoundedAlertSquare;
         iconColor = isCustomerMed ? Colors.purple.shade700 : const Color(0xFFE11D48);
@@ -778,8 +803,22 @@ class _PremiumNotificationTile extends ConsumerWidget {
   }
 
   void _handleTap(BuildContext context, WidgetRef ref) async {
+    final authState = ref.read(authProvider);
+    final currentUser = authState is Authenticated ? authState.user : null;
+    bool canAccess(List<String> perms) {
+      if (currentUser == null) return false;
+      return perms.any((p) => currentUser.hasPermission(p));
+    }
+
     if (notification.type == 'STRIKE_APPLIED' ||
         notification.type == 'STORE_SUSPENDED') {
+      if (!canAccess(['settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para gestionar la salud de la sucursal.',
+        );
+        return;
+      }
       final storeId = (notification.targetId != null &&
               notification.targetId!.isNotEmpty)
           ? notification.targetId!
@@ -788,6 +827,13 @@ class _PremiumNotificationTile extends ConsumerWidget {
         StoreHealthSheet.show(context, storeId);
       }
     } else if (notification.type == 'ITEM_HIDDEN') {
+      if (!canAccess(['items:view', 'items:edit', 'items:create', 'items:adjust_stock'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para acceder al catálogo de artículos.',
+        );
+        return;
+      }
       final storeId = ref.read(storesProvider).stores.firstOrNull?.id;
       if (storeId != null && storeId.isNotEmpty) {
         context.push('/dashboard/stores/$storeId/items');
@@ -964,43 +1010,138 @@ class _PremiumNotificationTile extends ConsumerWidget {
         }
       }
     } else if (notification.targetId != null && notification.targetId!.isNotEmpty) {
-      if (notification.type == 'CHAT_MESSAGE') {
+      final isSupportChat = notification.type == 'SUPPORT_CHAT_MESSAGE' ||
+          (notification.type == 'CHAT_MESSAGE' &&
+              (notification.title.toLowerCase().contains('soporte') ||
+                  notification.body.toLowerCase().contains('soporte')));
+      if (isSupportChat) {
+        if (!canAccess(['disputes:view', 'disputes:respond'])) {
+          NotificationService.showError(
+            context,
+            'No tienes los permisos requeridos para acceder al chat de soporte.',
+          );
+          return;
+        }
+        context.push('/orders/${notification.targetId}/support-chat');
+      } else if (notification.type == 'CHAT_MESSAGE') {
+        if (!canAccess(['orders:chat'])) {
+          NotificationService.showError(
+            context,
+            'No tienes los permisos requeridos para acceder al chat de pedidos.',
+          );
+          return;
+        }
         context.push('/dashboard/orders/${notification.targetId}/chat');
       } else if (notification.type == 'MEDIATION_REQUEST' ||
-          notification.type == 'MEDIATION_RESPONSE') {
-        final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
-            notification.title.toLowerCase().contains('mediacion') ||
-            notification.body.toLowerCase().contains('solicitud de mediación') ||
-            notification.body.toLowerCase().contains('solicitud de mediacion');
-
-        if (isCustomerMed) {
-          var storeId = ref.read(storesProvider).stores.firstOrNull?.id;
-          if (storeId == null || storeId.isEmpty) {
-            await ref.read(storesProvider.notifier).loadData();
-            storeId = ref.read(storesProvider).stores.firstOrNull?.id;
-          }
-
-          if (context.mounted) {
-            if (storeId != null && storeId.isNotEmpty) {
-              context.push('/dashboard/stores/$storeId/mediation-requests');
-            } else {
-              NotificationService.showInfo(context, notification.body);
-            }
-          }
-        } else {
+          notification.type == 'MEDIATION_RESPONSE' ||
+          notification.type == 'DISPUTE_ESCALATED') {
+        if (!canAccess(['disputes:view', 'disputes:respond'])) {
+          NotificationService.showError(
+            context,
+            'No tienes los permisos requeridos para gestionar reclamos o mediaciones.',
+          );
+          return;
+        }
+        if (notification.type == 'DISPUTE_ESCALATED') {
           context.push('/dashboard/orders/${notification.targetId}?openDispute=true');
           ref.read(notificationRepositoryProvider).markDisputeRead(notification.targetId!);
+        } else {
+          final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
+              notification.title.toLowerCase().contains('mediacion') ||
+              notification.body.toLowerCase().contains('solicitud de mediación') ||
+              notification.body.toLowerCase().contains('solicitud de mediacion');
+
+          if (isCustomerMed) {
+            var storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+            if (storeId == null || storeId.isEmpty) {
+              await ref.read(storesProvider.notifier).loadData();
+              storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+            }
+
+            if (context.mounted) {
+              if (storeId != null && storeId.isNotEmpty) {
+                context.push('/dashboard/stores/$storeId/mediation-requests');
+              } else {
+                NotificationService.showInfo(context, notification.body);
+              }
+            }
+          } else {
+            context.push('/dashboard/orders/${notification.targetId}?openDispute=true');
+            ref.read(notificationRepositoryProvider).markDisputeRead(notification.targetId!);
+          }
         }
       } else if (notification.type == 'ORDER_CREATED' ||
           notification.type == 'ORDER_STATUS_CHANGED' ||
           notification.type == 'PAYMENT_REPORTED' ||
           notification.type == 'PAYMENT_APPROVED' ||
           notification.type == 'PAYMENT_REJECTED' ||
+          notification.type == 'REFUND_REPORTED' ||
+          notification.type == 'REFUND_CONFIRMED' ||
           notification.type == 'ORDER_REVIEW_RECEIVED' ||
           notification.type == 'BUYER_REVIEW_PROMPT' ||
           notification.type.startsWith('ORDER_') ||
-          notification.type.startsWith('PAYMENT_')) {
+          notification.type.startsWith('PAYMENT_') ||
+          notification.type.startsWith('REFUND_') ||
+          notification.type == 'GENERAL') {
+        if (!canAccess([
+          'orders:view',
+          'orders:process',
+          'orders:cancel',
+          'installments:view',
+          'installments:approve_payment',
+        ])) {
+          NotificationService.showError(
+            context,
+            'No tienes los permisos requeridos para consultar el detalle de pedidos.',
+          );
+          return;
+        }
         context.push('/dashboard/orders/${notification.targetId}');
+      } else {
+        context.push('/dashboard/orders/${notification.targetId}');
+      }
+    } else {
+      // Notificación general o informativa sin ruta de destino: mostrar modal para dar feedback
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedNotification01,
+                    color: Colors.indigo,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    notification.title,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              _formatNotificationBody(notification.body),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.45),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+              ),
+            ],
+          ),
+        );
       }
     }
 

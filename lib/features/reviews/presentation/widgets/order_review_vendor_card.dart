@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
+import 'package:tu_lojita_business/features/orders/presentation/widgets/order_detail/order_detail_helpers.dart';
 import '../providers/review_providers.dart';
 import 'vendor_reply_sheet.dart';
 
@@ -9,6 +10,78 @@ class OrderReviewVendorCard extends ConsumerWidget {
   final Order order;
 
   const OrderReviewVendorCard({super.key, required this.order});
+
+  void _showZoomableImage(BuildContext context, String imageUrl) {
+    final resolvedUrl = OrderDetailHelpers.resolveImageUrl(imageUrl);
+    if (resolvedUrl.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.network(
+                    resolvedUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
+                          SizedBox(height: 8),
+                          Text(
+                            'No se pudo cargar la imagen',
+                            style: TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -93,17 +166,45 @@ class OrderReviewVendorCard extends ConsumerWidget {
                     itemCount: review.imageUrls.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          review.imageUrls[index],
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
+                      final rawUrl = review.imageUrls[index];
+                      final resolvedUrl = OrderDetailHelpers.resolveImageUrl(rawUrl);
+                      return GestureDetector(
+                        onTap: () => _showZoomableImage(context, rawUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            resolvedUrl,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              width: 60,
+                              height: 60,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.broken_image_rounded, size: 20),
+                            ),
+                          ),
                         ),
                       );
                     },
                   ),
+                ),
+              ],
+              if (review.likesCount > 0) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.favorite_rounded, size: 14, color: Color(0xFFEF4444)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${review.likesCount} a ${review.likesCount == 1 ? "persona le pareció útil" : "personas les pareció útil"}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ],
 

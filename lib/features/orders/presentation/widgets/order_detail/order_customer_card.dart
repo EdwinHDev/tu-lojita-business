@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/block_customer_dialog.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'order_detail_helpers.dart';
 
 /// Tarjeta interactiva con datos del cliente y acciones directas (WhatsApp, Llamada, Copiar, Restringir).
-class OrderCustomerCard extends StatelessWidget {
+class OrderCustomerCard extends ConsumerWidget {
   final Order order;
   final String? storeId;
 
@@ -15,8 +18,19 @@ class OrderCustomerCard extends StatelessWidget {
     this.storeId,
   });
 
+  String _maskPhone(String raw) {
+    final clean = raw.trim();
+    if (clean.length <= 4) return '****';
+    final visible = clean.substring(clean.length - 4);
+    return '***-***-$visible';
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final currentUser = authState is Authenticated ? authState.user : null;
+    final canViewCustomerData = currentUser?.canViewSensitiveCustomerData ?? true;
+
     final user = order.user;
     final firstName = user?['firstName'] as String? ?? 'Cliente';
     final lastName = user?['lastName'] as String? ?? '';
@@ -25,6 +39,7 @@ class OrderCustomerCard extends StatelessWidget {
     final phone = user?['phone'] as String?;
     final address = user?['address'] as String?;
     final hasPhone = phone != null && phone.trim().isNotEmpty;
+    final displayPhone = (hasPhone && !canViewCustomerData) ? _maskPhone(phone) : phone;
     final hasAddress = address != null && address.trim().isNotEmpty;
     final customerId = user?['id']?.toString() ?? '';
     final effectiveStoreId = (storeId != null && storeId!.isNotEmpty) ? storeId! : (order.storeId ?? '');
@@ -159,7 +174,7 @@ class OrderCustomerCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    phone,
+                    displayPhone ?? '',
                     style: const TextStyle(
                       color: Color(0xFF334155),
                       fontSize: 13,
@@ -169,71 +184,73 @@ class OrderCustomerCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // Fila de acciones interactivas para el comerciante
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => OrderDetailHelpers.launchWhatsApp(
-                      context: context,
-                      phone: phone,
-                      customerName: fullName,
-                      storeName: order.storeName,
-                      orderItems: order.orderItems,
+            if (canViewCustomerData) ...[
+              const SizedBox(height: 12),
+              // Fila de acciones interactivas para el comerciante
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => OrderDetailHelpers.launchWhatsApp(
+                        context: context,
+                        phone: phone,
+                        customerName: fullName,
+                        storeName: order.storeName,
+                        orderItems: order.orderItems,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF059669),
+                        side: const BorderSide(color: Color(0xFFA7F3D0)),
+                        backgroundColor: const Color(0xFFECFDF5),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.chat_outlined, size: 16),
+                      label: const Text(
+                        'WhatsApp',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF059669),
-                      side: const BorderSide(color: Color(0xFFA7F3D0)),
-                      backgroundColor: const Color(0xFFECFDF5),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => OrderDetailHelpers.launchPhoneCall(
+                        context: context,
+                        phone: phone,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF4F46E5),
+                        side: const BorderSide(color: Color(0xFFC7D2FE)),
+                        backgroundColor: const Color(0xFFEEF2FF),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.call_outlined, size: 16),
+                      label: const Text(
+                        'Llamar',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => OrderDetailHelpers.copyToClipboard(
+                      context: context,
+                      text: phone,
+                      label: 'Teléfono',
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF64748B)),
+                    tooltip: 'Copiar teléfono',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFFF8FAFC),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Icon(Icons.chat_outlined, size: 16),
-                    label: const Text(
-                      'WhatsApp',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => OrderDetailHelpers.launchPhoneCall(
-                      context: context,
-                      phone: phone,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4F46E5),
-                      side: const BorderSide(color: Color(0xFFC7D2FE)),
-                      backgroundColor: const Color(0xFFEEF2FF),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.call_outlined, size: 16),
-                    label: const Text(
-                      'Llamar',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => OrderDetailHelpers.copyToClipboard(
-                    context: context,
-                    text: phone,
-                    label: 'Teléfono',
-                  ),
-                  icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF64748B)),
-                  tooltip: 'Copiar teléfono',
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFF8FAFC),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
           if (hasAddress) ...[
             const SizedBox(height: 14),

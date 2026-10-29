@@ -7,6 +7,7 @@ import 'package:tu_lojita_business/features/auth/data/datasources/remote_auth_da
 import 'package:tu_lojita_business/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:tu_lojita_business/features/auth/domain/repositories/auth_repository.dart';
 import 'package:tu_lojita_business/features/auth/data/interceptors/auth_interceptor.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
@@ -26,7 +27,13 @@ final dioProvider = Provider<Dio>((ref) {
   final localDataSource = ref.watch(localAuthDataSourceProvider);
   
   apiClient.dio.interceptors.add(
-    AuthInterceptor(localDataSource, apiClient.dio),
+    AuthInterceptor(
+      localDataSource,
+      apiClient.dio,
+      onUnauthenticated: () {
+        ref.read(authProvider.notifier).logoutLocal();
+      },
+    ),
   );
   
   return apiClient.dio;

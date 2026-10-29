@@ -8,6 +8,7 @@ class OrderReviewModel {
   final String? vendorReply;
   final DateTime? vendorRepliedAt;
   final bool isVisible;
+  final int likesCount;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? authorName;
@@ -23,6 +24,7 @@ class OrderReviewModel {
     this.vendorReply,
     this.vendorRepliedAt,
     this.isVisible = true,
+    this.likesCount = 0,
     required this.createdAt,
     required this.updatedAt,
     this.authorName,
@@ -59,6 +61,9 @@ class OrderReviewModel {
           ? DateTime.tryParse(json['vendorRepliedAt'].toString())
           : null,
       isVisible: json['isVisible'] ?? true,
+      likesCount: json['likesCount'] is num
+          ? (json['likesCount'] as num).toInt()
+          : int.tryParse(json['likesCount']?.toString() ?? '0') ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

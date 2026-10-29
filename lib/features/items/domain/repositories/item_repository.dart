@@ -4,6 +4,7 @@ import 'dart:io';
 
 abstract class ItemRepository {
   Future<List<Item>> getItemsByStore(String storeId);
+  Future<Item> getItemById(String id);
   
   Future<({List<Item> items, int total})> getItemsPaginated({
     required String storeId,

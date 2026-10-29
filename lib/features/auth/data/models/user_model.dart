@@ -14,22 +14,80 @@ class UserModel extends User {
     super.company,
     super.identification,
     super.phone,
+    super.isActive = true,
+    super.accountSuspendedUntil,
+    super.accountSuspensionReason,
+    super.googleId,
+    super.isCollaborator = false,
+    super.accessId,
+    super.collaboratorRole,
+    super.permissions = const [],
+    super.allowedBranchIds = const [],
+    super.hasFullBranchAccess = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    // If the response wraps under 'collaborator', extract that nested map
+    final Map<String, dynamic> source = json['collaborator'] is Map
+        ? Map<String, dynamic>.from(json['collaborator'] as Map)
+        : (json['user'] is Map
+            ? Map<String, dynamic>.from(json['user'] as Map)
+            : json);
+
+    final isCollab = source['isCollaborator'] == true ||
+        source['actorType'] == 'COLLABORATOR' ||
+        json['collaborator'] != null;
+
+    final permissionsRaw = source['permissions'];
+    final List<String> permissionsList = permissionsRaw is List
+        ? permissionsRaw.map((e) => e.toString()).toList()
+        : const [];
+
+    final allowedBranchesRaw = source['allowedBranchIds'];
+    final List<String> allowedBranchIdsList = allowedBranchesRaw is List
+        ? allowedBranchesRaw.map((e) => e.toString()).toList()
+        : const [];
+
+    String? roleName;
+    if (source['collaboratorRole'] != null) {
+      roleName = source['collaboratorRole']?.toString();
+    } else if (source['role'] is Map) {
+      roleName = (source['role'] as Map)['name']?.toString();
+    } else if (source['role'] is String) {
+      roleName = source['role'] as String;
+    }
+
+    final accessIdStr = source['accessId']?.toString();
+    final emailStr = source['email']?.toString() ??
+        (accessIdStr != null && accessIdStr.isNotEmpty
+            ? '$accessIdStr@collaborator.local'
+            : '');
+
     return UserModel(
-      id: json['id']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      firstName: json['firstName']?.toString() ?? '',
-      lastName: json['lastName']?.toString() ?? '',
-      role: json['role']?.toString() ?? 'USER',
-      hasCompany: json['hasCompany'] as bool? ?? (json['company'] != null),
-      avatarUrl: json['avatarUrl'] as String?,
-      company: json['company'] != null && json['company'] is Map
-          ? CompanyModel.fromJson(Map<String, dynamic>.from(json['company']))
+      id: source['id']?.toString() ?? '',
+      email: emailStr,
+      firstName: source['firstName']?.toString() ?? '',
+      lastName: source['lastName']?.toString() ?? '',
+      role: isCollab ? 'COMPANY' : (source['role']?.toString() ?? 'USER'),
+      hasCompany: source['hasCompany'] as bool? ?? (source['company'] != null),
+      avatarUrl: source['avatarUrl'] as String?,
+      company: source['company'] != null && source['company'] is Map
+          ? CompanyModel.fromJson(Map<String, dynamic>.from(source['company']))
           : null,
-      identification: json['identification'] as String?,
-      phone: json['phone'] as String?,
+      identification: source['identification'] as String?,
+      phone: source['phone'] as String?,
+      isActive: source['isActive'] is bool ? source['isActive'] as bool : true,
+      accountSuspendedUntil: source['accountSuspendedUntil'] != null
+          ? DateTime.tryParse(source['accountSuspendedUntil'].toString())
+          : null,
+      accountSuspensionReason: source['accountSuspensionReason'] as String?,
+      googleId: source['googleId'] as String?,
+      isCollaborator: isCollab,
+      accessId: accessIdStr,
+      collaboratorRole: roleName,
+      permissions: permissionsList,
+      allowedBranchIds: allowedBranchIdsList,
+      hasFullBranchAccess: source['hasFullBranchAccess'] as bool? ?? false,
     );
   }
 
@@ -46,6 +104,16 @@ class UserModel extends User {
       'company': company != null ? (company as CompanyModel).toJson() : null,
       'identification': identification,
       'phone': phone,
+      'isActive': isActive,
+      'accountSuspendedUntil': accountSuspendedUntil?.toIso8601String(),
+      'accountSuspensionReason': accountSuspensionReason,
+      'googleId': googleId,
+      'isCollaborator': isCollaborator,
+      'accessId': accessId,
+      'collaboratorRole': collaboratorRole,
+      'permissions': permissions,
+      'allowedBranchIds': allowedBranchIds,
+      'hasFullBranchAccess': hasFullBranchAccess,
     };
   }
 
@@ -61,6 +129,16 @@ class UserModel extends User {
     Company? company,
     String? identification,
     String? phone,
+    bool? isActive,
+    DateTime? accountSuspendedUntil,
+    String? accountSuspensionReason,
+    String? googleId,
+    bool? isCollaborator,
+    String? accessId,
+    String? collaboratorRole,
+    List<String>? permissions,
+    List<String>? allowedBranchIds,
+    bool? hasFullBranchAccess,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -73,6 +151,16 @@ class UserModel extends User {
       company: company ?? this.company,
       identification: identification ?? this.identification,
       phone: phone ?? this.phone,
+      isActive: isActive ?? this.isActive,
+      accountSuspendedUntil: accountSuspendedUntil ?? this.accountSuspendedUntil,
+      accountSuspensionReason: accountSuspensionReason ?? this.accountSuspensionReason,
+      googleId: googleId ?? this.googleId,
+      isCollaborator: isCollaborator ?? this.isCollaborator,
+      accessId: accessId ?? this.accessId,
+      collaboratorRole: collaboratorRole ?? this.collaboratorRole,
+      permissions: permissions ?? this.permissions,
+      allowedBranchIds: allowedBranchIds ?? this.allowedBranchIds,
+      hasFullBranchAccess: hasFullBranchAccess ?? this.hasFullBranchAccess,
     );
   }
 }

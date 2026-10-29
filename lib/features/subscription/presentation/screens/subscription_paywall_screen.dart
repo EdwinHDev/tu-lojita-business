@@ -9,6 +9,8 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_not
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
+import '../../domain/entities/company_subscription.dart';
+import '../widgets/platform_qr_dialog.dart';
 
 class SubscriptionPaywallScreen extends ConsumerStatefulWidget {
   const SubscriptionPaywallScreen({super.key});
@@ -25,6 +27,7 @@ class _SubscriptionPaywallScreenState
   PlatformPaymentMethod? _selectedMethod;
   File? _receiptFile;
   final _picker = ImagePicker();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -60,17 +63,40 @@ class _SubscriptionPaywallScreenState
       return;
     }
 
-    final success = await ref
-        .read(subscriptionProvider.notifier)
-        .reportSubscriptionPayment(
-          amount: 20.0,
-          paymentMethodId: _selectedMethod!.id,
-          referenceNumber: _refController.text.trim(),
-          receiptFile: _receiptFile!,
-        );
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    if (success && mounted) {
-      context.go('/subscription/pending');
+    try {
+      final success = await ref
+          .read(subscriptionProvider.notifier)
+          .reportSubscriptionPayment(
+            amount: 20.0,
+            paymentMethodId: _selectedMethod!.id,
+            referenceNumber: _refController.text.trim(),
+            receiptFile: _receiptFile!,
+          );
+
+      if (!mounted) return;
+
+      if (success) {
+        context.go('/subscription/pending');
+      } else {
+        setState(() {
+          _isSubmitting = false;
+        });
+        NotificationService.showError(
+          context,
+          'No se pudo registrar el pago. Por favor intenta de nuevo.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        NotificationService.showError(context, 'Error al enviar comprobante: $e');
+      }
     }
   }
 
@@ -79,10 +105,120 @@ class _SubscriptionPaywallScreenState
     NotificationService.showSuccess(context, '$label copiado al portapapeles');
   }
 
+  void _copyAllPaymentDetails(PlatformPaymentMethod m) {
+    final d = m.accountDetails;
+    final buffer = StringBuffer();
+    buffer.writeln(m.title);
+
+    if (d['bankName'] != null && d['bankName'].toString().trim().isNotEmpty) {
+      buffer.writeln('Banco: ${d['bankName'].toString().trim()}');
+    }
+    if (d['accountHolder'] != null && d['accountHolder'].toString().trim().isNotEmpty) {
+      buffer.writeln('Titular: ${d['accountHolder'].toString().trim()}');
+    }
+    if (d['idNumber'] != null && d['idNumber'].toString().trim().isNotEmpty) {
+      buffer.writeln('C.I. / RIF: ${d['idNumber'].toString().trim()}');
+    }
+    if (d['phoneNumber'] != null && d['phoneNumber'].toString().trim().isNotEmpty) {
+      buffer.writeln('Teléfono: ${d['phoneNumber'].toString().trim()}');
+    }
+    if (d['accountNumber'] != null && d['accountNumber'].toString().trim().isNotEmpty) {
+      buffer.writeln('Nº Cuenta: ${d['accountNumber'].toString().trim()}');
+    }
+    if (d['accountType'] != null && d['accountType'].toString().trim().isNotEmpty) {
+      buffer.writeln('Tipo: ${d['accountType'].toString().trim()}');
+    }
+    if (d['binancePayId'] != null && d['binancePayId'].toString().trim().isNotEmpty) {
+      buffer.writeln('Binance Pay ID: ${d['binancePayId'].toString().trim()}');
+    }
+    if (d['email'] != null && d['email'].toString().trim().isNotEmpty) {
+      buffer.writeln('Correo: ${d['email'].toString().trim()}');
+    }
+
+    final fullText = buffer.toString().trim();
+    Clipboard.setData(ClipboardData(text: fullText));
+    NotificationService.showSuccess(
+      context,
+      'Datos de ${m.title} copiados al portapapeles',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final subState = ref.watch(subscriptionProvider);
+    final sub = subState.subscription;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final isProcessing = _isSubmitting ||
+        subState.isReportingPayment ||
+        (sub != null && sub.status == SubscriptionStatus.pendingVerification);
+
+    if (isProcessing) {
+      if (sub != null && sub.status == SubscriptionStatus.pendingVerification) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go('/subscription/pending');
+        });
+      }
+
+      return PopScope(
+        canPop: false,
+        child: Scaffold(
+          backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF2FF),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF818CF8).withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 42,
+                        height: 42,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Color(0xFF4F46E5),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  const Text(
+                    'Procesando comprobante...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Registrando transferencia y sincronizando tu estado de suscripción.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
@@ -281,7 +417,9 @@ class _SubscriptionPaywallScreenState
 
                           // Selector de Método
                           DropdownButtonFormField<PlatformPaymentMethod>(
-                            initialValue: _selectedMethod,
+                            initialValue: subState.paymentMethods.any((m) => m.id == _selectedMethod?.id)
+                                ? subState.paymentMethods.firstWhere((m) => m.id == _selectedMethod?.id)
+                                : null,
                             decoration: InputDecoration(
                               labelText: 'Método Utilizado',
                               border: OutlineInputBorder(
@@ -510,6 +648,10 @@ class _SubscriptionPaywallScreenState
 
           if (d['bankName'] != null)
             _buildCopyField('Banco:', d['bankName'].toString()),
+          if (d['accountHolder'] != null)
+            _buildCopyField('Titular:', d['accountHolder'].toString()),
+          if (d['accountType'] != null)
+            _buildCopyField('Tipo:', d['accountType'].toString()),
           if (d['phoneNumber'] != null)
             _buildCopyField('Teléfono:', d['phoneNumber'].toString()),
           if (d['idNumber'] != null)
@@ -520,6 +662,86 @@ class _SubscriptionPaywallScreenState
             _buildCopyField('Binance Pay ID:', d['binancePayId'].toString()),
           if (d['email'] != null)
             _buildCopyField('Correo:', d['email'].toString()),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              InkWell(
+                onTap: () => _copyAllPaymentDetails(m),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.indigo.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      HugeIcon(
+                        icon: HugeIcons.strokeRoundedCopy01,
+                        color: Colors.indigo,
+                        size: 16,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Copiar todo',
+                        style: TextStyle(
+                          color: Colors.indigo,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (m.qrImageUrl != null && m.qrImageUrl!.trim().isNotEmpty)
+                InkWell(
+                  onTap: () => PlatformQrDialog.show(
+                    context,
+                    qrImageUrl: m.qrImageUrl!,
+                    title: m.title,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.indigo.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        HugeIcon(
+                          icon: HugeIcons.strokeRoundedQrCode,
+                          color: Colors.indigo,
+                          size: 18,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Ver Código QR para Escanear',
+                          style: TextStyle(
+                            color: Colors.indigo,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Icon(Icons.open_in_full_rounded, size: 14, color: Colors.indigo),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );

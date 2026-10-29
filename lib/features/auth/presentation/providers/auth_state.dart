@@ -24,5 +24,6 @@ class Unauthenticated extends AuthState {
 
 class AuthError extends AuthState {
   final String message;
-  const AuthError(this.message);
+  final String? code;
+  const AuthError(this.message, {this.code});
 }

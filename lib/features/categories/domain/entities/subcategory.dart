@@ -6,6 +6,7 @@ class Subcategory {
   final String description;
   final String imageUrl;
   final bool isActive;
+  final bool isAgeRestricted;
   final Category? category;
 
   Subcategory({
@@ -14,6 +15,7 @@ class Subcategory {
     required this.description,
     required this.imageUrl,
     required this.isActive,
+    this.isAgeRestricted = false,
     this.category,
   });
 }

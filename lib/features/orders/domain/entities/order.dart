@@ -13,6 +13,7 @@ class Payment {
   final String? rejectionReason;
   final int? installmentIndex;
   final DateTime createdAt;
+  final DateTime? updatedAt;
 
   Payment({
     required this.id,
@@ -25,6 +26,7 @@ class Payment {
     this.rejectionReason,
     this.installmentIndex,
     required this.createdAt,
+    this.updatedAt,
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) {
@@ -38,7 +40,12 @@ class Payment {
       receiptImage: json['receiptImage'] as String?,
       rejectionReason: json['rejectionReason'] as String?,
       installmentIndex: json['installmentIndex'] as int?,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : (json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now()),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : (json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null),
     );
   }
 }
@@ -112,6 +119,12 @@ class Order {
   final String? storeId;
   final String? storeName;
   final String? rejectionReason;
+  final String? cancellationReason;
+  final String? cancellationNotes;
+  final DateTime? cancelledAt;
+  final bool cancellationResolutionConfirmed;
+  final DateTime? cancellationResolvedAt;
+  final String? cancellationResolutionStatus;
   final List<Installment> installments;
   final bool isPartialPayment;
   final bool isFullyPaid;
@@ -122,6 +135,35 @@ class Order {
   final int? installmentIntervalValue;
   final String? installmentIntervalUnit;
   final List<OrderDispute> disputes;
+  final String? preOrderStatus;
+  final DateTime? settlementDeadline;
+  final List<Map<String, dynamic>> slotBookings;
+
+  bool get isPreOrder => preOrderStatus != null && preOrderStatus != 'NONE';
+  bool get hasSlotBookings => slotBookings.isNotEmpty;
+  bool get isAwaitingStock => preOrderStatus == 'AWAITING_STOCK';
+  bool get isStockArrived => preOrderStatus == 'STOCK_ARRIVED';
+  bool get isReadyForSettlement => preOrderStatus == 'READY_FOR_SETTLEMENT';
+
+  bool get isCancelled => status.toUpperCase() == 'CANCELLED';
+
+  bool get isCancellationResolved =>
+      cancellationResolutionConfirmed ||
+      cancellationResolutionStatus == 'RESOLVED' ||
+      (rejectionReason != null &&
+          (rejectionReason!.contains('común acuerdo') ||
+              rejectionReason!.contains('Cliente aceptó que el pago no fue recibido')));
+
+  bool get hasPendingRefund =>
+      isCancelled &&
+      !isCancellationResolved &&
+      payments.any((p) => p.status == 'WAITING_VERIFICATION' || p.status == 'PENDING');
+
+  bool get isFullyRefunded =>
+      isCancelled &&
+      payments.isNotEmpty &&
+      payments.every((p) => p.status == 'REFUNDED' || p.status == 'REJECTED') &&
+      payments.any((p) => p.status == 'REFUNDED');
 
   OrderDispute? get activeDispute {
     if (disputes.isEmpty) return null;
@@ -150,6 +192,12 @@ class Order {
     this.storeId,
     this.storeName,
     this.rejectionReason,
+    this.cancellationReason,
+    this.cancellationNotes,
+    this.cancelledAt,
+    this.cancellationResolutionConfirmed = false,
+    this.cancellationResolvedAt,
+    this.cancellationResolutionStatus,
     this.installments = const [],
     this.isPartialPayment = false,
     this.isFullyPaid = false,
@@ -160,6 +208,9 @@ class Order {
     this.installmentIntervalValue,
     this.installmentIntervalUnit,
     this.disputes = const [],
+    this.preOrderStatus,
+    this.settlementDeadline,
+    this.slotBookings = const [],
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -191,6 +242,16 @@ class Order {
       storeId: json['storeId'] ?? json['store']?['id'],
       storeName: json['storeName'] ?? json['store']?['name'],
       rejectionReason: json['rejectionReason'] as String?,
+      cancellationReason: json['cancellationReason'] as String?,
+      cancellationNotes: json['cancellationNotes'] as String?,
+      cancelledAt: json['cancelledAt'] != null
+          ? DateTime.tryParse(json['cancelledAt'].toString())
+          : null,
+      cancellationResolutionConfirmed: json['cancellationResolutionConfirmed'] == true,
+      cancellationResolvedAt: json['cancellationResolvedAt'] != null
+          ? DateTime.tryParse(json['cancellationResolvedAt'].toString())
+          : null,
+      cancellationResolutionStatus: json['cancellationResolutionStatus'] as String?,
       installments: (json['installments'] as List<dynamic>?)
               ?.map((e) => Installment.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -205,6 +266,14 @@ class Order {
       installmentIntervalUnit: json['installmentIntervalUnit'] as String?,
       disputes: (json['disputes'] as List<dynamic>?)
               ?.map((e) => OrderDisputeModel.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      preOrderStatus: json['preOrderStatus'] as String?,
+      settlementDeadline: json['settlementDeadline'] != null
+          ? DateTime.tryParse(json['settlementDeadline'].toString())
+          : null,
+      slotBookings: (json['slotBookings'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],
     );

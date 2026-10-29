@@ -21,6 +21,9 @@ class StoreSettingsState {
   final int maxExtensionDays;
   final double? maxCreditLimit;
   final bool isAgeRestricted;
+  final String branchName;
+  final String instagram;
+  final String tiktok;
 
   const StoreSettingsState({
     this.isLoading = false,
@@ -42,6 +45,9 @@ class StoreSettingsState {
     this.maxExtensionDays = 7,
     this.maxCreditLimit,
     this.isAgeRestricted = false,
+    this.branchName = '',
+    this.instagram = '',
+    this.tiktok = '',
   });
 
   factory StoreSettingsState.initial() => const StoreSettingsState();
@@ -68,6 +74,9 @@ class StoreSettingsState {
     double? maxCreditLimit,
     bool clearMaxCreditLimit = false,
     bool? isAgeRestricted,
+    String? branchName,
+    String? instagram,
+    String? tiktok,
   }) {
     return StoreSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -89,6 +98,9 @@ class StoreSettingsState {
       maxExtensionDays: maxExtensionDays ?? this.maxExtensionDays,
       maxCreditLimit: clearMaxCreditLimit ? null : (maxCreditLimit ?? this.maxCreditLimit),
       isAgeRestricted: isAgeRestricted ?? this.isAgeRestricted,
+      branchName: branchName ?? this.branchName,
+      instagram: instagram ?? this.instagram,
+      tiktok: tiktok ?? this.tiktok,
     );
   }
 }
