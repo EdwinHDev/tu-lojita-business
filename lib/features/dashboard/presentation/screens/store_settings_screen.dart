@@ -329,7 +329,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
     } else if (isInactive) {
       badgeBg = const Color(0xFFFEF3C7);
       badgeText = const Color(0xFF92400E);
-      badgeLabel = 'Pausada';
+      badgeLabel = 'Desactivada';
       badgeIcon = Icons.pause_circle_outline_rounded;
     } else {
       badgeBg = const Color(0xFFECFDF5);
@@ -354,35 +354,41 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isDeleting
-                          ? const Color(0xFFDC2626).withValues(alpha: 0.1)
-                          : const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDeleting
+                            ? const Color(0xFFDC2626).withValues(alpha: 0.1)
+                            : const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: HugeIcon(
+                        icon: isDeleting
+                            ? HugeIcons.strokeRoundedAlertCircle
+                            : HugeIcons.strokeRoundedStore01,
+                        color: isDeleting ? const Color(0xFFDC2626) : const Color(0xFF4F46E5),
+                        size: 20,
+                      ),
                     ),
-                    child: HugeIcon(
-                      icon: isDeleting
-                          ? HugeIcons.strokeRoundedAlertCircle
-                          : HugeIcons.strokeRoundedStore01,
-                      color: isDeleting ? const Color(0xFFDC2626) : const Color(0xFF4F46E5),
-                      size: 20,
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Estado de la Sucursal',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Color(0xFF111827),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Estado de la Sucursal',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -461,14 +467,19 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
           ] else ...[
             Text(
               isActive
-                  ? 'La sucursal está activa y visible para tus clientes en la app de compras.'
-                  : 'La sucursal está pausada y oculta para compras. Puedes reactivarla cuando desees.',
+                  ? (store.hasMultipleBranches
+                      ? 'La sucursal está activa y visible para tus clientes en la app de compras.'
+                      : 'La tienda está activa y visible para tus clientes en la app de compras.')
+                  : (store.hasMultipleBranches
+                      ? 'La sucursal está desactivada y oculta para compras. Puedes reactivarla cuando desees.'
+                      : 'La tienda está desactivada y todos sus artículos están ocultos. Puedes reactivarla cuando desees.'),
               style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.35),
             ),
             const SizedBox(height: 14),
-            Row(
+            Column(
               children: [
-                Expanded(
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () => isActive
                         ? _handleDeactivateFlow(store)
@@ -477,27 +488,34 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                       isActive ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
                       size: 18,
                     ),
-                    label: Text(isActive ? 'Pausar Sucursal' : 'Reactivar Sucursal'),
+                    label: Text(
+                      isActive
+                          ? (store.hasMultipleBranches ? 'Desactivar Sucursal' : 'Desactivar Tienda')
+                          : (store.hasMultipleBranches ? 'Reactivar Sucursal' : 'Reactivar Tienda'),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: isActive ? const Color(0xFFD97706) : const Color(0xFF10B981),
                       side: BorderSide(
                         color: isActive ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () => _handleDeleteFlow(store),
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    label: const Text('Eliminar'),
+                    label: Text(
+                      store.hasMultipleBranches ? 'Eliminar Sucursal' : 'Eliminar Tienda',
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFDC2626),
                       side: const BorderSide(color: Color(0xFFFECACA)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -520,7 +538,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
         BranchPreflightBlockersDialog.show(
           context,
           branchName: store.branchName ?? store.name,
-          actionTitle: 'pausar',
+          actionTitle: 'desactivar',
           blockers: preflight.blockers,
         );
         return;
@@ -540,7 +558,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
       if (updated != null && mounted) {
         NotificationService.showSuccess(
           context,
-          'Sucursal pausada exitosamente',
+          'Tienda desactivada exitosamente',
         );
         ref.read(storeSettingsProvider.notifier).loadStore(widget.storeId);
         ref.read(storesProvider.notifier).loadData();
@@ -562,7 +580,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
 
       NotificationService.showSuccess(
         context,
-        'Sucursal reactivada exitosamente',
+        'Tienda reactivada exitosamente',
       );
       ref.read(storeSettingsProvider.notifier).loadStore(widget.storeId);
       ref.read(storesProvider.notifier).loadData();

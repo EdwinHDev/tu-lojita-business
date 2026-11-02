@@ -267,6 +267,45 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 18),
       child: Column(
         children: [
+          // Badge Prominente si la Tienda está Desactivada
+          if (!isActive)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.pause_circle_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 18,
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Desactivada',
+                    style: TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 1. Nombre de Tienda o Sucursal
           Text(
             shouldShowBranch ? store.branchLabel : store.name,
@@ -416,7 +455,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      isActive ? 'Operativa' : 'Pausada',
+                      isActive ? 'Operativa' : 'Desactivada',
                       style: TextStyle(
                         color: isActive ? const Color(0xFF047857) : const Color(0xFFB91C1C),
                         fontSize: 11.5,
@@ -428,6 +467,40 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
               ),
             ],
           ),
+
+          // Banner de alerta informativa si está Desactivada
+          if (!isActive) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.visibility_off_outlined,
+                    color: Color(0xFFD97706),
+                    size: 18,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Esta tienda está desactivada. Ni la tienda ni sus artículos son visibles para los clientes.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF92400E),
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 14),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),

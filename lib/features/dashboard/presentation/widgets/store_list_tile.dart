@@ -36,7 +36,7 @@ class StoreListTile extends StatelessWidget {
       chipBgColor = const Color(0xFFFEF2F2);
       chipTextColor = const Color(0xFFDC2626);
     } else if (isInactive) {
-      chipLabel = 'Pausada';
+      chipLabel = 'Desactivada';
       chipBgColor = const Color(0xFFFEF3C7);
       chipTextColor = const Color(0xFF92400E);
     } else {
@@ -160,15 +160,30 @@ class StoreListTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.2,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: textColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }

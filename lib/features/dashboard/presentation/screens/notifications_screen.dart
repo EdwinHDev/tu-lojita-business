@@ -923,73 +923,31 @@ class _PremiumNotificationTile extends ConsumerWidget {
         achievementTitle = titleMatch.group(1) ?? notification.title;
       }
 
-      // Initial baseline URL resolved by title
-      String badgeUrl = resolveAchievementBadgeUrl(null, achievementName: achievementTitle);
-
-      // Mostrar loader sutil mientras se descarga y precachea la imagen
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          barrierColor: Colors.black26,
-          builder: (_) => const PopScope(
-            canPop: false,
-            child: Center(
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-
-      final achievementId = notification.targetId;
-      if (achievementId != null && achievementId.isNotEmpty) {
-        try {
-          final dio = ref.read(dioProvider);
-          final res = await dio
-              .get('/ranking/achievements/$achievementId')
-              .timeout(const Duration(seconds: 4));
-          if (res.data is Map<String, dynamic>) {
-            final data = res.data as Map<String, dynamic>;
-            if (data['name'] != null && data['name'].toString().isNotEmpty) {
-              achievementTitle = data['name'].toString();
+      // Resolver medalla y descripción desde la caché en memoria si está disponible
+      String? matchedBadgeUrl;
+      if (storeId.isNotEmpty) {
+        final achievements = ref.read(storeAchievementsProvider(storeId)).asData?.value;
+        if (achievements != null) {
+          final matched = achievements.where((a) =>
+            (notification.targetId != null && notification.targetId!.isNotEmpty && a.id == notification.targetId) ||
+            (achievementTitle.isNotEmpty && a.title.toLowerCase().trim() == achievementTitle.toLowerCase().trim())
+          ).firstOrNull;
+          if (matched != null) {
+            if (matched.description.isNotEmpty) {
+              achievementDesc = matched.description;
             }
-            if (data['description'] != null &&
-                data['description'].toString().isNotEmpty) {
-              achievementDesc = data['description'].toString();
+            if (matched.lpBonus > 0 && bonus == 0) {
+              bonus = matched.lpBonus;
             }
-            if (data['lpBonus'] != null) {
-              bonus = int.tryParse(data['lpBonus'].toString()) ?? bonus;
+            if (matched.badgeUrl != null && matched.badgeUrl!.isNotEmpty) {
+              matchedBadgeUrl = resolveAchievementBadgeUrl(matched.badgeUrl, achievementName: matched.title);
             }
-            final rawImg = (data['imageUrl'] ?? data['badgeUrl'])?.toString();
-            badgeUrl = resolveAchievementBadgeUrl(rawImg, achievementName: achievementTitle);
           }
-        } catch (_) {
-          // Si falla la consulta directa, fallback sin romper el flujo
         }
       }
 
-      // Descargar y precachear en memoria antes de abrir la pantalla
-      if (badgeUrl.isNotEmpty && context.mounted) {
-        try {
-          await precacheImage(NetworkImage(badgeUrl), context)
-              .timeout(const Duration(seconds: 5));
-        } catch (_) {
-          // Si el precache falla o excede el timeout, continuar
-        }
-      }
-
-      // Cerrar loader
-      if (context.mounted &&
-          Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
+      final badgeUrl = matchedBadgeUrl ??
+          resolveAchievementBadgeUrl(null, achievementName: achievementTitle);
 
       if (context.mounted) {
         context.push('/dashboard/ranking/achievement-unlocked', extra: {

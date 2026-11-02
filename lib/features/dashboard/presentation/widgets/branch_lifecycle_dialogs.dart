@@ -292,7 +292,7 @@ class _BranchLifecycleOtpDialogState
 
   @override
   Widget build(BuildContext context) {
-    final title = _isDeletion ? 'Eliminar Sucursal' : 'Pausar Sucursal';
+    final title = _isDeletion ? 'Eliminar Sucursal' : 'Desactivar Tienda';
     final themeColor = _isDeletion ? const Color(0xFFDC2626) : const Color(0xFFD97706);
 
     return AlertDialog(
@@ -371,6 +371,38 @@ class _BranchLifecycleOtpDialogState
                         style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF991B1B),
+                          height: 1.4,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.visibility_off_outlined,
+                      color: Color(0xFFD97706),
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Al desactivar tu tienda, esta y todos sus artículos quedarán ocultos al público en la app de compras. Los clientes no podrán ver tus productos ni hacer pedidos hasta que decidas reactivarla.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF92400E),
                           height: 1.4,
                           fontWeight: FontWeight.w500,
                         ),
@@ -490,7 +522,7 @@ class _BranchLifecycleOtpDialogState
                           color: Colors.white,
                         ),
                       )
-                    : Text(_isDeletion ? 'Eliminar' : 'Pausar'),
+                    : Text(_isDeletion ? 'Eliminar' : 'Desactivar'),
               ),
             ),
           ],

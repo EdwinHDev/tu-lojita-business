@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_form_provider.dart';
@@ -26,16 +27,167 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
   final PageController _imagePageController = PageController();
   int _activeImagePage = 0;
 
-  // Variant simulation state
+  // Variant & option simulation state
   final Map<String, String> _simulatedAxisValues = {};
-  int _simulatedQuantity = 1;
+  final Map<String, int> _variantQuantities = {};
+  final Map<String, List<String>> _selectedOptions = {};
+  int _quantity = 1;
   DateTime _simulatedSelectedDate = DateTime.now();
   String? _simulatedSelectedSlotId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final state = ref.read(itemFormProvider);
+        for (final group in state.customizationGroups) {
+          final defaultOptions = <String>[];
+          for (final option in group.options) {
+            final defQty = option.defaultQuantity;
+            for (var i = 0; i < defQty; i++) {
+              defaultOptions.add(option.id);
+            }
+          }
+          if (defaultOptions.isNotEmpty) {
+            setState(() {
+              _selectedOptions[group.id] = defaultOptions;
+            });
+          }
+        }
+      }
+    });
+  }
 
   @override
   void dispose() {
     _imagePageController.dispose();
     super.dispose();
+  }
+
+  String _getVariantKey(ItemVariant variant) {
+    if (variant.id != null && variant.id!.isNotEmpty) return variant.id!;
+    final sortedEntries = variant.axisValues.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return sortedEntries.map((e) => '${e.key}:${e.value}').join(';');
+  }
+
+  ItemVariant? _getVariantForRow(VariantAxis axis, String val, ItemFormState state) {
+    if (state.variantAxes.length == 1) {
+      for (final v in state.variants) {
+        if (_matchesAxisValue(v.axisValues[axis.name], val)) return v;
+      }
+      return null;
+    }
+    final currentAxes = Map<String, String>.from(_simulatedAxisValues);
+    currentAxes[axis.name] = val;
+    for (final v in state.variants) {
+      bool match = true;
+      for (final entry in currentAxes.entries) {
+        if (!_matchesAxisValue(v.axisValues[entry.key], entry.value)) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return v;
+    }
+    return null;
+  }
+
+  void _setVariantQuantity(ItemVariant variant, int qty, ItemFormState state) {
+    final maxStock = state.trackInventory
+        ? variant.stockQuantity.toInt()
+        : 999999;
+    if (state.trackInventory && qty > maxStock) {
+      NotificationService.showWarning(
+        context,
+        'Stock máximo disponible alcanzado ($maxStock unidades)',
+      );
+      return;
+    }
+    setState(() {
+      final key = _getVariantKey(variant);
+      if (qty <= 0) {
+        _variantQuantities.remove(key);
+      } else {
+        _variantQuantities[key] = qty;
+      }
+    });
+  }
+
+  int get _totalSelectedVariantsCount {
+    return _variantQuantities.values.fold(0, (sum, q) => sum + q);
+  }
+
+  double _calculateTotalVariantsPrice(ItemFormState state) {
+    double total = 0;
+    for (final entry in _variantQuantities.entries) {
+      final variantKey = entry.key;
+      final qty = entry.value;
+      final variant = state.variants.firstWhere(
+        (v) => _getVariantKey(v) == variantKey,
+        orElse: () => ItemVariant(),
+      );
+      final hasDiscount = variant.discountPrice != null && variant.discountPrice! > 0;
+      final price = hasDiscount
+          ? variant.discountPrice!
+          : (variant.price ?? (state.discountPrice ?? state.price));
+      total += price * qty;
+    }
+    return total;
+  }
+
+  double _calculateExtraPrice(ItemFormState state) {
+    double extra = 0;
+    final activeQuantity = state.hasVariants
+        ? (_totalSelectedVariantsCount > 0 ? _totalSelectedVariantsCount : 1)
+        : _quantity;
+
+    for (final group in state.customizationGroups) {
+      final selected = _selectedOptions[group.id] ?? [];
+      final counts = <String, int>{};
+      for (final id in selected) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+
+      for (final entry in counts.entries) {
+        final optionId = entry.key;
+        final selectedQty = entry.value;
+
+        final option = group.options.firstWhere(
+          (o) => o.id == optionId,
+          orElse: () => const CustomizationOption(
+            id: '',
+            name: '',
+            price: 0,
+            defaultQuantity: 0,
+          ),
+        );
+        if (option.id.isNotEmpty) {
+          final defaultQty = option.defaultQuantity;
+          final chargeableQty = selectedQty - (defaultQty * activeQuantity);
+          if (chargeableQty > 0) {
+            extra += chargeableQty * option.price;
+          }
+        }
+      }
+    }
+    return extra;
+  }
+
+  void _handleOptionQuantityChanged(
+    String groupId,
+    String optionId,
+    int newQuantity,
+  ) {
+    setState(() {
+      final currentList = _selectedOptions[groupId] ?? [];
+      final filtered = currentList.where((id) => id != optionId).toList();
+      for (var i = 0; i < newQuantity; i++) {
+        filtered.add(optionId);
+      }
+      _selectedOptions[groupId] = filtered;
+    });
   }
 
   String _resolveImageUrl(String path) {
@@ -51,15 +203,18 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
       if (parts.length > 1) {
         final hex = parts[1].trim().replaceAll('#', '');
         if (hex.length == 6) {
-          return Color(int.parse('FF$hex', radix: 16));
+          final intVal = int.tryParse('FF$hex', radix: 16);
+          if (intVal != null) return Color(intVal);
         } else if (hex.length == 8) {
-          return Color(int.parse(hex, radix: 16));
+          final intVal = int.tryParse(hex, radix: 16);
+          if (intVal != null) return Color(intVal);
         }
       }
     } else {
       final hex = value.trim().replaceAll('#', '');
       if (hex.length == 6) {
-        return Color(int.parse('FF$hex', radix: 16));
+        final intVal = int.tryParse('FF$hex', radix: 16);
+        if (intVal != null) return Color(intVal);
       }
     }
     return null;
@@ -339,6 +494,12 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
     final isPreOrderProduct = state.itemType == ItemType.product &&
         state.requiresBooking;
 
+    final double extraPrice = _calculateExtraPrice(state);
+    final double totalVariantsPrice = _calculateTotalVariantsPrice(state);
+    final double totalSimulatedPrice = state.hasVariants
+        ? (totalVariantsPrice > 0 ? (totalVariantsPrice + extraPrice) : (activePrice + extraPrice))
+        : ((activePrice * _quantity) + extraPrice);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
@@ -581,80 +742,245 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                         ),
                       ),
 
-                      // Grupos de Personalización / Extras
+                      // Grupos de Personalización / Extras (idéntico a la app cliente)
                       if (state.customizationGroups.isNotEmpty) ...[
                         const SizedBox(height: 18),
                         const Divider(),
                         const SizedBox(height: 14),
                         const Text(
-                          'Personalizaciones y Extras incluidos',
+                          'Personalización',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
+                            color: Color(0xFF111827),
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 16),
                         ...state.customizationGroups.map((group) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
+                          final selected = _selectedOptions[group.id] ?? [];
+                          final activeQuantity = state.hasVariants
+                              ? (_totalSelectedVariantsCount > 0 ? _totalSelectedVariantsCount : 1)
+                              : _quantity;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      group.name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF1E293B),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    if (group.minSelect > 0)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEEF2FF),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          'Obligatorio',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF4F46E5),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                Text(
+                                  group.name,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF374151),
+                                  ),
                                 ),
-                                if (group.options.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children: group.options.map((opt) {
-                                      return Chip(
-                                        padding: EdgeInsets.zero,
-                                        label: Text(
-                                          '${opt.name}${opt.price > 0 ? " (+\$${opt.price.toStringAsFixed(2)})" : ""}',
-                                          style: const TextStyle(fontSize: 11),
-                                        ),
-                                        backgroundColor: Colors.white,
-                                        side: const BorderSide(color: Color(0xFFCBD5E1)),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      );
-                                    }).toList(),
+                                if (group.minSelect > 0 || group.maxSelect > 0) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Selecciona ${group.minSelect > 0 ? "mínimo ${group.minSelect * activeQuantity} opción(es)" : ""} ${group.maxSelect > 0 ? "hasta ${group.maxSelect * activeQuantity} opción(es)" : "sin límites"}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500,
+                                    ),
                                   ),
                                 ],
+                                const SizedBox(height: 10),
+                                ...group.options.map((opt) {
+                                  final int limitMin = (opt.minQuantity > opt.defaultQuantity ? opt.minQuantity : opt.defaultQuantity) * activeQuantity;
+                                  final int currentCount = selected.where((id) => id == opt.id).length;
+                                  final bool canDecrease = currentCount > limitMin;
+                                  final bool isOptSelected = selected.contains(opt.id);
+                                  final showSelector = opt.maxQuantity > 1 || opt.maxQuantity == 0;
+
+                                  return ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    title: Text(
+                                      opt.name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF1F2937),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      opt.price > 0
+                                          ? '+ \$${opt.price.toStringAsFixed(2)}'
+                                          : 'Incluido',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: opt.price > 0
+                                            ? Colors.green
+                                            : Colors.grey.shade500,
+                                      ),
+                                    ),
+                                    trailing: showSelector
+                                        ? Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.remove_circle_outline,
+                                                  color: canDecrease ? const Color(0xFF4F46E5) : Colors.grey.shade300,
+                                                ),
+                                                onPressed: canDecrease
+                                                    ? () {
+                                                        if (currentCount > 0) {
+                                                          if (currentCount == opt.minQuantity) {
+                                                            _handleOptionQuantityChanged(group.id, opt.id, 0);
+                                                          } else {
+                                                            _handleOptionQuantityChanged(group.id, opt.id, currentCount - 1);
+                                                          }
+                                                        }
+                                                      }
+                                                    : null,
+                                              ),
+                                              Text(
+                                                '$currentCount',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF1F2937),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4F46E5)),
+                                                onPressed: () {
+                                                  final currentList = _selectedOptions[group.id] ?? [];
+                                                  final currentCount = currentList.where((id) => id == opt.id).length;
+                                                  final int newCount = currentCount == 0
+                                                      ? (opt.minQuantity > 0 ? opt.minQuantity : 1)
+                                                      : currentCount + 1;
+
+                                                  if (opt.maxQuantity > 0 && newCount > opt.maxQuantity) {
+                                                    NotificationService.showWarning(
+                                                      context,
+                                                      'Solo puedes seleccionar un máximo de ${opt.maxQuantity} para ${opt.name}',
+                                                    );
+                                                    return;
+                                                  }
+
+                                                  if (group.maxSelect > 0) {
+                                                    final int currentGroupTotal = currentList.length;
+                                                    final int newGroupTotal = currentGroupTotal - currentCount + newCount;
+                                                    final int allowedMax = group.maxSelect * activeQuantity;
+                                                    if (newGroupTotal > allowedMax) {
+                                                      NotificationService.showWarning(
+                                                        context,
+                                                        'Solo puedes seleccionar un máximo de $allowedMax opción(es) en ${group.name}',
+                                                      );
+                                                      return;
+                                                    }
+                                                  }
+
+                                                  _handleOptionQuantityChanged(group.id, opt.id, newCount);
+                                                },
+                                              ),
+                                            ],
+                                          )
+                                        : Switch(
+                                            activeThumbColor: Colors.green,
+                                            activeTrackColor: Colors.green.shade100,
+                                            inactiveThumbColor: Colors.white,
+                                            inactiveTrackColor: Colors.black12,
+                                            trackOutlineColor: WidgetStateProperty.resolveWith((states) => Colors.transparent),
+                                            value: isOptSelected,
+                                            onChanged: limitMin > 0
+                                                ? null
+                                                : (checked) {
+                                                    if (checked == true) {
+                                                      final int newCount = opt.minQuantity > 0 ? opt.minQuantity : 1;
+                                                      if (opt.maxQuantity > 0 && newCount > opt.maxQuantity) {
+                                                        NotificationService.showWarning(
+                                                          context,
+                                                          'Solo puedes seleccionar un máximo de ${opt.maxQuantity} para ${opt.name}',
+                                                        );
+                                                        return;
+                                                      }
+                                                      if (group.maxSelect > 0) {
+                                                        final currentList = _selectedOptions[group.id] ?? [];
+                                                        final int currentGroupTotal = currentList.length;
+                                                        final int newGroupTotal = currentGroupTotal + newCount;
+                                                        final int allowedMax = group.maxSelect * activeQuantity;
+                                                        if (newGroupTotal > allowedMax) {
+                                                          NotificationService.showWarning(
+                                                            context,
+                                                            'Solo puedes seleccionar un máximo de $allowedMax opción(es) en ${group.name}',
+                                                          );
+                                                          return;
+                                                        }
+                                                      }
+                                                      _handleOptionQuantityChanged(group.id, opt.id, newCount);
+                                                    } else {
+                                                      _handleOptionQuantityChanged(group.id, opt.id, 0);
+                                                    }
+                                                  },
+                                          ),
+                                    onTap: () {
+                                      if (showSelector) {
+                                        final currentList = _selectedOptions[group.id] ?? [];
+                                        final currentCount = currentList.where((id) => id == opt.id).length;
+                                        if (currentCount == 0) {
+                                          final int newCount = opt.minQuantity > 0 ? opt.minQuantity : 1;
+                                          if (opt.maxQuantity > 0 && newCount > opt.maxQuantity) {
+                                            NotificationService.showWarning(
+                                              context,
+                                              'Solo puedes seleccionar un máximo de ${opt.maxQuantity} para ${opt.name}',
+                                            );
+                                            return;
+                                          }
+                                          if (group.maxSelect > 0) {
+                                            final int currentGroupTotal = currentList.length;
+                                            final int newGroupTotal = currentGroupTotal + newCount;
+                                            final int allowedMax = group.maxSelect * activeQuantity;
+                                            if (newGroupTotal > allowedMax) {
+                                              NotificationService.showWarning(
+                                                context,
+                                                'Solo puedes seleccionar un máximo de $allowedMax opción(es) en ${group.name}',
+                                              );
+                                              return;
+                                            }
+                                          }
+                                          _handleOptionQuantityChanged(group.id, opt.id, newCount);
+                                        } else if (canDecrease) {
+                                          _handleOptionQuantityChanged(group.id, opt.id, 0);
+                                        }
+                                      } else {
+                                        if (limitMin == 0) {
+                                          final checked = !isOptSelected;
+                                          if (checked) {
+                                            final int newCount = opt.minQuantity > 0 ? opt.minQuantity : 1;
+                                            if (opt.maxQuantity > 0 && newCount > opt.maxQuantity) {
+                                              NotificationService.showWarning(
+                                                context,
+                                                'Solo puedes seleccionar un máximo de ${opt.maxQuantity} para ${opt.name}',
+                                              );
+                                              return;
+                                            }
+                                            if (group.maxSelect > 0) {
+                                              final currentList = _selectedOptions[group.id] ?? [];
+                                              final int currentGroupTotal = currentList.length;
+                                              final int newGroupTotal = currentGroupTotal + newCount;
+                                              final int allowedMax = group.maxSelect * activeQuantity;
+                                              if (newGroupTotal > allowedMax) {
+                                                NotificationService.showWarning(
+                                                  context,
+                                                  'Solo puedes seleccionar un máximo de $allowedMax opción(es) en ${group.name}',
+                                                );
+                                                return;
+                                              }
+                                            }
+                                            _handleOptionQuantityChanged(group.id, opt.id, newCount);
+                                          } else {
+                                            _handleOptionQuantityChanged(group.id, opt.id, 0);
+                                          }
+                                        }
+                                      }
+                                    },
+                                  );
+                                }),
                               ],
                             ),
                           );
@@ -698,63 +1024,67 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                         ),
                       ],
                       const SizedBox(height: 20),
-                      // Botón de acción interactivo (idéntico a la experiencia en app de clientes)
+                      // Resumen de Total Estimado de Compra (Sin botón de compra / Agregar al carrito)
                       Container(
                         width: double.infinity,
-                        height: 52,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {},
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF2FF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const HugeIcon(
+                                icon: HugeIcons.strokeRoundedCalculate,
+                                size: 20,
+                                color: Color(0xFF4F46E5),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  HugeIcon(
-                                    icon: isServiceWithSlots
-                                        ? HugeIcons.strokeRoundedCalendar03
-                                        : (isPreOrderProduct
-                                            ? HugeIcons.strokeRoundedDeliveryBox01
-                                            : HugeIcons.strokeRoundedShoppingBag02),
-                                    color: Colors.white,
-                                    size: 20,
+                                  const Text(
+                                    'Total estimado en vista previa',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
                                   ),
-                                  const SizedBox(width: 10),
                                   Text(
-                                    isServiceWithSlots
-                                        ? (_simulatedSelectedSlotId != null
-                                            ? 'Reservar Cita • \$${activePrice.toStringAsFixed(2)}'
-                                            : 'Selecciona un Horario')
-                                        : (isPreOrderProduct
-                                            ? 'Reservar en Preventa • \$${activePrice.toStringAsFixed(2)}'
-                                            : 'Agregar al Carrito • \$${activePrice.toStringAsFixed(2)}'),
+                                    state.hasVariants && _totalSelectedVariantsCount > 0
+                                        ? '$_totalSelectedVariantsCount ${isServiceWithSlots ? "servicio(s)" : "artículo(s)"} seleccionados'
+                                        : (isServiceWithSlots
+                                            ? (_simulatedSelectedSlotId != null ? 'Turno seleccionado' : 'Sin turno seleccionado')
+                                            : '$_quantity ${isPreOrderProduct ? "preventa(s)" : "unidad(es)"}'),
                                     style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14.5,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF334155),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
+                            Text(
+                              '\$${totalSimulatedPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1002,12 +1332,14 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Opciones del producto',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF111827),
+            const Expanded(
+              child: Text(
+                'Opciones del producto',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
               ),
             ),
             Container(
@@ -1089,6 +1421,9 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                       final displayLabel = _getVariantDisplayLabel(val);
                       final color = _parseVariantColor(val);
                       final imageUrl = _resolveVariantImageUrl(state, axis, val);
+                      final rowVariant = _getVariantForRow(axis, val, state);
+                      final rowKey = rowVariant != null ? _getVariantKey(rowVariant) : val;
+                      final rowQuantity = _variantQuantities[rowKey] ?? 0;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -1223,6 +1558,15 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                             color: Color(0xFFEF4444),
                                           ),
                                         )
+                                      else if (rowQuantity > 0)
+                                        Text(
+                                          '$rowQuantity seleccionado${rowQuantity > 1 ? 's' : ''}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF4F46E5),
+                                          ),
+                                        )
                                       else if (isSelected)
                                         const Text(
                                           'Seleccionado',
@@ -1238,16 +1582,28 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
 
                                 const SizedBox(width: 8),
 
-                                // 4. Contador de cantidad [-] [ 1 ] [+]
+                                // 4. Contador de cantidad [-] [ 0 ] [+]
                                 _buildRowStepper(
                                   isSelected: isSelected,
                                   isAvailable: isAvailable,
-                                  quantity: _simulatedQuantity,
-                                  onTapSelect: () => setState(() => _simulatedAxisValues[axis.name] = val),
-                                  onIncrease: () => setState(() => _simulatedQuantity++),
-                                  onDecrease: () => setState(() {
-                                    if (_simulatedQuantity > 1) _simulatedQuantity--;
-                                  }),
+                                  quantity: rowQuantity,
+                                  onTapSelect: () {
+                                    setState(() => _simulatedAxisValues[axis.name] = val);
+                                    if (rowVariant != null && rowQuantity == 0) {
+                                      _setVariantQuantity(rowVariant, 1, state);
+                                    }
+                                  },
+                                  onIncrease: () {
+                                    setState(() => _simulatedAxisValues[axis.name] = val);
+                                    if (rowVariant != null) {
+                                      _setVariantQuantity(rowVariant, rowQuantity + 1, state);
+                                    }
+                                  },
+                                  onDecrease: () {
+                                    if (rowVariant != null && rowQuantity > 0) {
+                                      _setVariantQuantity(rowVariant, rowQuantity - 1, state);
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -1270,7 +1626,10 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                         onTap: isAvailable
                             ? () => setState(() => _simulatedAxisValues[axis.name] = val)
                             : null,
-                        child: AnimatedContainer(
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: isAvailable ? 1.0 : 0.35,
+                          child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -1307,11 +1666,17 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                     : FontWeight.w500,
                                 color: isSelected
                                     ? const Color(0xFF4F46E5)
-                                    : const Color(0xFF1E293B),
+                                    : (isAvailable
+                                        ? const Color(0xFF1E293B)
+                                        : const Color(0xFF94A3B8)),
+                                decoration: isAvailable
+                                    ? null
+                                    : TextDecoration.lineThrough,
                               ),
                             ),
                           ),
-                        );
+                        ),
+                      );
                     }).toList(),
                   ),
                 ],
@@ -1320,7 +1685,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
           );
         }),
 
-        // Barra de Acción / Total Simulado
+        // Barra Informativa de Subtotal Simulado de Variantes
         Container(
           margin: const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1336,7 +1701,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'Total simulado',
+                    'Subtotal variantes',
                     style: TextStyle(
                       fontSize: 11,
                       color: Color(0xFF64748B),
@@ -1344,7 +1709,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                     ),
                   ),
                   Text(
-                    '\$${(activePrice * _simulatedQuantity).toStringAsFixed(2)}',
+                    '\$${_calculateTotalVariantsPrice(state).toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
@@ -1355,35 +1720,27 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFC7D2FE)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    HugeIcon(
-                      icon: HugeIcons.strokeRoundedShoppingBag02,
-                      size: 16,
-                      color: Colors.white,
+                    const HugeIcon(
+                      icon: HugeIcons.strokeRoundedPackage,
+                      size: 15,
+                      color: Color(0xFF4F46E5),
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text(
-                      'Agregar al Carrito',
-                      style: TextStyle(
-                        fontSize: 13,
+                      '$_totalSelectedVariantsCount seleccionada${_totalSelectedVariantsCount == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: Color(0xFF4F46E5),
                       ),
                     ),
                   ],
@@ -1531,6 +1888,11 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
       }
 
       final stock = variant.stockQuantity;
+      final availableVariants = state.variants
+          .where((v) => v.isActive && v.stockQuantity > 0)
+          .toList();
+      final isSingleVariantRemaining = availableVariants.length == 1;
+
       if (stock <= 0) {
         return Row(
           children: [
@@ -1550,7 +1912,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
             ),
           ],
         );
-      } else if (stock <= 5) {
+      } else if (isSingleVariantRemaining && stock <= 3) {
         return Row(
           children: [
             const HugeIcon(
@@ -1605,6 +1967,25 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
             'Agotado',
             style: TextStyle(
               color: Colors.red.shade700,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      );
+    } else if (stock <= 3) {
+      return Row(
+        children: [
+          const HugeIcon(
+            icon: HugeIcons.strokeRoundedAlert01,
+            color: Colors.deepOrange,
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '¡Apurate, solo quedan ${stock.toInt()} unidades!',
+            style: TextStyle(
+              color: Colors.deepOrange.shade700,
               fontWeight: FontWeight.w700,
               fontSize: 13,
             ),
@@ -1673,13 +2054,13 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
         children: [
           // Botón Menos
           InkWell(
-            onTap: isSelected && quantity > 1 ? onDecrease : null,
+            onTap: isSelected && quantity > 0 ? onDecrease : null,
             borderRadius: BorderRadius.circular(6),
             child: Container(
               width: 26,
               height: 26,
               decoration: BoxDecoration(
-                color: isSelected && quantity > 1
+                color: isSelected && quantity > 0
                     ? const Color(0xFFF1F5F9)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
@@ -1688,7 +2069,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
               child: Icon(
                 Icons.remove_rounded,
                 size: 14,
-                color: isSelected && quantity > 1
+                color: isSelected && quantity > 0
                     ? const Color(0xFF1E293B)
                     : const Color(0xFFCBD5E1),
               ),
@@ -1700,7 +2081,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
-              isSelected ? '$quantity' : '1',
+              '$quantity',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,

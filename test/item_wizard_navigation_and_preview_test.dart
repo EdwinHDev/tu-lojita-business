@@ -132,7 +132,9 @@ void main() {
     expect(find.text('Paso 4 de 4'), findsOneWidget);
     expect(find.text('Vista previa interactiva: Así se presentará tu artículo a los compradores en la app.'), findsOneWidget);
     expect(find.text('Camiseta Oversize Streetwear'), findsOneWidget);
-    expect(find.text('\$25.00'), findsOneWidget);
+    expect(find.text('\$25.00'), findsAtLeastNWidgets(1));
+    expect(find.text('Total estimado en vista previa'), findsOneWidget);
+    expect(find.textContaining('Agregar al Carrito'), findsNothing);
 
     // 10. Verify final Action Button in Step 4 is "PUBLICAR ARTÍCULO"
     expect(find.text('PUBLICAR ARTÍCULO'), findsOneWidget);
