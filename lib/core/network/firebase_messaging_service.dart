@@ -50,6 +50,28 @@ class FirebaseMessagingService {
     this.ensureStoresLoaded,
   });
 
+  static Map<String, dynamic> _extractMessageData(RemoteMessage message) {
+    final map = Map<String, dynamic>.from(message.data);
+    final notifTitle = message.notification?.title?.trim();
+    if ((map['title'] == null || map['title'].toString().trim().isEmpty) &&
+        notifTitle != null &&
+        notifTitle.isNotEmpty) {
+      map['title'] = notifTitle;
+    }
+    final notifBody = message.notification?.body?.trim();
+    if ((map['body'] == null || map['body'].toString().trim().isEmpty) &&
+        notifBody != null &&
+        notifBody.isNotEmpty) {
+      map['body'] = notifBody;
+    }
+    return map;
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> extractMessageDataForTest(RemoteMessage message) {
+    return _extractMessageData(message);
+  }
+
   Future<void> init() async {
     try {
       await Firebase.initializeApp();
@@ -79,7 +101,7 @@ class FirebaseMessagingService {
 
       // Segundo plano (Warm start)
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        queueOrNavigate(message.data);
+        queueOrNavigate(_extractMessageData(message));
       });
 
       // App cerrada (Cold start - local notification)
@@ -101,7 +123,7 @@ class FirebaseMessagingService {
       final initialMessage =
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
-        queueOrNavigate(initialMessage.data);
+        queueOrNavigate(_extractMessageData(initialMessage));
       }
     } catch (e) {
       debugPrint('Error initializing Firebase Messaging in Business app: $e');
@@ -217,10 +239,21 @@ class FirebaseMessagingService {
       return;
     }
 
-    final title = message.notification?.title ??
-        message.data['title'] ??
-        'Tu Lojita Comercio';
-    final body = message.notification?.body ?? message.data['body'] ?? '';
+    final notifTitle = message.notification?.title?.trim();
+    final dataTitle = message.data['title']?.toString().trim();
+    final title = (notifTitle != null && notifTitle.isNotEmpty)
+        ? notifTitle
+        : ((dataTitle != null && dataTitle.isNotEmpty)
+            ? dataTitle
+            : 'Tu Lojita Comercio');
+
+    final notifBody = message.notification?.body?.trim();
+    final dataBody = message.data['body']?.toString().trim();
+    final body = (notifBody != null && notifBody.isNotEmpty)
+        ? notifBody
+        : ((dataBody != null && dataBody.isNotEmpty)
+            ? dataBody
+            : '');
 
     final rawOrderId = message.data['orderId']?.toString() ?? '';
     final rawTargetId = message.data['targetId']?.toString() ?? '';
