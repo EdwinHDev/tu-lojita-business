@@ -278,39 +278,10 @@ class _StoreSetupWizardScreenState
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        // Evitar que el usuario salga hacia el dashboard sin configurar su sede
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Configuración Necesaria'),
-            content: const Text(
-              'Para comenzar a utilizar tu panel empresarial debes confirmar o crear tu primera sede. Si deseas continuar después, puedes cerrar sesión.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Continuar aquí'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Cerrar sesión'),
-              ),
-            ],
-          ),
-        );
-        if (confirm == true && context.mounted) {
-          await ref.read(authProvider.notifier).logout();
-          if (context.mounted) context.go('/login');
-        }
-      },
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           title: Text(
             !_hasCompletedTutorial
                 ? 'Bienvenido a Tu Lojita'

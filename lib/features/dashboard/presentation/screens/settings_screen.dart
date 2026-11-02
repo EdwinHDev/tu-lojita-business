@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/business_change_password_dialog.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/business_account_deletion_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -90,6 +91,23 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => BusinessChangePasswordDialog.show(context),
             ),
           const Divider(),
+          if (user?.isCollaborator != true)
+            ListTile(
+              leading: const HugeIcon(
+                icon: HugeIcons.strokeRoundedDelete02,
+                color: Colors.red,
+              ),
+              title: const Text(
+                'Dar de baja mi cuenta',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: const Text('Eliminar cuenta y credenciales'),
+              trailing: const Icon(Icons.chevron_right, color: Colors.red),
+              onTap: () => BusinessAccountDeletionDialog.show(context),
+            ),
           ListTile(
             leading: const HugeIcon(icon: HugeIcons.strokeRoundedLogout01, color: Colors.red),
             title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),

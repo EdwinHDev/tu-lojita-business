@@ -36,6 +36,7 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
     final canManageStock = user?.canManageStock ?? true;
 
     return SingleChildScrollView(
+      key: const PageStorageKey('step_pricing_and_variants_scroll'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Form(
         key: widget.formKey,

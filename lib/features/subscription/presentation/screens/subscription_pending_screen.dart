@@ -51,7 +51,7 @@ class _SubscriptionPendingScreenState
         context,
         '¡Tu membresía ha sido aprobada y activada!',
       );
-      context.go('/dashboard');
+      context.go('/splash');
       return;
     }
 

@@ -47,9 +47,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     try {
       await Future.wait(
-        unreadNotifications.map((n) => ref.read(notificationRepositoryProvider).markAsRead(n.id)),
+        unreadNotifications
+            .map((n) => ref.read(notificationsProvider.notifier).markAsRead(n.id)),
       );
-      ref.invalidate(notificationsProvider);
       if (mounted) {
         NotificationService.showSuccess(context, 'Todas las notificaciones marcadas como leídas');
       }
@@ -611,7 +611,10 @@ class _PremiumNotificationTile extends ConsumerWidget {
       final achievementName = titleMatch?.group(1);
 
       // Check if store achievements list is already available in provider cache
-      final storeId = ref.watch(storesProvider).stores.firstOrNull?.id;
+      final storeId = (notification.storeId != null &&
+              notification.storeId!.isNotEmpty)
+          ? notification.storeId
+          : ref.watch(storesProvider).stores.firstOrNull?.id;
       if (storeId != null && storeId.isNotEmpty) {
         final achievements = ref.watch(storeAchievementsProvider(storeId)).asData?.value;
         if (achievements != null) {
@@ -803,11 +806,46 @@ class _PremiumNotificationTile extends ConsumerWidget {
   }
 
   void _handleTap(BuildContext context, WidgetRef ref) async {
+    ref.read(notificationsProvider.notifier).markAsRead(notification.id);
+
     final authState = ref.read(authProvider);
     final currentUser = authState is Authenticated ? authState.user : null;
     bool canAccess(List<String> perms) {
       if (currentUser == null) return false;
       return perms.any((p) => currentUser.hasPermission(p));
+    }
+
+    Future<String> resolveEffectiveStoreId({bool useTargetIdAsFallback = false}) async {
+      if (notification.storeId != null && notification.storeId!.isNotEmpty) {
+        return notification.storeId!;
+      }
+      if (useTargetIdAsFallback &&
+          notification.targetId != null &&
+          notification.targetId!.isNotEmpty) {
+        return notification.targetId!;
+      }
+      var fallback = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (fallback.isEmpty) {
+        await ref.read(storesProvider.notifier).loadData();
+        fallback = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      }
+      return fallback;
+    }
+
+    bool checkBranchAccess(String storeId) {
+      if (storeId.isEmpty || currentUser == null || !currentUser.isCollaborator) {
+        return true;
+      }
+      if (!currentUser.canAccessBranch(storeId)) {
+        if (context.mounted) {
+          NotificationService.showError(
+            context,
+            'No tienes acceso a la sucursal asociada a esta notificación.',
+          );
+        }
+        return false;
+      }
+      return true;
     }
 
     if (notification.type == 'STRIKE_APPLIED' ||
@@ -819,11 +857,9 @@ class _PremiumNotificationTile extends ConsumerWidget {
         );
         return;
       }
-      final storeId = (notification.targetId != null &&
-              notification.targetId!.isNotEmpty)
-          ? notification.targetId!
-          : (ref.read(storesProvider).stores.firstOrNull?.id ?? '');
-      if (storeId.isNotEmpty) {
+      final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+      if (!checkBranchAccess(storeId)) return;
+      if (context.mounted && storeId.isNotEmpty) {
         StoreHealthSheet.show(context, storeId);
       }
     } else if (notification.type == 'ITEM_HIDDEN') {
@@ -834,8 +870,10 @@ class _PremiumNotificationTile extends ConsumerWidget {
         );
         return;
       }
-      final storeId = ref.read(storesProvider).stores.firstOrNull?.id;
-      if (storeId != null && storeId.isNotEmpty) {
+      final storeId = await resolveEffectiveStoreId();
+      if (!checkBranchAccess(storeId)) return;
+      if (!context.mounted) return;
+      if (storeId.isNotEmpty) {
         context.push('/dashboard/stores/$storeId/items');
       } else {
         context.push('/dashboard');
@@ -860,11 +898,15 @@ class _PremiumNotificationTile extends ConsumerWidget {
         body: notification.body,
       );
     } else if (notification.type == 'ACHIEVEMENT_UNLOCKED') {
-      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
-      if (storeId.isEmpty) {
-        await ref.read(storesProvider.notifier).loadData();
-        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (!canAccess(['reports:view', 'settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para ver logros y ranking.',
+        );
+        return;
       }
+      final storeId = await resolveEffectiveStoreId();
+      if (!checkBranchAccess(storeId)) return;
 
       int bonus = 0;
       final match = RegExp(r'\+(\d+)\s*(?:LP|PR)', caseSensitive: false)
@@ -952,6 +994,7 @@ class _PremiumNotificationTile extends ConsumerWidget {
       if (context.mounted) {
         context.push('/dashboard/ranking/achievement-unlocked', extra: {
           'title': achievementTitle,
+          'achievementTitle': achievementTitle,
           'description': achievementDesc,
           'lpBonus': bonus,
           'badgeUrl': badgeUrl,
@@ -959,33 +1002,57 @@ class _PremiumNotificationTile extends ConsumerWidget {
         });
       }
     } else if (notification.type == 'DIVISION_UP') {
-      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
-      if (storeId.isEmpty) {
-        await ref.read(storesProvider.notifier).loadData();
-        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (!canAccess(['reports:view', 'settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para ver logros y ranking.',
+        );
+        return;
       }
+      final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+      if (!checkBranchAccess(storeId)) return;
+      final divMatch = RegExp(
+        r'(GRAN MAESTRO|RETADOR|DIAMANTE|PLATINO|MAESTRO|BRONCE|PLATA|ORO|HIERRO)',
+        caseSensitive: false,
+      ).firstMatch(notification.body);
+      final division = divMatch?.group(1)?.toUpperCase() ?? 'BRONCE';
       if (context.mounted) {
         context.push('/dashboard/ranking/celebration', extra: {
+          'division': division,
           'storeId': storeId,
         });
       }
     } else if (notification.type == 'DIVISION_DOWN') {
-      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
-      if (storeId.isEmpty) {
-        await ref.read(storesProvider.notifier).loadData();
-        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (!canAccess(['reports:view', 'settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para ver logros y ranking.',
+        );
+        return;
       }
+      final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+      if (!checkBranchAccess(storeId)) return;
+      final divMatch = RegExp(
+        r'(GRAN MAESTRO|RETADOR|DIAMANTE|PLATINO|MAESTRO|BRONCE|PLATA|ORO|HIERRO)',
+        caseSensitive: false,
+      ).firstMatch(notification.body);
+      final division = divMatch?.group(1)?.toUpperCase() ?? 'HIERRO';
       if (context.mounted) {
         context.push('/dashboard/ranking/division-down', extra: {
+          'division': division,
           'storeId': storeId,
         });
       }
     } else if (notification.type == 'STORE_FLAGGED') {
-      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
-      if (storeId.isEmpty) {
-        await ref.read(storesProvider.notifier).loadData();
-        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (!canAccess(['settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para gestionar esta configuración.',
+        );
+        return;
       }
+      final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+      if (!checkBranchAccess(storeId)) return;
       if (context.mounted) {
         context.push('/dashboard/ranking/flagged', extra: {
           'storeId': storeId,
@@ -997,11 +1064,15 @@ class _PremiumNotificationTile extends ConsumerWidget {
         notification.type == 'CATEGORY_RIVALRY' ||
         notification.type == 'RANK_SHIELD_EXPIRING' ||
         notification.type == 'DANGER_ZONE_ALERT') {
-      var storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
-      if (storeId.isEmpty) {
-        await ref.read(storesProvider.notifier).loadData();
-        storeId = ref.read(storesProvider).stores.firstOrNull?.id ?? '';
+      if (!canAccess(['reports:view', 'settings:manage'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para ver logros y ranking.',
+        );
+        return;
       }
+      final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+      if (!checkBranchAccess(storeId)) return;
       if (context.mounted) {
         if (storeId.isNotEmpty) {
           context.push('/dashboard/stores/$storeId/ranking');
@@ -1010,10 +1081,18 @@ class _PremiumNotificationTile extends ConsumerWidget {
         }
       }
     } else if (notification.targetId != null && notification.targetId!.isNotEmpty) {
+      if (notification.storeId != null &&
+          notification.storeId!.isNotEmpty &&
+          !checkBranchAccess(notification.storeId!)) {
+        return;
+      }
+      final ch = (notification.channelType ?? '').toUpperCase();
       final isSupportChat = notification.type == 'SUPPORT_CHAT_MESSAGE' ||
           (notification.type == 'CHAT_MESSAGE' &&
-              (notification.title.toLowerCase().contains('soporte') ||
-                  notification.body.toLowerCase().contains('soporte')));
+              (ch.contains('SUPPORT') ||
+                  (ch.isEmpty &&
+                      (notification.title.toLowerCase().contains('soporte') ||
+                          notification.body.toLowerCase().contains('soporte')))));
       if (isSupportChat) {
         if (!canAccess(['disputes:view', 'disputes:respond'])) {
           NotificationService.showError(
@@ -1042,32 +1121,30 @@ class _PremiumNotificationTile extends ConsumerWidget {
           );
           return;
         }
-        if (notification.type == 'DISPUTE_ESCALATED') {
+        final bool isStoreBlockMediation = (notification.storeId != null &&
+                notification.storeId!.isNotEmpty &&
+                notification.targetId == notification.storeId) ||
+            (notification.type != 'DISPUTE_ESCALATED' &&
+                notification.channelType != 'DISPUTE_BUYER_SELLER' &&
+                !notification.title.toLowerCase().contains('reclamo') &&
+                !notification.body.toLowerCase().contains('reclamo') &&
+                !notification.body.toLowerCase().contains('pedido') &&
+                !notification.body.toLowerCase().contains('orden'));
+
+        if (!isStoreBlockMediation) {
           context.push('/dashboard/orders/${notification.targetId}?openDispute=true');
-          ref.read(notificationRepositoryProvider).markDisputeRead(notification.targetId!);
+          ref.read(notificationsProvider.notifier).markDisputeRead(notification.targetId!);
         } else {
-          final isCustomerMed = notification.title.toLowerCase().contains('mediación') ||
-              notification.title.toLowerCase().contains('mediacion') ||
-              notification.body.toLowerCase().contains('solicitud de mediación') ||
-              notification.body.toLowerCase().contains('solicitud de mediacion');
+          // Solicitud de mediación de cliente por bloqueo en tienda
+          final storeId = await resolveEffectiveStoreId(useTargetIdAsFallback: true);
+          if (!checkBranchAccess(storeId)) return;
 
-          if (isCustomerMed) {
-            var storeId = ref.read(storesProvider).stores.firstOrNull?.id;
-            if (storeId == null || storeId.isEmpty) {
-              await ref.read(storesProvider.notifier).loadData();
-              storeId = ref.read(storesProvider).stores.firstOrNull?.id;
+          if (context.mounted) {
+            if (storeId.isNotEmpty) {
+              context.push('/dashboard/stores/$storeId/mediation-requests');
+            } else {
+              NotificationService.showInfo(context, notification.body);
             }
-
-            if (context.mounted) {
-              if (storeId != null && storeId.isNotEmpty) {
-                context.push('/dashboard/stores/$storeId/mediation-requests');
-              } else {
-                NotificationService.showInfo(context, notification.body);
-              }
-            }
-          } else {
-            context.push('/dashboard/orders/${notification.targetId}?openDispute=true');
-            ref.read(notificationRepositoryProvider).markDisputeRead(notification.targetId!);
           }
         }
       } else if (notification.type == 'ORDER_CREATED' ||
@@ -1099,6 +1176,24 @@ class _PremiumNotificationTile extends ConsumerWidget {
         context.push('/dashboard/orders/${notification.targetId}');
       } else {
         context.push('/dashboard/orders/${notification.targetId}');
+      }
+    } else if (notification.type == 'MEDIATION_REQUEST' ||
+        notification.type == 'MEDIATION_RESPONSE') {
+      if (!canAccess(['disputes:view', 'disputes:respond'])) {
+        NotificationService.showError(
+          context,
+          'No tienes los permisos requeridos para gestionar reclamos o mediaciones.',
+        );
+        return;
+      }
+      final storeId = await resolveEffectiveStoreId();
+      if (!checkBranchAccess(storeId)) return;
+      if (context.mounted) {
+        if (storeId.isNotEmpty) {
+          context.push('/dashboard/stores/$storeId/mediation-requests');
+        } else {
+          NotificationService.showInfo(context, notification.body);
+        }
       }
     } else {
       // Notificación general o informativa sin ruta de destino: mostrar modal para dar feedback
@@ -1143,15 +1238,6 @@ class _PremiumNotificationTile extends ConsumerWidget {
           ),
         );
       }
-    }
-
-    if (!notification.isRead) {
-      ref.read(notificationRepositoryProvider)
-          .markAsRead(notification.id)
-          .then((_) {
-            ref.invalidate(notificationsProvider);
-          })
-          .catchError((_) {});
     }
   }
 }

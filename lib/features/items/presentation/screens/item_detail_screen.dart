@@ -6,6 +6,7 @@ import '../../domain/entities/item.dart';
 import '../../../../core/config/envs.dart';
 import '../providers/item_list_notifier.dart';
 import '../../../../core/utils/notification_service.dart';
+import '../widgets/promote_item_sheet.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
@@ -276,7 +277,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
                 borderRadius: BorderRadius.circular(14),
               ),
               onSelected: (value) async {
-                if (value == 'edit') {
+                if (value == 'promote') {
+                  PromoteItemSheet.show(context, item, widget.storeId);
+                } else if (value == 'edit') {
                   final result = await context.push('/dashboard/stores/${widget.storeId}/items/new', extra: item);
                   if (result == true && mounted && context.mounted) {
                     ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
@@ -289,6 +292,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
                 }
               },
               itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'promote',
+                  child: Row(
+                    children: [
+                      Icon(Icons.stars_rounded, size: 18, color: Color(0xFFD97706)),
+                      SizedBox(width: 8),
+                      Text('Promocionar en Home', style: TextStyle(fontSize: 14, color: Color(0xFFD97706), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'edit',
                   child: Row(
@@ -377,6 +390,41 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
         ),
         const SizedBox(height: 8),
         _buildPriceSection(),
+        const SizedBox(height: 14),
+        InkWell(
+          onTap: () => PromoteItemSheet.show(context, item, widget.storeId),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7).withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFDE68A)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.stars_rounded, color: Color(0xFFD97706), size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.isFeatured ? 'Artículo en Vitrina Destacada' : 'Promocionar en el Home',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF92400E)),
+                      ),
+                      Text(
+                        item.isFeatured ? 'Toca para extender o gestionar tu campaña' : 'Aparece en la portada principal para miles de clientes',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFFB45309)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF92400E)),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -1490,7 +1538,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
         }
       } catch (e) {
         if (mounted && context.mounted) {
-          NotificationService.showError(context, 'Error al eliminar: $e');
+          NotificationService.showError(
+            context,
+            e.toString().replaceAll('Exception: ', ''),
+          );
         }
       }
     }

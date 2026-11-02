@@ -67,25 +67,15 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
   }
 
   void _clearNotifications() {
-    // Cancelar notificación local del OS (idéntico a lo que pasa en OrderDetailsScreen)
     NotificationHelper.cancelNotification(widget.orderId.hashCode);
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final notificationsAsync = ref.read(notificationsProvider);
-      if (notificationsAsync.value != null) {
-        final unreadForOrder = notificationsAsync.value!.where((n) => 
-          !n.isRead && n.targetId == widget.orderId
-        ).toList();
-        
-        if (unreadForOrder.isNotEmpty) {
-          final repo = ref.read(notificationRepositoryProvider);
-          Future.wait(unreadForOrder.map((n) => repo.markAsRead(n.id))).then((_) {
-            if (mounted) {
-              ref.invalidate(notificationsProvider);
-            }
-          });
-        }
-      }
+      if (!mounted) return;
+      ref.read(notificationsProvider.notifier).markOrderNotificationsAsRead(
+            widget.orderId,
+            onlyChat: true,
+            isSupportChat: false,
+          );
     });
   }
 

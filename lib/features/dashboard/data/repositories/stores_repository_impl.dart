@@ -87,4 +87,85 @@ class StoresRepositoryImpl implements StoresRepository {
       rethrow;
     }
   }
+
+  @override
+  Future<({bool canProceed, List<String> blockers, Map<String, dynamic> details})> validateLifecyclePreflight(String storeId) async {
+    try {
+      final response = await _dio.post('/stores/$storeId/lifecycle/validate-preflight');
+      final data = response.data as Map<String, dynamic>;
+      final blockersRaw = data['blockers'] as List? ?? [];
+      final blockers = blockersRaw.map((e) => e.toString()).toList();
+      return (
+        canProceed: data['canProceed'] == true,
+        blockers: blockers,
+        details: (data['details'] as Map<String, dynamic>?) ?? {},
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<({bool success, String message, String email})> requestLifecycleOtp(String storeId, String actionType) async {
+    try {
+      final response = await _dio.post(
+        '/stores/$storeId/lifecycle/request-otp',
+        data: {'actionType': actionType},
+      );
+      final data = response.data as Map<String, dynamic>;
+      return (
+        success: data['success'] == true,
+        message: data['message']?.toString() ?? '',
+        email: data['email']?.toString() ?? '',
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Store> deactivateBranch(String storeId, String otpCode) async {
+    try {
+      final response = await _dio.post(
+        '/stores/$storeId/lifecycle/deactivate',
+        data: {'otpCode': otpCode},
+      );
+      return StoreModel.fromJson(response.data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Store> reactivateBranch(String storeId) async {
+    try {
+      final response = await _dio.post('/stores/$storeId/lifecycle/reactivate');
+      return StoreModel.fromJson(response.data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Store> scheduleBranchDeletion(String storeId, String otpCode) async {
+    try {
+      final response = await _dio.post(
+        '/stores/$storeId/lifecycle/schedule-deletion',
+        data: {'otpCode': otpCode},
+      );
+      return StoreModel.fromJson(response.data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Store> cancelScheduledDeletion(String storeId) async {
+    try {
+      final response = await _dio.post('/stores/$storeId/lifecycle/cancel-deletion');
+      return StoreModel.fromJson(response.data);
+    } catch (e) {
+      rethrow;
+    }
+  }
 }

@@ -640,7 +640,7 @@ class OrderCard extends StatelessWidget {
     String label;
     IconData icon;
 
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'PENDING':
         bgColor = const Color(0xFFFFF7ED);
         textColor = const Color(0xFFC2410C);
@@ -656,7 +656,13 @@ class OrderCard extends StatelessWidget {
       case 'CANCELLED':
         bgColor = const Color(0xFFFEF2F2);
         textColor = const Color(0xFFB91C1C);
-        label = 'Cancelado';
+        label = 'Cancelada';
+        icon = Icons.cancel_outlined;
+        break;
+      case 'REJECTED':
+        bgColor = const Color(0xFFFEF2F2);
+        textColor = const Color(0xFFDC2626);
+        label = 'Rechazada';
         icon = Icons.cancel_outlined;
         break;
       case 'PARTIALLY_PAID':

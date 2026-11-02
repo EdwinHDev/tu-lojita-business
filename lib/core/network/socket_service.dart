@@ -82,6 +82,14 @@ class SocketService {
 
   bool get isConnected => _socket != null && _socket!.connected;
 
+  bool isViewingOrderChat(String orderId, {bool isSupport = false}) {
+    if (orderId.isEmpty) return false;
+    if (isSupport) {
+      return _currentSupportChatOrderId == orderId;
+    }
+    return _currentChatOrderId == orderId;
+  }
+
   Future<void> init() async {
     if (_socket != null && _socket!.connected) return;
 
@@ -185,8 +193,43 @@ class SocketService {
       final body = (payload['body'] ?? '').toString();
       final type = (payload['type'] ?? '').toString();
       final targetId = (payload['targetId'] ?? payload['orderId'] ?? '').toString();
+      final rawOrderId = (payload['orderId'] ?? '').toString();
       final storeId = (payload['storeId'] ?? '').toString();
       final channelType = (payload['channelType'] ?? '').toString();
+
+      final bool isStoreMediation = (type == 'MEDIATION_REQUEST' ||
+              type == 'MEDIATION_RESPONSE') &&
+          ((storeId.isNotEmpty && targetId == storeId) ||
+              (channelType != 'DISPUTE_BUYER_SELLER' &&
+                  !title.toLowerCase().contains('reclamo') &&
+                  !body.toLowerCase().contains('reclamo') &&
+                  !body.toLowerCase().contains('pedido') &&
+                  !body.toLowerCase().contains('orden') &&
+                  rawOrderId.isEmpty));
+
+      final bool isOrderTargeted = !isStoreMediation &&
+          (rawOrderId.isNotEmpty ||
+              type == 'ORDER_CREATED' ||
+              type == 'ORDER_STATUS_CHANGED' ||
+              type == 'PAYMENT_REPORTED' ||
+              type == 'PAYMENT_APPROVED' ||
+              type == 'PAYMENT_REJECTED' ||
+              type == 'REFUND_REPORTED' ||
+              type == 'REFUND_CONFIRMED' ||
+              type == 'CHAT_MESSAGE' ||
+              type == 'SUPPORT_CHAT_MESSAGE' ||
+              type == 'DISPUTE_ESCALATED' ||
+              type == 'MEDIATION_REQUEST' ||
+              type == 'MEDIATION_RESPONSE' ||
+              type == 'BUYER_REVIEW_PROMPT' ||
+              type == 'ORDER_REVIEW_RECEIVED' ||
+              type.startsWith('ORDER_') ||
+              type.startsWith('PAYMENT_') ||
+              type.startsWith('REFUND_'));
+
+      final resolvedOrderId = rawOrderId.isNotEmpty
+          ? rawOrderId
+          : (isOrderTargeted ? targetId : '');
 
       final normalizedData = <String, dynamic>{
         ...payload,
@@ -196,19 +239,32 @@ class SocketService {
         'body': body,
         'type': type,
         'targetId': targetId,
-        'orderId': (payload['orderId'] ?? targetId).toString(),
+        'orderId': resolvedOrderId,
         'storeId': storeId,
         'channelType': channelType,
       };
 
       FirebaseMessagingService.onPayloadCallback?.call(normalizedData);
 
-      final isOrderRelated = !type.startsWith('DIVISION') &&
-          !type.startsWith('ACHIEVEMENT') &&
-          !type.startsWith('STORE_FLAGGED') &&
-          !type.startsWith('WEEKLY_RANKING');
-      if (targetId.isNotEmpty && isOrderRelated) {
-        FirebaseMessagingService.onOrderNotificationCallback?.call(targetId);
+      if (resolvedOrderId.isNotEmpty && isOrderTargeted) {
+        FirebaseMessagingService.onOrderNotificationCallback
+            ?.call(resolvedOrderId);
+      }
+
+      if (type == 'CHAT_MESSAGE' || type == 'SUPPORT_CHAT_MESSAGE') {
+        final ch = channelType.toUpperCase();
+        final isSupportMsg = type == 'SUPPORT_CHAT_MESSAGE' ||
+            ch.contains('SUPPORT') ||
+            (ch.isEmpty &&
+                (title.toLowerCase().contains('soporte') ||
+                    body.toLowerCase().contains('soporte')));
+        if (isViewingOrderChat(resolvedOrderId, isSupport: isSupportMsg)) {
+          if (notificationId.isNotEmpty) {
+            FirebaseMessagingService.onActiveChatNotificationCallback
+                ?.call(notificationId);
+          }
+          return;
+        }
       }
 
       NotificationHelper.showNotification(

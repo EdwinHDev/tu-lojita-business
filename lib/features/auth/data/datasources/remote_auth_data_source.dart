@@ -62,6 +62,12 @@ abstract class RemoteAuthDataSource {
     required String currentPassword,
     required String newPassword,
   });
+  Future<Map<String, dynamic>> requestAccountDeletion({String? reason});
+  Future<Map<String, dynamic>> confirmAccountDeletion({
+    required String deletionToken,
+    required String otp,
+    String? reason,
+  });
 }
 
 class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
@@ -530,6 +536,48 @@ class RemoteAuthDataSourceImpl implements RemoteAuthDataSource {
           'newPassword': newPassword,
         },
       );
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestAccountDeletion({String? reason}) async {
+    try {
+      final response = await _dio.post(
+        '/auth/request-account-deletion',
+        data: {
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw BackendAuthenticationException(ErrorParser.parse(e));
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw AuthException(e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> confirmAccountDeletion({
+    required String deletionToken,
+    required String otp,
+    String? reason,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/auth/confirm-account-deletion',
+        data: {
+          'deletionToken': deletionToken,
+          'otp': otp,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        },
+      );
+      return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw BackendAuthenticationException(ErrorParser.parse(e));
     } catch (e) {

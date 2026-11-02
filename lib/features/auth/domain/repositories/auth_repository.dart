@@ -50,4 +50,10 @@ abstract class AuthRepository {
     required String currentPassword,
     required String newPassword,
   });
+  Future<String> requestAccountDeletion({String? reason});
+  Future<void> confirmAccountDeletion({
+    required String deletionToken,
+    required String otp,
+    String? reason,
+  });
 }

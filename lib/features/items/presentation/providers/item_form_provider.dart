@@ -17,6 +17,7 @@ class ItemFormState {
   final bool isLoadingTemplates;
   final String? errorMessage;
   final bool isSuccess;
+  final Item? createdItem;
 
   // New fields
   final String? itemId;
@@ -54,6 +55,7 @@ class ItemFormState {
     this.isLoadingTemplates = false,
     this.errorMessage,
     this.isSuccess = false,
+    this.createdItem,
     this.itemId,
     this.title = '',
     this.description = '',
@@ -144,6 +146,7 @@ class ItemFormState {
     bool? isLoadingTemplates,
     String? errorMessage,
     bool? isSuccess,
+    Item? createdItem,
     String? itemId,
     String? title,
     String? description,
@@ -179,6 +182,7 @@ class ItemFormState {
       isLoadingTemplates: isLoadingTemplates ?? this.isLoadingTemplates,
       errorMessage: errorMessage,
       isSuccess: isSuccess ?? this.isSuccess,
+      createdItem: createdItem ?? this.createdItem,
       itemId: itemId ?? this.itemId,
       title: title ?? this.title,
       description: description ?? this.description,
@@ -619,6 +623,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         if (state.existingImages.isNotEmpty) 'existingImages': state.existingImages,
       };
 
+      Item? createdResult;
       if (state.itemId != null) {
         await repository.updateItem(
           state.itemId!,
@@ -630,14 +635,18 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
           await repository.deleteImages(state.deletedImages);
         }
       } else {
-        await repository.createItem(
+        createdResult = await repository.createItem(
           itemData,
           validImages,
           mainImageIndex: state.primaryImageIndex,
         );
       }
 
-      state = state.copyWith(isLoading: false, isSuccess: true);
+      state = state.copyWith(
+        isLoading: false,
+        isSuccess: true,
+        createdItem: createdResult,
+      );
     } catch (e) {
       String message = 'Error al guardar el producto';
       if (e is DioException) {

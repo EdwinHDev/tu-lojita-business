@@ -126,22 +126,10 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     NotificationHelper.cancelNotification(orderId.hashCode);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final notificationsAsync = ref.read(notificationsProvider);
-      if (notificationsAsync.value != null) {
-        final unreadForOrder = notificationsAsync.value!
-            .where((n) => !n.isRead && n.targetId == orderId)
-            .toList();
-
-        if (unreadForOrder.isNotEmpty) {
-          final repo = ref.read(notificationRepositoryProvider);
-          Future.wait(unreadForOrder.map((n) => repo.markAsRead(n.id))).then((_) {
-            if (mounted) {
-              ref.invalidate(notificationsProvider);
-            }
-          });
-        }
-      }
-      ref.read(notificationRepositoryProvider).markDisputeRead(orderId);
+      if (!mounted) return;
+      ref
+          .read(notificationsProvider.notifier)
+          .markOrderNotificationsAsRead(orderId);
     });
   }
 

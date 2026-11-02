@@ -31,10 +31,16 @@ class SessionPurgeService {
 
     // 0. Unregister FCM device token from backend while JWT is still available
     try {
-      await _ref
-          .read(firebaseMessagingServiceProvider)
-          .unregisterDeviceToken()
-          .timeout(const Duration(seconds: 3));
+      final localAuth = _ref.read(localAuthDataSourceProvider);
+      final currentToken = await localAuth.getAccessToken();
+      if (currentToken != null && currentToken.trim().isNotEmpty) {
+        await _ref
+            .read(firebaseMessagingServiceProvider)
+            .unregisterDeviceToken()
+            .timeout(const Duration(seconds: 3));
+      } else {
+        log('SessionPurgeService: Skipping remote FCM unregister because no access token is present.');
+      }
     } catch (e) {
       log('SessionPurgeService: Warning during FCM device unregister: $e');
     }
@@ -91,6 +97,10 @@ class SessionPurgeService {
 
     try {
       _ref.read(companyOnboardingProvider.notifier).reset();
+    } catch (_) {}
+
+    try {
+      _ref.read(notificationsProvider.notifier).reset();
     } catch (_) {}
 
     // Invalidate all business and company scoped state providers

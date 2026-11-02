@@ -7,6 +7,8 @@ class NotificationModel extends AppNotification {
     required super.body,
     required super.type,
     super.targetId,
+    super.storeId,
+    super.channelType,
     required super.isRead,
     required super.createdAt,
   });
@@ -18,6 +20,8 @@ class NotificationModel extends AppNotification {
       body: json['body'],
       type: json['type'],
       targetId: json['targetId'],
+      storeId: json['storeId'],
+      channelType: json['channelType'],
       isRead: json['isRead'] ?? false,
       createdAt: DateTime.parse(json['createdAt']),
     );
@@ -30,6 +34,8 @@ class NotificationModel extends AppNotification {
       'body': body,
       'type': type,
       'targetId': targetId,
+      'storeId': storeId,
+      'channelType': channelType,
       'isRead': isRead,
       'createdAt': createdAt.toIso8601String(),
     };

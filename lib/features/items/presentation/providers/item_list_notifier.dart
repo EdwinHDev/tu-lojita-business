@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import '../../domain/entities/item.dart';
 import '../../domain/repositories/item_repository.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import 'item_list_state.dart';
@@ -120,20 +121,50 @@ class ItemListNotifier extends Notifier<ItemListState> {
     loadInitial(storeId);
   }
 
+  Future<void> toggleItemActive(String storeId, Item item) async {
+    final newActive = !item.isActive;
+    final storeData = state.forStore(storeId);
+
+    // 1. Optimistic update: Replace item in local list
+    final updatedItems = storeData.items.map((i) {
+      if (i.id == item.id) {
+        return i.copyWith(isActive: newActive);
+      }
+      return i;
+    }).toList();
+
+    _updateStoreData(storeId, storeData.copyWith(items: updatedItems));
+
+    // 2. Persist to API
+    try {
+      await _repository.updateItem(item.id, {'isActive': newActive});
+    } catch (e) {
+      // Rollback to original items if request fails
+      if (ref.mounted) {
+        _updateStoreData(storeId, storeData);
+      }
+      rethrow;
+    }
+  }
+
   Future<void> deleteItem(String storeId, String itemId) async {
     try {
-      final storeData = state.forStore(storeId);
-      final itemIndex = storeData.items.indexWhere((i) => i.id == itemId);
-      final List<String> images = itemIndex != -1 ? storeData.items[itemIndex].images : const [];
-
       await _repository.deleteItem(itemId);
 
-      if (images.isNotEmpty) {
-        _repository.deleteImages(images);
-      }
-
       if (!ref.mounted) return;
-      await loadInitial(storeId);
+
+      // In-place removal to preserve scroll position and avoid full-screen shimmer
+      final storeData = state.forStore(storeId);
+      final updatedItems = storeData.items.where((i) => i.id != itemId).toList();
+      final newTotal = storeData.total > 0 ? storeData.total - 1 : 0;
+
+      _updateStoreData(
+        storeId,
+        storeData.copyWith(
+          items: updatedItems,
+          total: newTotal,
+        ),
+      );
     } catch (e) {
       rethrow;
     }

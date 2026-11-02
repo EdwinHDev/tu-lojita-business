@@ -15,6 +15,7 @@ import '../widgets/wizard/step_basic_info.dart';
 import '../widgets/wizard/step_customizations_and_rules.dart';
 import '../widgets/wizard/step_item_preview.dart';
 import '../widgets/wizard/step_pricing_and_variants.dart';
+import '../widgets/promote_item_sheet.dart';
 
 class ItemFormScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -180,6 +181,88 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     ref.read(itemFormProvider.notifier).submit(widget.storeId);
   }
 
+  Future<void> _showPromotionUpsellDialog(BuildContext context, Item createdItem) async {
+    final shouldPromote = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.stars_rounded, color: Color(0xFFF59E0B), size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '¡Artículo publicado!',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tu ${createdItem.itemType == ItemType.product ? 'producto' : 'servicio'} "${createdItem.title}" ya está activo en tu tienda.',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7).withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.local_fire_department_rounded, color: Color(0xFFD97706), size: 22),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '¿Deseas promocionarlo en el Home de Tu Lojita para multiplicar sus visitas y ventas?',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Ahora no', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Promocionar ⭐', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || !context.mounted) return;
+
+    if (shouldPromote == true && context.mounted) {
+      await PromoteItemSheet.show(context, createdItem, widget.storeId);
+    }
+
+    if (mounted && context.mounted) {
+      context.pop(true);
+      NotificationService.showSuccess(
+        context,
+        'Artículo guardado exitosamente',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(itemFormProvider);
@@ -188,11 +271,17 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
       if (next.isSuccess) {
         ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
         ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
-        context.pop(true);
-        NotificationService.showSuccess(
-          context,
-          '${state.itemType == ItemType.product ? 'Producto' : 'Servicio'} guardado exitosamente',
-        );
+
+        final newlyCreatedItem = next.createdItem;
+        if (widget.item == null && newlyCreatedItem != null) {
+          _showPromotionUpsellDialog(context, newlyCreatedItem);
+        } else {
+          context.pop(true);
+          NotificationService.showSuccess(
+            context,
+            '${state.itemType == ItemType.product ? 'Producto' : 'Servicio'} guardado exitosamente',
+          );
+        }
       }
       final error = next.errorMessage;
       if (error != null) {

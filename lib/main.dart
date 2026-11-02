@@ -10,7 +10,6 @@ import 'core/theme/app_theme.dart';
 
 import 'core/utils/notification_helper.dart';
 import 'core/network/background_service_manager.dart';
-import 'core/network/notification_deduplicator.dart';
 import 'core/network/firebase_messaging_service.dart';
 import 'core/services/order_sync_service.dart';
 import 'core/services/app_lifecycle_sync_observer.dart';
@@ -88,6 +87,17 @@ class _MyAppState extends ConsumerState<MyApp> {
         ));
       }
     };
+    FirebaseMessagingService.onActiveChatNotificationCallback = (notificationId) {
+      if (notificationId.isNotEmpty) {
+        ref.read(notificationsProvider.notifier).markAsRead(notificationId);
+      }
+    };
+    FirebaseMessagingService.isViewingChatCallback =
+        (orderId, {bool isSupport = false}) {
+      return ref
+          .read(socketServiceProvider)
+          .isViewingOrderChat(orderId, isSupport: isSupport);
+    };
     _setupNotificationListener();
   }
 
@@ -140,97 +150,10 @@ class _MyAppState extends ConsumerState<MyApp> {
       if (payload != null && payload.isNotEmpty) {
         try {
           final data = jsonDecode(payload);
-          final notificationId = data['notificationId'] ?? data['id'];
-          if (notificationId != null && notificationId.toString().isNotEmpty) {
+          if (data is Map) {
             ref
-                .read(notificationRepositoryProvider)
-                .markAsRead(notificationId.toString())
-                .then((_) {
-                  ref.invalidate(notificationsProvider);
-                })
-                .catchError((_) {});
-          }
-
-          final String rawOrderId = data['orderId']?.toString() ?? '';
-          final String rawTargetId = data['targetId']?.toString() ?? '';
-          final String storeId = data['storeId']?.toString() ?? '';
-          final String type = data['type']?.toString() ?? '';
-          final String channelType = (data['channelType'] ?? '').toString();
-          final String title = (data['title'] ?? '').toString();
-          final String orderId = rawOrderId.isNotEmpty
-              ? rawOrderId
-              : (type != 'CUSTOMER_BLOCKED' && type != 'CUSTOMER_UNBLOCKED' ? rawTargetId : '');
-
-          final authState = ref.read(authProvider);
-          final user = authState is Authenticated ? authState.user : null;
-
-          // Si es un colaborador con acceso restringido y la notificación apunta a una tienda ajena, enviar a /dashboard/notifications
-          if (storeId.isNotEmpty && user != null && user.isCollaborator && !user.canAccessBranch(storeId)) {
-            router.push('/dashboard/notifications');
-            return;
-          }
-
-          if (type == 'DIVISION_UP') {
-            router.push('/dashboard/ranking/celebration', extra: data);
-          } else if (type == 'DIVISION_DOWN') {
-            router.push('/dashboard/ranking/division-down', extra: data);
-          } else if (type == 'ACHIEVEMENT_UNLOCKED') {
-            router.push('/dashboard/ranking/achievement-unlocked', extra: data);
-          } else if (type == 'STORE_FLAGGED') {
-            router.push('/dashboard/ranking/flagged', extra: data);
-          } else if (type == 'WEEKLY_RANKING_SUMMARY') {
-            if (storeId.isNotEmpty) {
-              router.push('/dashboard/stores/$storeId/ranking');
-            } else {
-              router.push('/dashboard/notifications');
-            }
-          } else if (type == 'MEDIATION_REQUEST' ||
-              type == 'MEDIATION_RESPONSE' ||
-              type == 'DISPUTE_ESCALATED') {
-            if (orderId.isNotEmpty) {
-              router.push('/dashboard/orders/$orderId?openDispute=true');
-            } else if (storeId.isNotEmpty) {
-              router.push('/dashboard/stores/$storeId/mediation-requests');
-            } else {
-              router.push('/dashboard/notifications');
-            }
-          } else if (type == 'CHAT_MESSAGE' || type == 'SUPPORT_CHAT_MESSAGE') {
-            final isSupport = type == 'SUPPORT_CHAT_MESSAGE' ||
-                channelType.isNotEmpty ||
-                title.toLowerCase().contains('soporte');
-            if (orderId.isNotEmpty) {
-              if (isSupport) {
-                router.push('/orders/$orderId/support-chat');
-              } else {
-                router.push('/dashboard/orders/$orderId/chat');
-              }
-            } else {
-              router.push('/dashboard/notifications');
-            }
-          } else if (type == 'REPORT_RESOLUTION' || type == 'CHAT_PENALTY') {
-            router.push('/dashboard/notifications');
-          } else if (type == 'BUYER_REVIEW_PROMPT' ||
-              type == 'ORDER_REVIEW_RECEIVED') {
-            if (orderId.isNotEmpty) {
-              router.push('/dashboard/orders/$orderId');
-            } else {
-              router.push('/dashboard/notifications');
-            }
-          } else if (type == 'ORDER_CREATED' ||
-              type == 'ORDER_STATUS_CHANGED' ||
-              type == 'PAYMENT_REPORTED' ||
-              type == 'PAYMENT_APPROVED' ||
-              type == 'PAYMENT_REJECTED' ||
-              type == 'REFUND_REPORTED' ||
-              type == 'REFUND_CONFIRMED' ||
-              type.startsWith('REFUND_') ||
-              (orderId.isNotEmpty &&
-                  (type.startsWith('ORDER_') || type.startsWith('PAYMENT_') || type == 'GENERAL'))) {
-            if (orderId.isNotEmpty) {
-              router.push('/dashboard/orders/$orderId');
-            } else {
-              router.push('/dashboard/notifications');
-            }
+                .read(firebaseMessagingServiceProvider)
+                .queueOrNavigate(Map<String, dynamic>.from(data));
           } else {
             router.push('/dashboard/notifications');
           }
@@ -242,82 +165,11 @@ class _MyAppState extends ConsumerState<MyApp> {
       }
     });
 
-    final deduplicator = NotificationDeduplicator();
-
-    // Escuchar notificaciones de chat por socket con deduplicación
-    ref.read(socketServiceProvider).chatNotificationStream.listen((data) {
-      final orderId = data['orderId']?.toString() ?? '';
-      final messageId = data['id']?.toString() ?? orderId;
-      final dedupKey = 'chat_$messageId';
-      if (!deduplicator.shouldProcess(dedupKey)) return;
-
-      NotificationHelper.showNotification(
-        id: data['orderId'].hashCode,
-        title: data['senderName'] ?? 'Nuevo mensaje',
-        body: data['content'] ?? '',
-        payload: jsonEncode({
-          'orderId': data['orderId'],
-          'type': 'CHAT_MESSAGE',
-        }),
-      );
-    });
-
-    // Escuchar notificaciones de chat de soporte por socket con deduplicación
-    ref.read(socketServiceProvider).supportChatNotificationStream.listen((data) {
-      final orderId = data['orderId']?.toString() ?? '';
-      final messageId = data['id']?.toString() ?? '${orderId}_${DateTime.now().millisecondsSinceEpoch}';
-      final dedupKey = 'support_chat_$messageId';
-      if (!deduplicator.shouldProcess(dedupKey)) return;
-
-      NotificationHelper.showNotification(
-        id: (orderId.hashCode + 1).abs(),
-        title: data['senderName'] ?? 'Soporte Tu Lojita',
-        body: data['content'] ?? '',
-        payload: jsonEncode({
-          'orderId': orderId,
-          'targetId': orderId,
-          'type': 'SUPPORT_CHAT_MESSAGE',
-          'channelType': data['channelType'] ?? 'DISPUTE_MERCHANT_SUPPORT',
-        }),
-      );
-    });
-
-    // Escuchar notificaciones generales por socket (pedidos, pagos, cuotas, reclamos)
-    ref.read(socketServiceProvider).notificationsStream.listen((data) {
-      ref.invalidate(notificationsProvider);
-
-      // Despachar al bus unificado de sincronización
-      ref.read(orderSyncServiceProvider).handleIncomingPayload(data);
-
-      final rawId =
-          data['id']?.toString() ?? data['notificationId']?.toString() ?? '';
-      if (rawId.isNotEmpty && !deduplicator.shouldProcess(rawId)) {
-        return; // Suprimido: ya procesado por otro canal
-      }
-
-      final id =
-          data['id']?.hashCode ??
-          DateTime.now().millisecondsSinceEpoch.hashCode;
-      final title = data['title'] ?? 'Nueva notificación';
-      final body = data['body'] ?? '';
-      final targetId =
-          data['targetId']?.toString() ?? data['orderId']?.toString() ?? '';
-      final orderId = data['orderId']?.toString() ?? '';
-      final storeId = data['storeId']?.toString() ?? '';
-      final type = data['type'] ?? '';
-
-      NotificationHelper.showNotification(
-        id: id,
-        title: title,
-        body: body,
-        payload: jsonEncode({
-          'orderId': orderId,
-          'targetId': targetId,
-          'storeId': storeId,
-          'type': type,
-          'notificationId': rawId,
-        }),
-      );
+    // Las notificaciones locales en primer plano son gestionadas y deduplicadas
+    // por SocketService (evento 'new_notification') y FirebaseMessagingService.
+    // Aquí solo refrescamos la bandeja en memoria ante eventos de socket.
+    ref.read(socketServiceProvider).notificationsStream.listen((_) {
+      ref.read(notificationsProvider.notifier).loadNotifications();
     });
 
     // Escuchar actualizaciones de disputas en tiempo real (Task 4.3)
@@ -331,7 +183,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         ref.invalidate(activeStoreDisputeProvider(orderId));
       }
       ref.invalidate(ordersNotifierProvider);
-      ref.invalidate(notificationsProvider);
+      ref.read(notificationsProvider.notifier).loadNotifications();
       ref.read(orderSyncServiceProvider).handleIncomingPayload({
         'orderId': orderId,
         'type': 'DISPUTE_UPDATED',

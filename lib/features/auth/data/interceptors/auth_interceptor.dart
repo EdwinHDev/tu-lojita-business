@@ -7,8 +7,23 @@ class AuthInterceptor extends QueuedInterceptor {
   final LocalAuthDataSource _localDataSource;
   final Dio _dio; // To retry requests
   final VoidCallback? onUnauthenticated;
+  bool _isHandlingUnauthenticated = false;
 
   AuthInterceptor(this._localDataSource, this._dio, {this.onUnauthenticated});
+
+  void _triggerUnauthenticated() async {
+    if (_isHandlingUnauthenticated) return;
+    _isHandlingUnauthenticated = true;
+    try {
+      await _localDataSource.clearAll();
+      onUnauthenticated?.call();
+    } finally {
+      // Cooldown to prevent concurrent/cascading 401 loops
+      Future.delayed(const Duration(seconds: 3), () {
+        _isHandlingUnauthenticated = false;
+      });
+    }
+  }
 
   @override
   void onRequest(
@@ -31,17 +46,25 @@ class AuthInterceptor extends QueuedInterceptor {
       if (data is Map &&
           (data['code'] == 'ACCOUNT_SUSPENDED' ||
               data['code'] == 'ACCOUNT_BANNED')) {
-        await _localDataSource.clearAll();
-        onUnauthenticated?.call();
+        _triggerUnauthenticated();
         return handler.next(err);
       }
     }
 
     if (err.response?.statusCode == 401) {
+      final path = err.requestOptions.path;
+
+      // Avoid infinite loop if the 401 error is from device cleanup or login endpoints
+      if (path.contains('/notifications/unregister-device') ||
+          path.contains('/auth/logout') ||
+          path.contains('/auth/collaborator-login') ||
+          path.contains('/auth/login')) {
+        return handler.next(err);
+      }
+
       // Avoid infinite loop if the 401 error is from the refresh endpoint itself
-      if (err.requestOptions.path.contains('/auth/refresh')) {
-        await _localDataSource.clearAll();
-        onUnauthenticated?.call();
+      if (path.contains('/auth/refresh')) {
+        _triggerUnauthenticated();
         return handler.next(err);
       }
 
@@ -78,8 +101,7 @@ class AuthInterceptor extends QueuedInterceptor {
           final statusCode = dioErr.response?.statusCode;
           if (statusCode == 401 || statusCode == 403) {
             debugPrint('Business AuthInterceptor: Refresh token rejected with HTTP $statusCode. Clearing session...');
-            await _localDataSource.clearAll();
-            onUnauthenticated?.call();
+            _triggerUnauthenticated();
           } else {
             debugPrint('Business AuthInterceptor: Transient error during refresh ($statusCode / $dioErr). Preserving session.');
           }
@@ -89,8 +111,7 @@ class AuthInterceptor extends QueuedInterceptor {
           debugPrint(stackTrace.toString());
           final errStr = e.toString().toLowerCase();
           if (errStr.contains('401') || errStr.contains('unauthorized')) {
-            await _localDataSource.clearAll();
-            onUnauthenticated?.call();
+            _triggerUnauthenticated();
           }
           return handler.next(err);
         }
@@ -112,8 +133,7 @@ class AuthInterceptor extends QueuedInterceptor {
           }
         }
       } else {
-        await _localDataSource.clearAll();
-        onUnauthenticated?.call();
+        _triggerUnauthenticated();
       }
     }
 

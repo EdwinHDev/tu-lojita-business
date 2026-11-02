@@ -235,7 +235,7 @@ class OrderDetailHelpers {
 
   /// Retorna paleta de color, icono y etiqueta para un estado de orden.
   static (Color bgColor, Color textColor, IconData icon, String label) getStatusStyle(String status) {
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'PENDING':
         return (
           const Color(0xFFFFF7ED),
@@ -255,14 +255,14 @@ class OrderDetailHelpers {
           const Color(0xFFFFF1F2),
           const Color(0xFFBE123C),
           Icons.cancel_outlined,
-          'Cancelado',
+          'Cancelada',
         );
       case 'REJECTED':
         return (
           const Color(0xFFFEF2F2),
           const Color(0xFFDC2626),
           Icons.cancel_outlined,
-          'Rechazado',
+          'Rechazada',
         );
       case 'PARTIALLY_PAID':
         return (

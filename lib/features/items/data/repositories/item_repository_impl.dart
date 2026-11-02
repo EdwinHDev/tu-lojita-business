@@ -209,6 +209,16 @@ class ItemRepositoryImpl implements ItemRepository {
   Future<void> deleteItem(String id) async {
     try {
       await _dio.delete('/items/$id');
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final data = e.response!.data as Map;
+        if (data.containsKey('message')) {
+          final serverMessage = data['message'];
+          final message = serverMessage is List ? serverMessage.join(', ') : serverMessage.toString();
+          throw Exception(message);
+        }
+      }
+      throw Exception('No se pudo eliminar el artículo. Intenta de nuevo.');
     } catch (e) {
       rethrow;
     }

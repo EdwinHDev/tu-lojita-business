@@ -288,4 +288,24 @@ class AuthRepositoryImpl implements AuthRepository {
       newPassword: newPassword,
     );
   }
+
+  @override
+  Future<String> requestAccountDeletion({String? reason}) async {
+    final response = await _remoteDataSource.requestAccountDeletion(reason: reason);
+    return response['deletionToken'] as String;
+  }
+
+  @override
+  Future<void> confirmAccountDeletion({
+    required String deletionToken,
+    required String otp,
+    String? reason,
+  }) async {
+    await _remoteDataSource.confirmAccountDeletion(
+      deletionToken: deletionToken,
+      otp: otp,
+      reason: reason,
+    );
+    await _localDataSource.clearAll();
+  }
 }

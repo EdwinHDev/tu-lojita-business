@@ -34,6 +34,17 @@ class _PaymentMethodFormScreenState
   late TextEditingController _emailController;
   late TextEditingController _walletController;
   late TextEditingController _instructionsController;
+
+  final FocusNode _titleFocusNode = FocusNode();
+  final FocusNode _holderFocusNode = FocusNode();
+  final FocusNode _idNumberFocusNode = FocusNode();
+  final FocusNode _accountNumberFocusNode = FocusNode();
+  final FocusNode _phoneFocusNode = FocusNode();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _walletFocusNode = FocusNode();
+  final FocusNode _instructionsFocusNode = FocusNode();
+
+  final Map<TextEditingController, String> _lastFieldTexts = {};
   String? _selectedBankId;
   bool _isActive = true;
   bool _isSaving = false;
@@ -99,6 +110,7 @@ class _PaymentMethodFormScreenState
 
     // Listen to all controllers to rebuild the save button reactively
     for (final ctrl in _allControllers) {
+      _lastFieldTexts[ctrl] = ctrl.text;
       ctrl.addListener(_onFieldChanged);
     }
   }
@@ -114,13 +126,39 @@ class _PaymentMethodFormScreenState
         _instructionsController,
       ];
 
-  void _onFieldChanged() => setState(() {});
+  List<FocusNode> get _allFocusNodes => [
+        _titleFocusNode,
+        _holderFocusNode,
+        _idNumberFocusNode,
+        _accountNumberFocusNode,
+        _phoneFocusNode,
+        _emailFocusNode,
+        _walletFocusNode,
+        _instructionsFocusNode,
+      ];
+
+  void _onFieldChanged() {
+    bool hasAnyTextChange = false;
+    for (final ctrl in _allControllers) {
+      final currentText = ctrl.text;
+      if (_lastFieldTexts[ctrl] != currentText) {
+        _lastFieldTexts[ctrl] = currentText;
+        hasAnyTextChange = true;
+      }
+    }
+    if (hasAnyTextChange && mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   void dispose() {
     for (final ctrl in _allControllers) {
       ctrl.removeListener(_onFieldChanged);
       ctrl.dispose();
+    }
+    for (final fn in _allFocusNodes) {
+      fn.dispose();
     }
     super.dispose();
   }
@@ -544,6 +582,7 @@ class _PaymentMethodFormScreenState
             label: 'Título descriptivo',
             hint: 'Ej: Mi Banesco, Pago Móvil Personal',
             controller: _titleController,
+            focusNode: _titleFocusNode,
             icon: HugeIcons.strokeRoundedTag01,
             validator: (v) => v?.isEmpty ?? true ? 'Campo requerido' : null,
           ),
@@ -633,6 +672,7 @@ class _PaymentMethodFormScreenState
             _buildTextField(
               label: 'Titular de la cuenta',
               controller: _holderController,
+              focusNode: _holderFocusNode,
               icon: HugeIcons.strokeRoundedUser02,
               validator: (v) =>
                   v?.isEmpty ?? true ? 'Campo requerido' : null,
@@ -641,6 +681,7 @@ class _PaymentMethodFormScreenState
             _buildTextField(
               label: 'Cédula / RIF del titular',
               controller: _idNumberController,
+              focusNode: _idNumberFocusNode,
               icon: HugeIcons.strokeRoundedIdentityCard,
               validator: (v) =>
                   v?.isEmpty ?? true ? 'Campo requerido' : null,
@@ -651,6 +692,7 @@ class _PaymentMethodFormScreenState
             _buildTextField(
               label: 'Número de Teléfono',
               controller: _phoneController,
+              focusNode: _phoneFocusNode,
               icon: HugeIcons.strokeRoundedSmartPhone01,
               keyboardType: TextInputType.phone,
               validator: (v) =>
@@ -663,6 +705,7 @@ class _PaymentMethodFormScreenState
               label: 'Número de Cuenta',
               hint: '20 dígitos',
               controller: _accountNumberController,
+              focusNode: _accountNumberFocusNode,
               icon: HugeIcons.strokeRoundedBank,
               keyboardType: TextInputType.number,
               validator: (v) {
@@ -676,6 +719,7 @@ class _PaymentMethodFormScreenState
             _buildTextField(
               label: 'Binance ID / Wallet Address',
               controller: _walletController,
+              focusNode: _walletFocusNode,
               icon: HugeIcons.strokeRoundedBitcoin01,
               validator: (v) =>
                   v?.isEmpty ?? true ? 'Campo requerido' : null,
@@ -687,6 +731,7 @@ class _PaymentMethodFormScreenState
             label: 'Instrucciones (Opcional)',
             hint: 'Ej: Reportar por WhatsApp enviando captura',
             controller: _instructionsController,
+            focusNode: _instructionsFocusNode,
             icon: HugeIcons.strokeRoundedInformationCircle,
             maxLines: 2,
           ),
@@ -701,6 +746,7 @@ class _PaymentMethodFormScreenState
     required String label,
     required TextEditingController controller,
     required List<List<dynamic>> icon,
+    FocusNode? focusNode,
     String? hint,
     TextInputType? keyboardType,
     int maxLines = 1,
@@ -720,6 +766,7 @@ class _PaymentMethodFormScreenState
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           selectAllOnFocus: false,
           keyboardType: keyboardType,
           maxLines: maxLines,

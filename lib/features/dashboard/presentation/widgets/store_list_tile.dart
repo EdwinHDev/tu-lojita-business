@@ -23,18 +23,42 @@ class StoreListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = store.status.toUpperCase() == 'ACTIVE';
+    final isDeleting = store.isScheduledForDeletion;
+    final isInactive = store.status.toUpperCase() == 'INACTIVE' && !isDeleting;
     final logoUrl = _resolveLogoUrl(store.logo);
+
+    String chipLabel;
+    Color chipBgColor;
+    Color chipTextColor;
+
+    if (isDeleting) {
+      chipLabel = 'Eliminación en ${store.remainingGraceDays}d';
+      chipBgColor = const Color(0xFFFEF2F2);
+      chipTextColor = const Color(0xFFDC2626);
+    } else if (isInactive) {
+      chipLabel = 'Pausada';
+      chipBgColor = const Color(0xFFFEF3C7);
+      chipTextColor = const Color(0xFF92400E);
+    } else {
+      chipLabel = 'Activa';
+      chipBgColor = const Color(0xFFECFDF5);
+      chipTextColor = const Color(0xFF047857);
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        border: Border.all(
+          color: isDeleting ? const Color(0xFFFECACA) : const Color(0xFFF1F5F9),
+          width: isDeleting ? 1.8 : 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: isDeleting
+                ? const Color(0xFFEF4444).withValues(alpha: 0.05)
+                : Colors.black.withValues(alpha: 0.02),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -104,9 +128,9 @@ class StoreListTile extends StatelessWidget {
             Row(
               children: [
                 _buildChip(
-                  isActive ? 'Activa' : 'Inactiva',
-                  isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                  isActive ? const Color(0xFF047857) : const Color(0xFFB91C1C),
+                  chipLabel,
+                  chipBgColor,
+                  chipTextColor,
                 ),
                 const SizedBox(width: 12),
                 Text(

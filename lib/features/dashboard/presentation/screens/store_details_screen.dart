@@ -18,6 +18,9 @@ import '../../../ranking/presentation/providers/ranking_providers.dart';
 import '../../../auth/presentation/providers/auth_notifier.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import 'settings/blocked_customers_screen.dart';
+import '../providers/dashboard_providers.dart';
+import '../providers/stores_notifier.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 
 class StoreDetailsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -102,6 +105,12 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                       ],
                     ),
                   ),
+
+                  // Banner de Eliminación Programada (si aplica)
+                  if (store != null && store.isScheduledForDeletion)
+                    SliverToBoxAdapter(
+                      child: _buildScheduledDeletionBanner(context, ref, store),
+                    ),
 
                   // Business Insights (KPI Metrics Section)
                   if (canViewFinancials)
@@ -1412,6 +1421,144 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildScheduledDeletionBanner(BuildContext context, WidgetRef ref, Store store) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF87171), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Baja Programada Activa',
+                        style: TextStyle(
+                          color: Color(0xFF991B1B),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        'Eliminación definitiva en ${store.remainingGraceDays} día${store.remainingGraceDays == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Esta sucursal está oculta a los clientes. Si no cancelas la solicitud antes de que expire el plazo, la tienda se dará de baja automáticamente.',
+              style: TextStyle(
+                color: Color(0xFF7F1D1D),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: const Text('¿Cancelar eliminación?'),
+                      content: Text(
+                        '¿Deseas cancelar la eliminación de "${store.branchName ?? store.name}" y reactivarla inmediatamente?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('No'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Sí, reactivar'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true && context.mounted) {
+                    try {
+                      final repo = ref.read(storesRepositoryProvider);
+                      await repo.cancelScheduledDeletion(store.id);
+                      if (context.mounted) {
+                        NotificationService.showSuccess(
+                          context,
+                          'Eliminación programada cancelada con éxito.',
+                        );
+                        ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
+                        ref.read(storesProvider.notifier).loadData();
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        NotificationService.showError(
+                          context,
+                          e.toString().replaceAll('Exception: ', ''),
+                        );
+                      }
+                    }
+                  }
+                },
+                icon: const Icon(Icons.restore_rounded, size: 18),
+                label: const Text('Cancelar Eliminación y Reactivar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

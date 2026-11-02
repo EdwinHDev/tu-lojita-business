@@ -446,6 +446,44 @@ class AuthNotifier extends Notifier<AuthState> {
       rethrow;
     }
   }
+
+  Future<String?> requestAccountDeletion({String? reason}) async {
+    try {
+      final token = await _repository.requestAccountDeletion(reason: reason);
+      return token;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> confirmAccountDeletion({
+    required String deletionToken,
+    required String otp,
+    String? reason,
+  }) async {
+    try {
+      await _repository.confirmAccountDeletion(
+        deletionToken: deletionToken,
+        otp: otp,
+        reason: reason,
+      );
+      await ref.read(sessionPurgeServiceProvider).purge();
+      state = const Unauthenticated();
+      return true;
+    } catch (e) {
+      if (e is AuthException) {
+        state = AuthError(e.message);
+      } else {
+        state = AuthError(e.toString());
+      }
+      rethrow;
+    }
+  }
 }
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(() {

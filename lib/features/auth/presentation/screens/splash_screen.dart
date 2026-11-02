@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
 import 'package:tu_lojita_business/features/subscription/domain/entities/company_subscription.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/providers/subscription_provider.dart';
@@ -112,6 +113,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // 3. Si el rol es ADMIN, entra directo al dashboard
       if (user.role == 'ADMIN') {
         context.go('/dashboard');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref
+              .read(firebaseMessagingServiceProvider)
+              .markAppReadyAndConsumePendingNotification();
+        });
         return;
       }
 
@@ -161,6 +167,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
         // Colaborador verificado con sucursales activas -> directo al dashboard
         context.go('/dashboard');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref
+              .read(firebaseMessagingServiceProvider)
+              .markAppReadyAndConsumePendingNotification();
+        });
         return;
       }
 
@@ -269,6 +280,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       // 6. ¡Todas las condiciones cumplidas! Entrar al Dashboard
       context.go('/dashboard');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(firebaseMessagingServiceProvider)
+            .markAppReadyAndConsumePendingNotification();
+      });
     } catch (e) {
       if (!mounted) return;
       final auth = ref.read(authProvider);

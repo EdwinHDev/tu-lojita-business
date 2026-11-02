@@ -8,6 +8,8 @@ class NotificationHelper {
       
   static final StreamController<String?> onNotificationClick = StreamController<String?>.broadcast();
 
+  static String? pendingLaunchPayload;
+
   static Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@drawable/ic_notification');
@@ -30,6 +32,19 @@ class NotificationHelper {
         onNotificationClick.add(response.payload);
       },
     );
+
+    try {
+      final launchDetails = await flutterLocalNotificationsPlugin
+          .getNotificationAppLaunchDetails();
+      if (launchDetails != null &&
+          launchDetails.didNotificationLaunchApp &&
+          launchDetails.notificationResponse?.payload != null &&
+          launchDetails.notificationResponse!.payload!.isNotEmpty) {
+        pendingLaunchPayload = launchDetails.notificationResponse!.payload;
+      }
+    } catch (e) {
+      debugPrint('Failed to get notification app launch details: $e');
+    }
 
     // Eliminar canal viejo para forzar a Android a recargar propiedades
     // (Android cachea permanentemente iconos y configuración de canales)

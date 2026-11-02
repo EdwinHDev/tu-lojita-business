@@ -5,6 +5,7 @@ import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/profile_settings_notifier.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/business_account_deletion_dialog.dart';
 
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -375,6 +376,25 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       'Guardar Cambios',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => BusinessAccountDeletionDialog.show(context),
+                icon: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedDelete02,
+                  color: Color(0xFFDC2626),
+                  size: 18,
+                ),
+                label: const Text(
+                  'Dar de baja mi cuenta',
+                  style: TextStyle(
+                    color: Color(0xFFDC2626),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

@@ -56,8 +56,20 @@ class _OrderSupportChatScreenState extends ConsumerState<OrderSupportChatScreen>
   @override
   void initState() {
     super.initState();
+    _clearNotifications();
     _checkInitialDisputeStatus();
     _listenToSupportChatClosed();
+  }
+
+  void _clearNotifications() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(notificationsProvider.notifier).markOrderNotificationsAsRead(
+            widget.orderId,
+            onlyChat: true,
+            isSupportChat: true,
+          );
+    });
   }
 
   void _listenToSupportChatClosed() {

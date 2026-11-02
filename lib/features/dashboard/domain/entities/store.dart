@@ -71,6 +71,8 @@ class Store {
   final Subcategory? subcategory;
   final String? instagram;
   final String? tiktok;
+  final DateTime? deletionScheduledAt;
+  final bool isDeleted;
 
   const Store({
     required this.id,
@@ -102,11 +104,25 @@ class Store {
     this.subcategory,
     this.instagram,
     this.tiktok,
+    this.deletionScheduledAt,
+    this.isDeleted = false,
   });
 
   bool get isCategoryOrSubcategoryRestricted =>
       (subcategory?.isAgeRestricted == true) ||
       (subcategory?.category?.isAgeRestricted == true);
+
+  bool get isScheduledForDeletion =>
+      deletionScheduledAt != null && deletionScheduledAt!.isAfter(DateTime.now());
+
+  int get remainingGraceDays {
+    if (deletionScheduledAt == null) return 0;
+    final diff = deletionScheduledAt!.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff + 1;
+  }
+
+  bool get isOperationalActive => status == 'ACTIVE' && !isScheduledForDeletion && !isDeleted;
+  bool get isTemporarilyInactive => status == 'INACTIVE' && !isScheduledForDeletion;
 
   bool get shouldShowBranch =>
       hasMultipleBranches && branchName != null && branchName!.trim().isNotEmpty;
@@ -151,6 +167,8 @@ class Store {
     Subcategory? subcategory,
     String? instagram,
     String? tiktok,
+    DateTime? deletionScheduledAt,
+    bool? isDeleted,
   }) {
     return Store(
       id: id ?? this.id,
@@ -182,6 +200,8 @@ class Store {
       subcategory: subcategory ?? this.subcategory,
       instagram: instagram ?? this.instagram,
       tiktok: tiktok ?? this.tiktok,
+      deletionScheduledAt: deletionScheduledAt ?? this.deletionScheduledAt,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

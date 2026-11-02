@@ -1,7 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tu_lojita_business/features/auth/domain/entities/user.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/company_onboarding/domain/entities/company.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_state.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_setup_wizard_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/first_branch_tutorial_carousel.dart';
+
+class MockAuthNotifier extends AuthNotifier {
+  final User _mockUser;
+  MockAuthNotifier(this._mockUser);
+
+  @override
+  AuthState build() => Authenticated(_mockUser);
+}
+
+class MockStoresNotifier extends StoresNotifier {
+  final List<Store> _mockStores;
+  MockStoresNotifier([this._mockStores = const []]);
+
+  @override
+  StoresState build() => StoresState(stores: _mockStores, isLoading: false);
+}
 
 void main() {
   group('Store Entity Branch Display Rules', () {
@@ -145,6 +169,61 @@ void main() {
       await tester.pump();
 
       expect(completed, isTrue);
+    });
+  });
+
+  group('StoreSetupWizardScreen AppBar and Exit Actions', () {
+    const testUser = User(
+      id: 'merchant-1',
+      email: 'owner@tulojita.com',
+      firstName: 'Empresario',
+      lastName: 'Prueba',
+      role: 'COMPANY',
+      hasCompany: true,
+      company: Company(
+        id: 'comp-1',
+        name: 'Inversiones Global',
+        rif: 'J-12345678-9',
+        logo: '/logo.png',
+      ),
+    );
+
+    testWidgets('AppBar has automaticallyImplyLeading false and no back button', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith(() => MockAuthNotifier(testUser)),
+            storesProvider.overrideWith(() => MockStoresNotifier([])),
+          ],
+          child: const MaterialApp(
+            home: StoreSetupWizardScreen(),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.automaticallyImplyLeading, isFalse);
+      expect(find.byType(BackButton), findsNothing);
+      expect(find.byIcon(Icons.arrow_back), findsNothing);
+      expect(find.byIcon(Icons.arrow_back_ios), findsNothing);
+
+      // Verify dedicated logout button is present
+      expect(find.byTooltip('Cerrar Sesión'), findsOneWidget);
+
+      // Tap logout button and verify confirmation dialog
+      await tester.tap(find.byTooltip('Cerrar Sesión'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Cerrar Sesión?'), findsOneWidget);
+      expect(
+        find.text(
+          'Podrás continuar con la configuración de tu sede cuando vuelvas a iniciar sesión.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Cancelar'), findsOneWidget);
     });
   });
 }

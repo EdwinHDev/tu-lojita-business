@@ -32,6 +32,8 @@ class StoreModel extends Store {
     super.subcategory,
     super.instagram,
     super.tiktok,
+    super.deletionScheduledAt,
+    super.isDeleted = false,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,11 @@ class StoreModel extends Store {
     final isRestrictedByRubro =
         (subcategory?.isAgeRestricted == true) ||
         (subcategory?.category?.isAgeRestricted == true);
+
+    DateTime? deletionScheduledAtDate;
+    if (json['deletionScheduledAt'] != null) {
+      deletionScheduledAtDate = DateTime.tryParse(json['deletionScheduledAt'].toString());
+    }
 
     return StoreModel(
       id: json['id'] as String,
@@ -76,6 +83,8 @@ class StoreModel extends Store {
       subcategory: subcategory,
       instagram: json['instagram'] as String?,
       tiktok: json['tiktok'] as String?,
+      deletionScheduledAt: deletionScheduledAtDate,
+      isDeleted: json['isDeleted'] == true,
     );
   }
 

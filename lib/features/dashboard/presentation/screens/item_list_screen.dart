@@ -6,12 +6,12 @@ import 'package:tu_lojita_business/core/config/envs.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
-import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
 import 'package:tu_lojita_business/core/repositories/payment_methods_repository.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import '../widgets/item_creation_prerequisites_modal.dart';
+import '../../../items/presentation/widgets/promote_item_sheet.dart';
 import 'dart:async';
 
 class ItemListScreen extends ConsumerStatefulWidget {
@@ -778,6 +778,36 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.stars_rounded, color: Color(0xFFD97706), size: 20),
+                  ),
+                  title: const Text(
+                    'Promocionar en el Home',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Destaca este producto en la vitrina principal',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    PromoteItemSheet.show(context, item, widget.storeId);
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
                       color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -834,15 +864,131 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   Future<void> _togglePublishItem(Item item) async {
+    // Si está activo y se va a despublicar, pedir confirmación y explicar consecuencias
+    if (item.isActive) {
+      final confirm = await showGeneralDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Confirmar Despublicación',
+        barrierColor: Colors.black.withValues(alpha: 0.4),
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+        transitionBuilder: (context, anim1, anim2, child) {
+          return ScaleTransition(
+            scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+            child: FadeTransition(
+              opacity: anim1,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.all(24),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.visibility_off_outlined,
+                        color: Colors.amber.shade700,
+                        size: 36,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      '¿Despublicar Artículo?',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'El artículo "${item.title}" dejará de ser visible para los clientes y no podrán agregarlo a su carrito. ¿Deseas continuar?',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.grey.shade200),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(
+                              'Cancelar',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber.shade700,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text(
+                              'Despublicar',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      if (confirm != true || !mounted) return;
+    }
+
     try {
-      final repository = ref.read(itemRepositoryProvider);
-      await repository.updateItem(item.id, {'isActive': !item.isActive});
+      await ref.read(itemListProvider.notifier).toggleItemActive(widget.storeId, item);
       if (mounted) {
-        ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+        NotificationService.showSuccess(
+          context,
+          item.isActive ? 'Artículo despublicado' : 'Artículo publicado',
+        );
       }
     } catch (e) {
       if (mounted) {
-        NotificationService.showError(context, 'Error al cambiar estado: $e');
+        NotificationService.showError(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+        );
       }
     }
   }
@@ -969,7 +1115,10 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
         }
       } catch (e) {
         if (mounted) {
-          NotificationService.showError(context, 'Error al eliminar: $e');
+          NotificationService.showError(
+            context,
+            e.toString().replaceAll('Exception: ', ''),
+          );
         }
       }
     }
