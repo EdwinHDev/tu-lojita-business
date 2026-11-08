@@ -14,6 +14,9 @@ class Item extends Equatable {
   final String id;
   final String title;
   final String description;
+  final double basePrice;
+  final double commissionRate;
+  final double commissionAmount;
   final double price;
   final PriceType priceType;
   final String mainImage;
@@ -102,6 +105,9 @@ class Item extends Equatable {
     required this.id,
     required this.title,
     required this.description,
+    this.basePrice = 0,
+    this.commissionRate = 0,
+    this.commissionAmount = 0,
     required this.price,
     this.priceType = PriceType.fixed,
     required this.mainImage,
@@ -132,6 +138,9 @@ class Item extends Equatable {
     String? id,
     String? title,
     String? description,
+    double? basePrice,
+    double? commissionRate,
+    double? commissionAmount,
     double? price,
     PriceType? priceType,
     String? mainImage,
@@ -161,6 +170,9 @@ class Item extends Equatable {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
+      basePrice: basePrice ?? this.basePrice,
+      commissionRate: commissionRate ?? this.commissionRate,
+      commissionAmount: commissionAmount ?? this.commissionAmount,
       price: price ?? this.price,
       priceType: priceType ?? this.priceType,
       mainImage: mainImage ?? this.mainImage,
@@ -273,6 +285,9 @@ class VariantAxis extends Equatable {
 class ItemVariant extends Equatable {
   final String? id;
   final String? sku;
+  final double? basePrice;
+  final double commissionRate;
+  final double commissionAmount;
   final double? price;
   final double? discountPrice;
   final double stockQuantity;
@@ -283,6 +298,9 @@ class ItemVariant extends Equatable {
   const ItemVariant({
     this.id,
     this.sku,
+    this.basePrice,
+    this.commissionRate = 0,
+    this.commissionAmount = 0,
     this.price,
     this.discountPrice,
     this.stockQuantity = 0,
@@ -314,9 +332,16 @@ class ItemVariant extends Equatable {
       }
     }
 
+    final parsedBasePrice = json['basePrice'] != null
+        ? double.tryParse(json['basePrice'].toString())
+        : (json['price'] != null ? double.tryParse(json['price'].toString()) : null);
+
     return ItemVariant(
       id: json['id']?.toString(),
       sku: json['sku']?.toString(),
+      basePrice: parsedBasePrice,
+      commissionRate: json['commissionRate'] != null ? double.tryParse(json['commissionRate'].toString()) ?? 0 : 0,
+      commissionAmount: json['commissionAmount'] != null ? double.tryParse(json['commissionAmount'].toString()) ?? 0 : 0,
       price: json['price'] != null ? double.tryParse(json['price'].toString()) : null,
       discountPrice: json['discountPrice'] != null ? double.tryParse(json['discountPrice'].toString()) : null,
       stockQuantity: json['stockQuantity'] != null ? double.tryParse(json['stockQuantity'].toString()) ?? 0 : 0,
@@ -329,6 +354,7 @@ class ItemVariant extends Equatable {
   Map<String, dynamic> toJson() => {
     if (id != null) 'id': id,
     if (sku != null) 'sku': sku,
+    if (price != null || basePrice != null) 'basePrice': price ?? basePrice,
     if (price != null) 'price': price,
     if (discountPrice != null) 'discountPrice': discountPrice,
     'stockQuantity': stockQuantity,
@@ -340,6 +366,9 @@ class ItemVariant extends Equatable {
   ItemVariant copyWith({
     String? id,
     String? sku,
+    double? basePrice,
+    double? commissionRate,
+    double? commissionAmount,
     double? price,
     double? discountPrice,
     double? stockQuantity,
@@ -350,6 +379,9 @@ class ItemVariant extends Equatable {
     return ItemVariant(
       id: id ?? this.id,
       sku: sku ?? this.sku,
+      basePrice: basePrice ?? this.basePrice,
+      commissionRate: commissionRate ?? this.commissionRate,
+      commissionAmount: commissionAmount ?? this.commissionAmount,
       price: price ?? this.price,
       discountPrice: discountPrice ?? this.discountPrice,
       stockQuantity: stockQuantity ?? this.stockQuantity,

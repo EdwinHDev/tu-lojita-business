@@ -4,6 +4,9 @@ import 'package:tu_lojita_business/features/items/data/models/item_model.dart';
 class OrderItem {
   final String id;
   final String title;
+  final double basePrice;
+  final double commissionRate;
+  final double commissionAmount;
   final double price;
   final int quantity;
   final String? itemId;
@@ -16,6 +19,9 @@ class OrderItem {
   OrderItem({
     required this.id,
     required this.title,
+    this.basePrice = 0,
+    this.commissionRate = 0,
+    this.commissionAmount = 0,
     required this.price,
     required this.quantity,
     this.itemId,
@@ -42,10 +48,18 @@ class OrderItem {
       parsedVariant = ItemVariant.fromJson(Map<String, dynamic>.from(json['variant']));
     }
 
+    final parsedPrice = double.tryParse(json['price']?.toString() ?? '0') ?? 0.0;
+    final parsedBasePrice = double.tryParse(json['basePrice']?.toString() ?? '') ?? parsedPrice;
+    final parsedCommRate = double.tryParse(json['commissionRate']?.toString() ?? '0') ?? 0.0;
+    final parsedCommAmount = double.tryParse(json['commissionAmount']?.toString() ?? '0') ?? 0.0;
+
     return OrderItem(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
-      price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
+      basePrice: parsedBasePrice,
+      commissionRate: parsedCommRate,
+      commissionAmount: parsedCommAmount,
+      price: parsedPrice,
       quantity: json['quantity'] ?? 0,
       itemId: json['item']?['id'] as String?,
       variantId: json['variantId']?.toString(),

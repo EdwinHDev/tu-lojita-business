@@ -435,7 +435,6 @@ class _StoreSetupWizardScreenState
                 decoration: BoxDecoration(
                   color: const Color(0xFFEEF2FF),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),

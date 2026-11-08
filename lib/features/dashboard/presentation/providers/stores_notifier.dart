@@ -11,6 +11,7 @@ import '../../domain/repositories/stores_repository.dart';
 import 'dashboard_providers.dart';
 import 'notifications_provider.dart';
 import 'stores_state.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
 
 class StoresNotifier extends Notifier<StoresState> {
   @override
@@ -32,6 +33,7 @@ class StoresNotifier extends Notifier<StoresState> {
   StoresRepository get _repository => ref.read(storesRepositoryProvider);
 
   Future<void> loadData() async {
+    ref.invalidate(platformAiGlobalEnabledProvider);
     final authState = ref.read(authProvider);
     if (authState is! Authenticated) return;
 

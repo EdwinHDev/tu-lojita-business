@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tu_lojita_business/core/network/firebase_messaging_service.dart';
 import 'package:tu_lojita_business/core/network/notification_deduplicator.dart';
 
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
@@ -45,6 +46,7 @@ class SessionPurgeService {
       log('SessionPurgeService: Warning during FCM device unregister: $e');
     }
     NotificationDeduplicator().clear();
+    FirebaseMessagingService.resetReadinessOnLogout();
 
     // 1. Wipe secure storage and tokens FIRST so nothing reloads from persistence
     await _purgeStorage();

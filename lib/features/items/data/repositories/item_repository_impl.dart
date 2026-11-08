@@ -114,6 +114,17 @@ class ItemRepositoryImpl implements ItemRepository {
       if (uploadedIds.isNotEmpty) {
         await _deleteImagesBulk(uploadedIds);
       }
+      if (e is DioException) {
+        if (e.response?.data != null && e.response?.data is Map) {
+          final data = e.response!.data as Map;
+          if (data.containsKey('message')) {
+            final serverMessage = data['message'];
+            final message = serverMessage is List ? serverMessage.join(', ') : serverMessage.toString();
+            throw Exception(message);
+          }
+        }
+        throw Exception('No se pudo crear el artículo. Intenta de nuevo.');
+      }
       rethrow;
     }
   }
@@ -151,6 +162,16 @@ class ItemRepositoryImpl implements ItemRepository {
 
       final response = await _dio.patch('/items/$id', data: itemData);
       return ItemModel.fromJson(response.data);
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final data = e.response!.data as Map;
+        if (data.containsKey('message')) {
+          final serverMessage = data['message'];
+          final message = serverMessage is List ? serverMessage.join(', ') : serverMessage.toString();
+          throw Exception(message);
+        }
+      }
+      throw Exception('No se pudo actualizar el artículo. Intenta de nuevo.');
     } catch (e) {
       rethrow;
     }

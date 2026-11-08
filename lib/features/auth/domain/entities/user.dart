@@ -20,6 +20,7 @@ class User {
   final String? collaboratorRole;
   final List<String> permissions;
   final List<String> allowedBranchIds;
+  final List<String> aiAllowedStoreIds;
   final bool hasFullBranchAccess;
 
   const User({
@@ -42,6 +43,7 @@ class User {
     this.collaboratorRole,
     this.permissions = const [],
     this.allowedBranchIds = const [],
+    this.aiAllowedStoreIds = const [],
     this.hasFullBranchAccess = false,
   });
 
@@ -77,6 +79,14 @@ class User {
       hasPermission('inventory:edit');
 
   bool get canEditProducts => hasPermission('inventory:edit');
+
+  bool canUseStoreAi(String storeId) {
+    if (!hasCompany && company == null) return false;
+    if (!isCollaborator) return true;
+    if (!canAccessBranch(storeId)) return false;
+    if (!canEditProducts) return false;
+    return aiAllowedStoreIds.contains(storeId);
+  }
 
   bool get canViewOrders => hasPermission('orders:view');
 
@@ -140,6 +150,7 @@ class User {
     String? collaboratorRole,
     List<String>? permissions,
     List<String>? allowedBranchIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
   }) {
     return User(
@@ -162,6 +173,7 @@ class User {
       collaboratorRole: collaboratorRole ?? this.collaboratorRole,
       permissions: permissions ?? this.permissions,
       allowedBranchIds: allowedBranchIds ?? this.allowedBranchIds,
+      aiAllowedStoreIds: aiAllowedStoreIds ?? this.aiAllowedStoreIds,
       hasFullBranchAccess: hasFullBranchAccess ?? this.hasFullBranchAccess,
     );
   }
@@ -187,6 +199,7 @@ class User {
       'collaboratorRole': collaboratorRole,
       'permissions': permissions,
       'allowedBranchIds': allowedBranchIds,
+      'aiAllowedStoreIds': aiAllowedStoreIds,
       'hasFullBranchAccess': hasFullBranchAccess,
     };
   }

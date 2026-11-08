@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
 import '../../domain/entities/collaborator.dart';
 import '../providers/collaborators_providers.dart';
 
@@ -36,10 +38,28 @@ class _CreateCollaboratorDialogState
   String? _selectedRoleId;
   bool _hasFullBranchAccess = true;
   final Set<String> _selectedStoreIds = {};
+  final Set<String> _selectedAiStoreIds = {};
   bool _isSubmitting = false;
 
   Collaborator? _createdCollaborator;
   String? _createdInitialPassword;
+
+  String? _resolveEffectiveRoleId(RolesState rolesState) {
+    if (_selectedRoleId != null &&
+        rolesState.roles.any((r) => r.id == _selectedRoleId)) {
+      return _selectedRoleId;
+    }
+    if (rolesState.roles.any((r) => r.isSystemDefault)) {
+      return rolesState.roles.firstWhere((r) => r.isSystemDefault).id;
+    }
+    return rolesState.roles.isNotEmpty ? rolesState.roles.first.id : null;
+  }
+
+  bool _roleHasInventoryEdit(RolesState rolesState, String? roleId) {
+    if (roleId == null) return false;
+    final role = rolesState.roles.where((r) => r.id == roleId).firstOrNull;
+    return role?.permissions.contains('inventory:edit') == true;
+  }
 
   @override
   void dispose() {
@@ -53,7 +73,11 @@ class _CreateCollaboratorDialogState
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedRoleId == null) {
+    final rolesState = ref.read(rolesNotifierProvider);
+    final storesState = ref.read(storesProvider);
+    final effectiveRoleId = _resolveEffectiveRoleId(rolesState);
+
+    if (effectiveRoleId == null) {
       NotificationService.showError(
         context,
         'Debes seleccionar un rol para el colaborador.',
@@ -69,6 +93,17 @@ class _CreateCollaboratorDialogState
       return;
     }
 
+    final isGlobalAiEnabled =
+        ref.read(platformAiGlobalEnabledProvider).value ?? false;
+    final hasInventoryEdit = _roleHasInventoryEdit(rolesState, effectiveRoleId);
+    final effectiveAiStoreIds = (!isGlobalAiEnabled || !hasInventoryEdit)
+        ? <String>[]
+        : _selectedAiStoreIds
+            .where((id) =>
+                (_hasFullBranchAccess || _selectedStoreIds.contains(id)) &&
+                storesState.stores.any((s) => s.id == id && s.aiEnabled))
+            .toList();
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -79,9 +114,10 @@ class _CreateCollaboratorDialogState
             lastName: _lastNameController.text.trim(),
             identification: _idController.text.trim(),
             phone: _phoneController.text.trim(),
-            roleId: _selectedRoleId!,
+            roleId: effectiveRoleId,
             hasFullBranchAccess: _hasFullBranchAccess,
             storeIds: _hasFullBranchAccess ? [] : _selectedStoreIds.toList(),
+            aiAllowedStoreIds: effectiveAiStoreIds,
           );
 
       if (!mounted) return;
@@ -302,6 +338,11 @@ Para ingresar:
   Widget _buildFormView() {
     final rolesState = ref.watch(rolesNotifierProvider);
     final storesState = ref.watch(storesProvider);
+    final effectiveRoleId = _resolveEffectiveRoleId(rolesState);
+    final isGlobalAiEnabled =
+        ref.watch(platformAiGlobalEnabledProvider).value ?? false;
+    final roleHasInventoryEdit =
+        _roleHasInventoryEdit(rolesState, effectiveRoleId);
 
     return SingleChildScrollView(
       child: Form(
@@ -462,10 +503,7 @@ Para ingresar:
               )
             else
               DropdownButtonFormField<String>(
-                initialValue: _selectedRoleId ??
-                    (rolesState.roles.any((r) => r.isSystemDefault)
-                        ? rolesState.roles.firstWhere((r) => r.isSystemDefault).id
-                        : (rolesState.roles.isNotEmpty ? rolesState.roles.first.id : null)),
+                initialValue: effectiveRoleId,
                 decoration: const InputDecoration(
                   labelText: 'Rol Asignado *',
                   border: OutlineInputBorder(),
@@ -507,6 +545,12 @@ Para ingresar:
               },
             ),
 
+            if (_hasFullBranchAccess && roleHasInventoryEdit) ...[
+              const SizedBox(height: 8),
+              _buildFullAccessAiBranchesSection(storesState.stores,
+                  isGlobalAiEnabled: isGlobalAiEnabled),
+            ],
+
             if (!_hasFullBranchAccess) ...[
               const SizedBox(height: 8),
               const Text(
@@ -515,7 +559,7 @@ Para ingresar:
               ),
               const SizedBox(height: 8),
               Container(
-                constraints: const BoxConstraints(maxHeight: 180),
+                constraints: const BoxConstraints(maxHeight: 260),
                 decoration: BoxDecoration(
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   borderRadius: BorderRadius.circular(12),
@@ -528,24 +572,33 @@ Para ingresar:
                     final store = storesState.stores[i];
                     final isChecked = _selectedStoreIds.contains(store.id);
 
-                    return CheckboxListTile(
-                      dense: true,
-                      value: isChecked,
-                      activeColor: const Color(0xFF4F46E5),
-                      title: Text(store.name),
-                      subtitle: store.branchName != null &&
-                              store.branchName!.isNotEmpty
-                          ? Text('Sucursal: ${store.branchName}')
-                          : null,
-                      onChanged: (val) {
-                        setState(() {
-                          if (val == true) {
-                            _selectedStoreIds.add(store.id);
-                          } else {
-                            _selectedStoreIds.remove(store.id);
-                          }
-                        });
-                      },
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CheckboxListTile(
+                          dense: true,
+                          value: isChecked,
+                          activeColor: const Color(0xFF4F46E5),
+                          title: Text(store.name),
+                          subtitle: store.branchName != null &&
+                                  store.branchName!.isNotEmpty
+                              ? Text('Sucursal: ${store.branchName}')
+                              : null,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedStoreIds.add(store.id);
+                              } else {
+                                _selectedStoreIds.remove(store.id);
+                                _selectedAiStoreIds.remove(store.id);
+                              }
+                            });
+                          },
+                        ),
+                        if (isChecked && roleHasInventoryEdit)
+                          _buildAiSubBranchRow(store,
+                              isGlobalAiEnabled: isGlobalAiEnabled),
+                      ],
                     );
                   },
                 ),
@@ -579,6 +632,237 @@ Para ingresar:
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFullAccessAiBranchesSection(
+    List<Store> stores, {
+    required bool isGlobalAiEnabled,
+  }) {
+    if (stores.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F3FF).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDD6FE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF7C3AED)),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Permiso de Estudio IA por Sucursal',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4C1D95),
+                  ),
+                ),
+              ),
+              if (!isGlobalAiEnabled)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: const Text(
+                    'No disponible',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFB45309),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            !isGlobalAiEnabled
+                ? 'La funcionalidad de IA está temporalmente desactivada en la plataforma.'
+                : 'El rol permite crear/editar artículos. Activa el uso de IA por sucursal:',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 190),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: stores.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final store = stores[index];
+                final isAiActiveInStore = store.aiEnabled && isGlobalAiEnabled;
+                final isAllowed =
+                    isAiActiveInStore && _selectedAiStoreIds.contains(store.id);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              store.displayName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isAiActiveInStore
+                                    ? const Color(0xFF1E293B)
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                            Text(
+                              !isGlobalAiEnabled
+                                  ? 'Desactivado temporalmente en la plataforma'
+                                  : (store.aiEnabled
+                                      ? 'Puede mejorar fotos con IA'
+                                      : 'IA no configurada o inactiva en esta sucursal'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isAiActiveInStore
+                                    ? const Color(0xFF64748B)
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: !isGlobalAiEnabled
+                            ? () => NotificationService.showError(
+                                  context,
+                                  'No puedes habilitar el Estudio IA en este momento porque la funcionalidad no está disponible actualmente en la plataforma.',
+                                )
+                            : null,
+                        behavior: HitTestBehavior.opaque,
+                        child: IgnorePointer(
+                          ignoring: !isGlobalAiEnabled || !store.aiEnabled,
+                          child: Switch.adaptive(
+                            value: isAllowed,
+                            activeTrackColor: const Color(0xFF7C3AED),
+                            onChanged: (isAiActiveInStore && isGlobalAiEnabled)
+                                ? (enabled) {
+                                    setState(() {
+                                      if (enabled) {
+                                        _selectedAiStoreIds.add(store.id);
+                                      } else {
+                                        _selectedAiStoreIds.remove(store.id);
+                                      }
+                                    });
+                                  }
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiSubBranchRow(Store store, {required bool isGlobalAiEnabled}) {
+    final isAiActiveInStore = store.aiEnabled && isGlobalAiEnabled;
+    final isAllowed =
+        isAiActiveInStore && _selectedAiStoreIds.contains(store.id);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(36, 0, 12, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isAiActiveInStore
+            ? const Color(0xFFF5F3FF)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isAiActiveInStore
+              ? const Color(0xFFDDD6FE)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isAiActiveInStore ? Icons.auto_awesome : Icons.lock_outline,
+            size: 15,
+            color: isAiActiveInStore
+                ? const Color(0xFF7C3AED)
+                : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Usar Estudio IA en esta sucursal',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isAiActiveInStore
+                        ? const Color(0xFF4C1D95)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+                Text(
+                  !isGlobalAiEnabled
+                      ? 'No disponible: IA desactivada temporalmente'
+                      : (store.aiEnabled
+                          ? 'Mejorar fotos de catálogo con IA'
+                          : 'IA inactiva en esta sucursal (bloqueado)'),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: !isGlobalAiEnabled
+                ? () => NotificationService.showError(
+                      context,
+                      'No puedes habilitar el Estudio IA en este momento porque la funcionalidad no está disponible actualmente en la plataforma.',
+                    )
+                : null,
+            behavior: HitTestBehavior.opaque,
+            child: IgnorePointer(
+              ignoring: !isGlobalAiEnabled || !store.aiEnabled,
+              child: Switch.adaptive(
+                value: isAllowed,
+                activeTrackColor: const Color(0xFF7C3AED),
+                onChanged: (isAiActiveInStore && isGlobalAiEnabled)
+                    ? (enabled) {
+                        setState(() {
+                          if (enabled) {
+                            _selectedAiStoreIds.add(store.id);
+                          } else {
+                            _selectedAiStoreIds.remove(store.id);
+                          }
+                        });
+                      }
+                    : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

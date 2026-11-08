@@ -15,6 +15,7 @@ abstract class CollaboratorsRepository {
     String? phone,
     required String roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool hasFullBranchAccess = false,
   });
   Future<Collaborator> updateCollaborator(
@@ -26,6 +27,7 @@ abstract class CollaboratorsRepository {
     String? phone,
     String? roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
     bool? isActive,
   });

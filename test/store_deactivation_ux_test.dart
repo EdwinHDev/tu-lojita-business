@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -8,7 +9,6 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_not
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
-import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_settings_notifier.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_settings_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_details_screen.dart';
@@ -16,6 +16,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/screens/store
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/branch_lifecycle_dialogs.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/store_list_tile.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/providers/ranking_providers.dart';
+import 'package:tu_lojita_business/features/ranking/domain/entities/ranking_models.dart';
 
 class MockHttpOverrides extends HttpOverrides {
   @override
@@ -170,7 +171,7 @@ void main() {
           overrides: [
             authProvider.overrideWith(() => FakeAuthNotifier(dummyOwner)),
             storeDetailsProvider.overrideWith(() => FakeStoreDetailsNotifier(inactiveStore)),
-            storeRankingProvider('store-2').overrideWith((ref) => Future.value(null)),
+            storeRankingProvider('store-2').overrideWith((ref) => Completer<StoreRankingData>().future),
           ],
           child: const MaterialApp(
             home: StoreDetailsScreen(storeId: 'store-2'),

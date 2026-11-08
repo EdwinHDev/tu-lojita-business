@@ -98,21 +98,41 @@ class ItemFormState {
   double get effectivePrice =>
       (discountPrice != null && discountPrice! > 0) ? discountPrice! : price;
 
-  Map<String, dynamic>? get matchedRange {
-    final p = effectivePrice;
-    if (p <= 0 || commissionRanges.isEmpty) return null;
+  Map<String, dynamic>? getRangeForPrice(double baseAmount) {
+    if (baseAmount <= 0 || commissionRanges.isEmpty) return null;
     for (final r in commissionRanges) {
       final min =
           double.tryParse(r['minAmount']?.toString() ?? '0') ?? 0.0;
       final max = r['maxAmount'] != null
           ? double.tryParse(r['maxAmount'].toString())
           : double.infinity;
-      if (p >= min && p <= (max ?? double.infinity)) {
+      if (baseAmount >= min && baseAmount <= (max ?? double.infinity)) {
         return r;
       }
     }
     return null;
   }
+
+  double calculateCustomerSinglePrice(double baseAmount) {
+    if (baseAmount <= 0) return 0.0;
+    final range = getRangeForPrice(baseAmount);
+    final rate =
+        double.tryParse(range?['singlePaymentRate']?.toString() ?? '0') ?? 0.0;
+    final commission = (baseAmount * rate) / 100.0;
+    return baseAmount + commission;
+  }
+
+  double calculateCustomerInstallmentPrice(double baseAmount) {
+    if (baseAmount <= 0) return 0.0;
+    final range = getRangeForPrice(baseAmount);
+    final rate =
+        double.tryParse(range?['installmentPaymentRate']?.toString() ?? '0') ??
+            0.0;
+    final commission = (baseAmount * rate) / 100.0;
+    return baseAmount + commission;
+  }
+
+  Map<String, dynamic>? get matchedRange => getRangeForPrice(effectivePrice);
 
   double get singleCommissionRate =>
       double.tryParse(matchedRange?['singlePaymentRate']?.toString() ?? '0') ??
@@ -134,6 +154,27 @@ class ItemFormState {
 
   double get customerInstallmentFinalPrice =>
       effectivePrice + installmentCommissionAmount;
+
+  bool get hasVaryingVariantPrices {
+    if (!hasVariants || variants.isEmpty) return false;
+    final activeVariants = variants.where((v) => v.isActive).toList();
+    if (activeVariants.length <= 1) return false;
+    final firstPrice = activeVariants.first.price ?? price;
+    return activeVariants.any((v) => (v.price ?? price) != firstPrice);
+  }
+
+  double get minVariantPrice {
+    if (!hasVariants || variants.isEmpty) return price;
+    final activeVariants = variants.where((v) => v.isActive).toList();
+    if (activeVariants.isEmpty) return price;
+    final prices = activeVariants
+        .map((v) => v.price ?? price)
+        .where((p) => p > 0)
+        .toList();
+    if (prices.isEmpty) return price;
+    prices.sort();
+    return prices.first;
+  }
 
   ItemFormState copyWith({
     List<File>? selectedImages,
@@ -272,11 +313,19 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       }
     }
 
+    final mappedVariants = item.variants.map((v) {
+      final effPrice = v.basePrice != null && v.basePrice! > 0 ? v.basePrice : v.price;
+      return v.copyWith(
+        price: effPrice,
+        basePrice: effPrice,
+      );
+    }).toList();
+
     state = state.copyWith(
       itemId: item.id,
       title: item.title,
       description: item.description,
-      price: item.price,
+      price: item.basePrice > 0 ? item.basePrice : item.price,
       priceType: item.priceType,
       isFeatured: item.isFeatured,
       discountPrice: item.discountPrice,
@@ -296,8 +345,9 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
       isAgeRestricted: item.isAgeRestricted,
       hasVariants: item.hasVariants,
       variantAxes: item.variantAxes,
-      variants: item.variants,
+      variants: mappedVariants,
     );
+    _syncPricingWithVariants(mappedVariants);
     if (item.categoryId != null) {
       loadCategoryTemplates(item.categoryId!);
     }
@@ -306,7 +356,12 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onTitleChanged(String value) => state = state.copyWith(title: value);
   void onDescriptionChanged(String value) => state = state.copyWith(description: value);
   void onPriceChanged(double value) => state = state.copyWith(price: value);
-  void onPriceTypeChanged(PriceType value) => state = state.copyWith(priceType: value);
+  void onPriceTypeChanged(PriceType value) {
+    if (state.hasVaryingVariantPrices && value == PriceType.fixed) {
+      return;
+    }
+    state = state.copyWith(priceType: value);
+  }
   void onIsFeaturedChanged(bool value) => state = state.copyWith(isFeatured: value);
   void onIsActiveChanged(bool value) => state = state.copyWith(isActive: value);
   void onIsAgeRestrictedChanged(bool value) => state = state.copyWith(isAgeRestricted: value);
@@ -384,6 +439,61 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     state = state.copyWith(primaryImageIndex: index);
   }
 
+  void replaceImageWithEnhanced(int combinedIndex, File enhancedFile) {
+    final existingLen = state.existingImages.length;
+    if (combinedIndex < 0 ||
+        combinedIndex >= existingLen + state.selectedImages.length) {
+      return;
+    }
+
+    if (combinedIndex >= existingLen) {
+      final localIndex = combinedIndex - existingLen;
+      final newSelected = [...state.selectedImages];
+      newSelected[localIndex] = enhancedFile;
+      state = state.copyWith(selectedImages: newSelected);
+      return;
+    }
+
+    final oldUrl = state.existingImages[combinedIndex];
+    final newExisting = [...state.existingImages]..removeAt(combinedIndex);
+    final newSelected = [...state.selectedImages, enhancedFile];
+    final newCombinedIndex = newExisting.length + newSelected.length - 1;
+
+    int newPrimary = state.primaryImageIndex;
+    if (newPrimary == combinedIndex) {
+      newPrimary = newCombinedIndex;
+    } else if (newPrimary > combinedIndex) {
+      newPrimary = newPrimary - 1;
+    }
+
+    final updatedVariants = state.variants.map((variant) {
+      String? updatedImg = variant.imageUrl;
+      if (updatedImg == oldUrl) {
+        updatedImg = 'img_idx:$newCombinedIndex';
+      } else if (updatedImg != null && updatedImg.startsWith('img_idx:')) {
+        final idx = int.tryParse(updatedImg.replaceFirst('img_idx:', ''));
+        if (idx != null) {
+          if (idx == combinedIndex) {
+            updatedImg = 'img_idx:$newCombinedIndex';
+          } else if (idx > combinedIndex) {
+            updatedImg = 'img_idx:${idx - 1}';
+          }
+        }
+      }
+      return updatedImg != variant.imageUrl
+          ? variant.copyWith(imageUrl: updatedImg)
+          : variant;
+    }).toList();
+
+    state = state.copyWith(
+      existingImages: newExisting,
+      selectedImages: newSelected,
+      deletedImages: [...state.deletedImages, oldUrl],
+      primaryImageIndex: newPrimary,
+      variants: updatedVariants,
+    );
+  }
+
   void addAttribute(String key, dynamic value) => onAttributeChanged(key, value);
 
   void removeAttribute(String key) {
@@ -442,21 +552,49 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     _regenerateVariants(newAxes);
   }
 
+  void _syncPricingWithVariants(List<ItemVariant> variants) {
+    if (!state.hasVariants || variants.isEmpty) return;
+    final activeVariants = variants.where((v) => v.isActive).toList();
+    if (activeVariants.length > 1) {
+      final firstPrice = activeVariants.first.price ?? state.price;
+      final hasVarying = activeVariants.any((v) => (v.price ?? state.price) != firstPrice);
+      if (hasVarying) {
+        final prices = activeVariants
+            .map((v) => v.price ?? state.price)
+            .where((p) => p > 0)
+            .toList();
+        final minPrice = prices.isNotEmpty ? (prices..sort()).first : state.price;
+        state = state.copyWith(
+          priceType: PriceType.startingAt,
+          price: minPrice,
+        );
+      }
+    }
+  }
+
   void updateVariant(int index, ItemVariant updated) {
     if (index < 0 || index >= state.variants.length) return;
     final newVariants = List<ItemVariant>.from(state.variants);
-    newVariants[index] = updated;
+    final aligned = updated.copyWith(
+      basePrice: updated.price ?? updated.basePrice,
+    );
+    newVariants[index] = aligned;
     state = state.copyWith(variants: newVariants);
+    _syncPricingWithVariants(newVariants);
   }
 
   void batchUpdatePrice(double? price, [bool onlyActive = true]) {
     final newVariants = state.variants.map((v) {
       if (!onlyActive || v.isActive) {
-        return v.copyWith(price: price);
+        return v.copyWith(
+          price: price,
+          basePrice: price,
+        );
       }
       return v;
     }).toList();
     state = state.copyWith(variants: newVariants);
+    _syncPricingWithVariants(newVariants);
   }
 
   void batchUpdateStock(double stock, [bool onlyActive = true]) {
@@ -515,6 +653,7 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     }).toList();
 
     state = state.copyWith(variantAxes: axes, variants: newVariants);
+    _syncPricingWithVariants(newVariants);
   }
 
   bool _areAxisValuesEqual(Map<String, String> a, Map<String, String> b) {
@@ -583,12 +722,17 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
         };
       }).toList();
 
+      final bool forceStartingAt = state.hasVariants && state.hasVaryingVariantPrices;
+      final effectivePriceType = forceStartingAt ? PriceType.startingAt : state.priceType;
+      final effectiveBasePrice = forceStartingAt ? state.minVariantPrice : state.price;
+
       final itemData = {
         'storeId': storeId,
-        'title': state.title,
-        'description': state.description,
-        'price': state.price,
-        'priceType': state.priceType.name.replaceAllMapped(RegExp(r'([A-Z])'), (match) => '_${match.group(0)}').toUpperCase(),
+        'title': state.title.trim(),
+        'description': state.description.trim(),
+        'basePrice': effectiveBasePrice,
+        'price': state.customerSingleFinalPrice > 0 ? state.customerSingleFinalPrice : effectiveBasePrice,
+        'priceType': effectivePriceType.name.replaceAllMapped(RegExp(r'([A-Z])'), (match) => '_${match.group(0)}').toUpperCase(),
         'itemType': state.itemType.name.toUpperCase(),
         'isFeatured': state.isFeatured,
         'isActive': state.isActive,

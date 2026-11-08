@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -17,7 +18,9 @@ import 'package:tu_lojita_business/features/reports/presentation/widgets/report_
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
   debugPrint('Business FCM Background message: ${message.messageId}');
 }
 
@@ -36,8 +39,21 @@ class FirebaseMessagingService {
   static void Function(String notificationId)? onActiveChatNotificationCallback;
   static bool Function(String orderId, {bool isSupport})? isViewingChatCallback;
 
+  static FirebaseMessagingService? _activeInstance;
   static Map<String, dynamic>? _pendingInitialNotification;
   static bool _isAppReadyForDeepLinks = false;
+  static bool _listenersRegistered = false;
+  static bool _initialMessageChecked = false;
+  static bool _tokenRefreshRegistered = false;
+  static final Map<String, DateTime> _recentConsumedTapKeys = {};
+
+  @visibleForTesting
+  static String Function()? debugCurrentPathOverride;
+  @visibleForTesting
+  static void Function(String route, Object? extra)? debugPushRouteOverride;
+  @visibleForTesting
+  static void Function(String modalType, Map<String, dynamic> details)?
+      debugModalOverride;
 
   FirebaseMessagingService(
     this._dio,
@@ -48,10 +64,84 @@ class FirebaseMessagingService {
     this.canAccessBranch,
     this.getFallbackStoreId,
     this.ensureStoresLoaded,
-  });
+  }) {
+    _activeInstance = this;
+  }
+
+  @visibleForTesting
+  static void resetForTesting() {
+    _pendingInitialNotification = null;
+    _isAppReadyForDeepLinks = false;
+    _recentConsumedTapKeys.clear();
+    debugCurrentPathOverride = null;
+    debugPushRouteOverride = null;
+    debugModalOverride = null;
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic>? get pendingNotificationForTest =>
+      _pendingInitialNotification == null
+          ? null
+          : Map<String, dynamic>.from(_pendingInitialNotification!);
+
+  static void resetReadinessOnLogout() {
+    _isAppReadyForDeepLinks = false;
+  }
+
+  static String _resolveDefaultTitle(String type) {
+    switch (type) {
+      case 'ORDER_CREATED':
+      case 'ORDER_STATUS_CHANGED':
+        return 'Actualización de Pedido';
+      case 'PAYMENT_REPORTED':
+      case 'PAYMENT_APPROVED':
+      case 'PAYMENT_REJECTED':
+        return 'Actualización de Pago';
+      case 'CHAT_MESSAGE':
+      case 'SUPPORT_CHAT_MESSAGE':
+        return 'Nuevo Mensaje';
+      case 'MEDIATION_REQUEST':
+      case 'MEDIATION_RESPONSE':
+        return 'Mediación de Tienda';
+      case 'ORDER_REVIEW_RECEIVED':
+        return 'Nueva Reseña Recibida';
+      default:
+        return 'Tu Lojita Comercio';
+    }
+  }
+
+  static String _resolveDefaultBody(String type) {
+    switch (type) {
+      case 'ORDER_CREATED':
+        return 'Has recibido un nuevo pedido en tu comercio.';
+      case 'ORDER_STATUS_CHANGED':
+        return 'El estado de un pedido ha sido actualizado.';
+      case 'PAYMENT_REPORTED':
+        return 'Se ha reportado un nuevo pago para verificación.';
+      case 'PAYMENT_APPROVED':
+        return 'Un pago ha sido aprobado exitosamente.';
+      case 'PAYMENT_REJECTED':
+        return 'Un comprobante de pago ha sido rechazado.';
+      case 'CHAT_MESSAGE':
+        return 'Has recibido un nuevo mensaje de un cliente.';
+      case 'SUPPORT_CHAT_MESSAGE':
+        return 'Has recibido un mensaje del equipo de soporte.';
+      case 'MEDIATION_REQUEST':
+      case 'MEDIATION_RESPONSE':
+        return 'Tienes una actualización en el caso de mediación.';
+      case 'ORDER_REVIEW_RECEIVED':
+        return 'Un cliente ha calificado su experiencia en tu tienda.';
+      default:
+        return 'Tienes una nueva notificación en tu comercio.';
+    }
+  }
 
   static Map<String, dynamic> _extractMessageData(RemoteMessage message) {
     final map = Map<String, dynamic>.from(message.data);
+    if (message.messageId != null && message.messageId!.isNotEmpty) {
+      map.putIfAbsent('messageId', () => message.messageId);
+    }
+    final type = map['type']?.toString() ?? '';
     final notifTitle = message.notification?.title?.trim();
     if ((map['title'] == null || map['title'].toString().trim().isEmpty) &&
         notifTitle != null &&
@@ -64,6 +154,13 @@ class FirebaseMessagingService {
         notifBody.isNotEmpty) {
       map['body'] = notifBody;
     }
+
+    if (map['title'] == null || map['title'].toString().trim().isEmpty) {
+      map['title'] = _resolveDefaultTitle(type);
+    }
+    if (map['body'] == null || map['body'].toString().trim().isEmpty) {
+      map['body'] = _resolveDefaultBody(type);
+    }
     return map;
   }
 
@@ -72,82 +169,187 @@ class FirebaseMessagingService {
     return _extractMessageData(message);
   }
 
+  static bool isModerationNotice({
+    required String type,
+    required String title,
+    required String body,
+  }) {
+    final lowerTitle = title.toLowerCase();
+    final lowerBody = body.toLowerCase();
+    return type == 'CHAT_PENALTY' ||
+        (type == 'GENERAL' &&
+            (lowerTitle.contains('moderación') ||
+                lowerTitle.contains('suspensión') ||
+                lowerTitle.contains('advertencia') ||
+                lowerTitle.contains('acceso al chat restaurado') ||
+                body.contains('Mensajes citados como evidencia') ||
+                lowerBody.contains('acceso al chat de órdenes')));
+  }
+
   Future<void> init() async {
+    _activeInstance = this;
     try {
-      await Firebase.initializeApp();
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
 
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
+      if (!_listenersRegistered) {
+        _listenersRegistered = true;
 
-      debugPrint(
-          'Business FCM Permission status: ${settings.authorizationStatus}');
+        // 1. Foreground message listener registrado inmediatamente sin bloqueos de red
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          (_activeInstance ?? this)._handleForegroundMessage(message);
+        });
 
-      await registerDeviceToken();
-
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        _sendTokenToBackend(newToken);
-      });
-
-      // Foreground message listener con deduplicación estricta
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        _handleForegroundMessage(message);
-      });
-
-      // Segundo plano (Warm start)
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        queueOrNavigate(_extractMessageData(message));
-      });
-
-      // App cerrada (Cold start - local notification)
-      if (NotificationHelper.pendingLaunchPayload != null &&
-          NotificationHelper.pendingLaunchPayload!.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(NotificationHelper.pendingLaunchPayload!);
-          if (decoded is Map) {
-            _pendingInitialNotification = Map<String, dynamic>.from(decoded);
-          }
-        } catch (e) {
-          debugPrint('Error decoding pending business launch payload: $e');
-        } finally {
-          NotificationHelper.pendingLaunchPayload = null;
-        }
+        // 2. Segundo plano (Warm start) registrado antes de solicitar permisos o red
+        FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+          (_activeInstance ?? this)
+              .queueOrNavigate(_extractMessageData(message));
+        });
       }
 
-      // App cerrada (Cold start - FCM)
+      // 3. Captura prioritaria de notificación en arranque en frío (Cold start - FCM o local)
+      if (!_initialMessageChecked) {
+        _initialMessageChecked = true;
+        await _captureInitialLaunchNotification();
+      }
+
+      // 4. Permisos y registro remoto de token en segundo plano no bloqueante
+      unawaited(_initPermissionsAndToken());
+    } catch (e) {
+      debugPrint('Error initializing Firebase Messaging in Business app: $e');
+    }
+  }
+
+  Future<void> _captureInitialLaunchNotification() async {
+    if (NotificationHelper.pendingLaunchPayload != null &&
+        NotificationHelper.pendingLaunchPayload!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(NotificationHelper.pendingLaunchPayload!);
+        if (decoded is Map) {
+          _pendingInitialNotification = Map<String, dynamic>.from(decoded);
+        }
+      } catch (e) {
+        debugPrint('Error decoding pending business launch payload: $e');
+      } finally {
+        NotificationHelper.pendingLaunchPayload = null;
+      }
+    }
+
+    try {
       final initialMessage =
           await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
         queueOrNavigate(_extractMessageData(initialMessage));
       }
     } catch (e) {
-      debugPrint('Error initializing Firebase Messaging in Business app: $e');
+      debugPrint('Error getting initial Business FCM message: $e');
     }
   }
 
-  void queueOrNavigate(Map<String, dynamic> data) {
-    bool isOnSplash = false;
+  Future<void> _initPermissionsAndToken() async {
     try {
-      final loc = _getRouter().routerDelegate.currentConfiguration.uri.path;
-      isOnSplash = loc == '/splash' || loc.isEmpty;
-    } catch (_) {}
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      debugPrint(
+          'Business FCM Permission status: ${settings.authorizationStatus}');
+    } catch (e) {
+      debugPrint('Business FCM requestPermission warning: $e');
+    }
 
-    if (!_isAppReadyForDeepLinks || isOnSplash) {
+    await registerDeviceToken();
+
+    if (!_tokenRefreshRegistered) {
+      _tokenRefreshRegistered = true;
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        (_activeInstance ?? this)._sendTokenToBackend(newToken);
+      });
+    }
+  }
+
+  String _currentRouterPath() {
+    if (debugCurrentPathOverride != null) {
+      return debugCurrentPathOverride!();
+    }
+    try {
+      return _getRouter().routerDelegate.currentConfiguration.uri.path;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static bool _isOnNonDashboardTransientRoute(String path) {
+    return path.isEmpty ||
+        path == '/splash' ||
+        path == '/onboarding' ||
+        path == '/login' ||
+        path == '/register' ||
+        path == '/verify-otp' ||
+        path == '/forgot-password' ||
+        path == '/reset-password' ||
+        path == '/onboarding/company' ||
+        path == '/subscription/paywall' ||
+        path == '/subscription/pending' ||
+        path == '/subscription/rejected' ||
+        path == '/dashboard/store-setup-wizard';
+  }
+
+  static bool _shouldConsumeTap(Map<String, dynamic> data) {
+    final now = DateTime.now();
+    _recentConsumedTapKeys.removeWhere(
+      (_, ts) => now.difference(ts).inMilliseconds > 5000,
+    );
+
+    final uniqueId = (data['messageId'] ??
+            data['notificationId'] ??
+            data['id'] ??
+            '')
+        .toString()
+        .trim();
+    final type = (data['type'] ?? '').toString().trim();
+    final orderId = (data['orderId'] ?? '').toString().trim();
+    final targetId = (data['targetId'] ?? '').toString().trim();
+    final storeId = (data['storeId'] ?? '').toString().trim();
+    final title = (data['title'] ?? '').toString().trim();
+
+    final key = uniqueId.isNotEmpty
+        ? 'id:$uniqueId|$type|$orderId|$targetId'
+        : 'anon:$type|$orderId|$targetId|$storeId|$title';
+    final ttlMs = uniqueId.isNotEmpty ? 4000 : 1500;
+
+    final last = _recentConsumedTapKeys[key];
+    if (last != null && now.difference(last).inMilliseconds < ttlMs) {
+      debugPrint('Business duplicate notification tap suppressed: $key');
+      return false;
+    }
+    _recentConsumedTapKeys[key] = now;
+    return true;
+  }
+
+  void queueOrNavigate(Map<String, dynamic> data) {
+    final currentPath = _currentRouterPath();
+
+    if (!_isAppReadyForDeepLinks ||
+        _isOnNonDashboardTransientRoute(currentPath)) {
       _pendingInitialNotification = Map<String, dynamic>.from(data);
       return;
     }
-    handleNotificationNavigation(data);
+
+    if (!_shouldConsumeTap(data)) return;
+    unawaited(handleNotificationNavigation(data));
   }
 
   void markAppReadyAndConsumePendingNotification() {
     _isAppReadyForDeepLinks = true;
 
-    if (NotificationHelper.pendingLaunchPayload != null &&
+    if (_pendingInitialNotification == null &&
+        NotificationHelper.pendingLaunchPayload != null &&
         NotificationHelper.pendingLaunchPayload!.isNotEmpty) {
       try {
         final decoded = jsonDecode(NotificationHelper.pendingLaunchPayload!);
@@ -163,10 +365,63 @@ class FirebaseMessagingService {
     final pending = _pendingInitialNotification;
     if (pending != null) {
       _pendingInitialNotification = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        handleNotificationNavigation(pending);
+      if (!_shouldConsumeTap(pending)) return;
+      _scheduleNavigation(() {
+        unawaited(handleNotificationNavigation(pending));
       });
     }
+  }
+
+  static void _scheduleNavigation(VoidCallback action) {
+    if (debugPushRouteOverride != null || debugModalOverride != null) {
+      action();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      action();
+    });
+  }
+
+  void _pushRoute(GoRouter? router, String route, {Object? extra}) {
+    if (debugPushRouteOverride != null) {
+      debugPushRouteOverride!(route, extra);
+      return;
+    }
+    if (router == null) return;
+    final currentPath = _currentRouterPath();
+    if (currentPath.isEmpty || currentPath == '/splash') {
+      router.go('/dashboard');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        router.push(route, extra: extra);
+      });
+      return;
+    }
+    router.push(route, extra: extra);
+  }
+
+  void _withMountedContext(
+    GoRouter? router,
+    void Function(BuildContext ctx) onMounted, {
+    VoidCallback? onFallback,
+    int remainingAttempts = 4,
+  }) {
+    final ctx = router?.routerDelegate.navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      onMounted(ctx);
+      return;
+    }
+    if (remainingAttempts > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _withMountedContext(
+          router,
+          onMounted,
+          onFallback: onFallback,
+          remainingAttempts: remainingAttempts - 1,
+        );
+      });
+      return;
+    }
+    onFallback?.call();
   }
 
   Future<void> registerDeviceToken() async {
@@ -239,13 +494,19 @@ class FirebaseMessagingService {
       return;
     }
 
+    final rawOrderId = message.data['orderId']?.toString() ?? '';
+    final rawTargetId = message.data['targetId']?.toString() ?? '';
+    final storeId = message.data['storeId']?.toString() ?? '';
+    final type = message.data['type']?.toString() ?? '';
+    final channelType = (message.data['channelType'] ?? '').toString();
+
     final notifTitle = message.notification?.title?.trim();
     final dataTitle = message.data['title']?.toString().trim();
     final title = (notifTitle != null && notifTitle.isNotEmpty)
         ? notifTitle
         : ((dataTitle != null && dataTitle.isNotEmpty)
             ? dataTitle
-            : 'Tu Lojita Comercio');
+            : _resolveDefaultTitle(type));
 
     final notifBody = message.notification?.body?.trim();
     final dataBody = message.data['body']?.toString().trim();
@@ -253,13 +514,7 @@ class FirebaseMessagingService {
         ? notifBody
         : ((dataBody != null && dataBody.isNotEmpty)
             ? dataBody
-            : '');
-
-    final rawOrderId = message.data['orderId']?.toString() ?? '';
-    final rawTargetId = message.data['targetId']?.toString() ?? '';
-    final storeId = message.data['storeId']?.toString() ?? '';
-    final type = message.data['type']?.toString() ?? '';
-    final channelType = (message.data['channelType'] ?? '').toString();
+            : _resolveDefaultBody(type));
 
     final bool isStoreMediation = (type == 'MEDIATION_REQUEST' ||
             type == 'MEDIATION_RESPONSE') &&
@@ -337,7 +592,7 @@ class FirebaseMessagingService {
     final notificationId = data['notificationId'] ?? data['id'];
     if (notificationId != null && notificationId.toString().isNotEmpty) {
       final idStr = notificationId.toString();
-      NotificationHelper.cancelNotification(idStr.hashCode);
+      NotificationHelper.cancelNotification(idStr.hashCode).catchError((_) {});
       try {
         if (onMarkAsRead != null) {
           onMarkAsRead!(idStr);
@@ -354,6 +609,12 @@ class FirebaseMessagingService {
     final channelType = (data['channelType'] ?? '').toString();
     final title = (data['title'] ?? '').toString();
     final body = (data['body'] ?? '').toString();
+
+    final bool isModeration = isModerationNotice(
+      type: type,
+      title: title,
+      body: body,
+    );
 
     final bool isStoreMediation =
         (type == 'MEDIATION_REQUEST' || type == 'MEDIATION_RESPONSE') &&
@@ -394,6 +655,8 @@ class FirebaseMessagingService {
 
     final bool isNonOrderType = isStoreMediation ||
         isStoreTargetedType ||
+        isModeration ||
+        type == 'PROMO' ||
         type == 'CUSTOMER_BLOCKED' ||
         type == 'CUSTOMER_UNBLOCKED' ||
         type == 'ITEM_HIDDEN' ||
@@ -405,8 +668,13 @@ class FirebaseMessagingService {
         ? rawOrderId
         : (!isNonOrderType ? rawTargetId : '');
 
-    final router = _getRouter();
-    final ctx = router.routerDelegate.navigatorKey.currentContext;
+    GoRouter? router;
+    if (debugPushRouteOverride == null && debugModalOverride == null) {
+      try {
+        router = _getRouter();
+      } catch (_) {}
+    }
+    final ctx = router?.routerDelegate.navigatorKey.currentContext;
 
     // Validar acceso a sucursal para colaboradores
     if (resolvedStoreId.isNotEmpty &&
@@ -418,7 +686,7 @@ class FirebaseMessagingService {
           'No tienes acceso a la sucursal asociada a esta notificación.',
         );
       }
-      router.push('/dashboard/notifications');
+      _pushRoute(router, '/dashboard/notifications');
       return;
     }
 
@@ -438,11 +706,22 @@ class FirebaseMessagingService {
       )) {
         return;
       }
-      if (ctx != null && ctx.mounted && resolvedStoreId.isNotEmpty) {
-        StoreHealthSheet.show(ctx, resolvedStoreId);
-      } else {
-        router.push('/dashboard/notifications');
+      if (resolvedStoreId.isEmpty) {
+        _pushRoute(router, '/dashboard/notifications');
+        return;
       }
+      if (debugModalOverride != null) {
+        debugModalOverride!('STORE_HEALTH', {
+          'storeId': resolvedStoreId,
+          'type': type,
+        });
+        return;
+      }
+      _withMountedContext(
+        router,
+        (mountedCtx) => StoreHealthSheet.show(mountedCtx, resolvedStoreId),
+        onFallback: () => _pushRoute(router, '/dashboard/notifications'),
+      );
     } else if (type == 'ITEM_HIDDEN') {
       if (!checkPerms(
         ['items:view', 'items:edit', 'items:create', 'items:adjust_stock'],
@@ -451,38 +730,55 @@ class FirebaseMessagingService {
         return;
       }
       if (resolvedStoreId.isNotEmpty) {
-        router.push('/dashboard/stores/$resolvedStoreId/items');
+        _pushRoute(router, '/dashboard/stores/$resolvedStoreId/items');
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else if (type == 'REPORT_RESOLUTION') {
-      if (ctx != null && ctx.mounted) {
-        if (rawTargetId.isNotEmpty) {
-          ReportDetailSheet.show(ctx, rawTargetId);
-        } else {
-          ChatPenaltyExplanationModal.show(
-            ctx,
-            title: title.isNotEmpty ? title : 'Moderación',
-            body: body,
-          );
-        }
-      } else {
-        router.push('/dashboard/notifications');
-      }
-    } else if (type == 'CHAT_PENALTY' ||
-        (type == 'GENERAL' &&
-            (title.toLowerCase().contains('moderación') ||
-                title.toLowerCase().contains('suspensión') ||
-                title.toLowerCase().contains('advertencia')))) {
-      if (ctx != null && ctx.mounted) {
-        ChatPenaltyExplanationModal.show(
-          ctx,
-          title: title.isNotEmpty ? title : 'Aviso de Moderación',
-          body: body,
+      if (debugModalOverride != null) {
+        debugModalOverride!(
+          rawTargetId.isNotEmpty ? 'REPORT_DETAIL' : 'CHAT_PENALTY',
+          {
+            'targetId': rawTargetId,
+            'title': title.isNotEmpty ? title : 'Moderación',
+            'body': body,
+          },
         );
-      } else {
-        router.push('/dashboard/notifications');
+        return;
       }
+      _withMountedContext(
+        router,
+        (mountedCtx) {
+          if (rawTargetId.isNotEmpty) {
+            ReportDetailSheet.show(mountedCtx, rawTargetId);
+          } else {
+            ChatPenaltyExplanationModal.show(
+              mountedCtx,
+              title: title.isNotEmpty ? title : 'Moderación',
+              body: body,
+            );
+          }
+        },
+        onFallback: () => _pushRoute(router, '/dashboard/notifications'),
+      );
+    } else if (isModeration) {
+      final modalTitle = title.isNotEmpty ? title : 'Aviso de Moderación';
+      if (debugModalOverride != null) {
+        debugModalOverride!('CHAT_PENALTY', {
+          'title': modalTitle,
+          'body': body,
+        });
+        return;
+      }
+      _withMountedContext(
+        router,
+        (mountedCtx) => ChatPenaltyExplanationModal.show(
+          mountedCtx,
+          title: modalTitle,
+          body: body,
+        ),
+        onFallback: () => _pushRoute(router, '/dashboard/notifications'),
+      );
     } else if (type == 'ACHIEVEMENT_UNLOCKED') {
       if (!checkPerms(
         ['reports:view', 'settings:manage'],
@@ -500,8 +796,7 @@ class FirebaseMessagingService {
       }
       String achievementTitle =
           (data['achievementTitle'] ?? data['title'] ?? title).toString();
-      String achievementDesc =
-          (data['description'] ?? body).toString();
+      String achievementDesc = (data['description'] ?? body).toString();
       final titleMatch = RegExp(r'["“«](.+?)["”»]').firstMatch(body);
       if (titleMatch != null && titleMatch.group(1) != null) {
         achievementTitle = titleMatch.group(1)!;
@@ -539,15 +834,19 @@ class FirebaseMessagingService {
         } catch (_) {}
       }
 
-      router.push('/dashboard/ranking/achievement-unlocked', extra: {
-        ...data,
-        'title': achievementTitle,
-        'achievementTitle': achievementTitle,
-        'description': achievementDesc,
-        'lpBonus': bonus,
-        'badgeUrl': badgeUrl,
-        'storeId': resolvedStoreId,
-      });
+      _pushRoute(
+        router,
+        '/dashboard/ranking/achievement-unlocked',
+        extra: {
+          ...data,
+          'title': achievementTitle,
+          'achievementTitle': achievementTitle,
+          'description': achievementDesc,
+          'lpBonus': bonus,
+          'badgeUrl': badgeUrl,
+          'storeId': resolvedStoreId,
+        },
+      );
     } else if (type == 'DIVISION_UP') {
       if (!checkPerms(
         ['reports:view', 'settings:manage'],
@@ -562,11 +861,15 @@ class FirebaseMessagingService {
       final division = data['division']?.toString() ??
           divMatch?.group(1)?.toUpperCase() ??
           'BRONCE';
-      router.push('/dashboard/ranking/celebration', extra: {
-        ...data,
-        'division': division,
-        'storeId': resolvedStoreId,
-      });
+      _pushRoute(
+        router,
+        '/dashboard/ranking/celebration',
+        extra: {
+          ...data,
+          'division': division,
+          'storeId': resolvedStoreId,
+        },
+      );
     } else if (type == 'DIVISION_DOWN') {
       if (!checkPerms(
         ['reports:view', 'settings:manage'],
@@ -581,11 +884,15 @@ class FirebaseMessagingService {
       final division = data['division']?.toString() ??
           divMatch?.group(1)?.toUpperCase() ??
           'HIERRO';
-      router.push('/dashboard/ranking/division-down', extra: {
-        ...data,
-        'division': division,
-        'storeId': resolvedStoreId,
-      });
+      _pushRoute(
+        router,
+        '/dashboard/ranking/division-down',
+        extra: {
+          ...data,
+          'division': division,
+          'storeId': resolvedStoreId,
+        },
+      );
     } else if (type == 'STORE_FLAGGED') {
       if (!checkPerms(
         ['settings:manage'],
@@ -593,11 +900,15 @@ class FirebaseMessagingService {
       )) {
         return;
       }
-      router.push('/dashboard/ranking/flagged', extra: {
-        ...data,
-        'storeId': resolvedStoreId,
-        'reason': data['reason'] ?? body,
-      });
+      _pushRoute(
+        router,
+        '/dashboard/ranking/flagged',
+        extra: {
+          ...data,
+          'storeId': resolvedStoreId,
+          'reason': data['reason'] ?? body,
+        },
+      );
     } else if (type == 'WEEKLY_RANKING_SUMMARY' ||
         type == 'STREAK_EXPIRING' ||
         type == 'CATEGORY_RIVALRY' ||
@@ -610,9 +921,9 @@ class FirebaseMessagingService {
         return;
       }
       if (resolvedStoreId.isNotEmpty) {
-        router.push('/dashboard/stores/$resolvedStoreId/ranking');
+        _pushRoute(router, '/dashboard/stores/$resolvedStoreId/ranking');
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else if (isStoreMediation ||
         (type == 'MEDIATION_REQUEST' && orderId.isEmpty)) {
@@ -623,9 +934,12 @@ class FirebaseMessagingService {
         return;
       }
       if (resolvedStoreId.isNotEmpty) {
-        router.push('/dashboard/stores/$resolvedStoreId/mediation-requests');
+        _pushRoute(
+          router,
+          '/dashboard/stores/$resolvedStoreId/mediation-requests',
+        );
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else if (type == 'MEDIATION_REQUEST' ||
         type == 'MEDIATION_RESPONSE' ||
@@ -637,11 +951,14 @@ class FirebaseMessagingService {
         return;
       }
       if (orderId.isNotEmpty) {
-        router.push('/dashboard/orders/$orderId?openDispute=true');
+        _pushRoute(router, '/dashboard/orders/$orderId?openDispute=true');
       } else if (resolvedStoreId.isNotEmpty) {
-        router.push('/dashboard/stores/$resolvedStoreId/mediation-requests');
+        _pushRoute(
+          router,
+          '/dashboard/stores/$resolvedStoreId/mediation-requests',
+        );
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else if (type == 'CHAT_MESSAGE' || type == 'SUPPORT_CHAT_MESSAGE') {
       final ch = channelType.toUpperCase();
@@ -666,12 +983,12 @@ class FirebaseMessagingService {
       }
       if (orderId.isNotEmpty) {
         if (isSupport) {
-          router.push('/orders/$orderId/support-chat');
+          _pushRoute(router, '/dashboard/orders/$orderId/support-chat');
         } else {
-          router.push('/dashboard/orders/$orderId/chat');
+          _pushRoute(router, '/dashboard/orders/$orderId/chat');
         }
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else if (type == 'ORDER_CREATED' ||
         type == 'ORDER_STATUS_CHANGED' ||
@@ -700,12 +1017,74 @@ class FirebaseMessagingService {
         return;
       }
       if (orderId.isNotEmpty) {
-        router.push('/dashboard/orders/$orderId');
+        _pushRoute(router, '/dashboard/orders/$orderId');
       } else {
-        router.push('/dashboard/notifications');
+        _pushRoute(router, '/dashboard/notifications');
       }
     } else {
-      router.push('/dashboard/notifications');
+      _pushRoute(router, '/dashboard/notifications');
+      if (title.isNotEmpty || body.isNotEmpty) {
+        final infoTitle = title.isNotEmpty ? title : 'Notificación';
+        if (debugModalOverride != null) {
+          debugModalOverride!('GENERAL_INFO', {
+            'title': infoTitle,
+            'body': body,
+          });
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _withMountedContext(router, (mountedCtx) {
+            showDialog(
+              context: mountedCtx,
+              builder: (dialogCtx) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.notifications_active_outlined,
+                      color: Colors.indigo,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        infoTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  body,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF4B5563),
+                    height: 1.45,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogCtx),
+                    child: const Text(
+                      'Entendido',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          });
+        });
+      }
     }
   }
 }

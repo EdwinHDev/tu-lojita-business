@@ -217,7 +217,6 @@ class HomeView extends ConsumerWidget {
             height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
               image: DecorationImage(
                 image: NetworkImage(companyLogoUrl),
                 fit: BoxFit.cover,

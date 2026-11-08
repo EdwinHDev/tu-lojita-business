@@ -73,7 +73,6 @@ class StoreListTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: logoUrl.isNotEmpty ? Colors.white : const Color(0xFFEEF2FF),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
             image: logoUrl.isNotEmpty
                 ? DecorationImage(
                     image: NetworkImage(logoUrl),

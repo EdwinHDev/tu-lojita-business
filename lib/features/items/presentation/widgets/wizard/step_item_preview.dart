@@ -31,7 +31,7 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
   final Map<String, String> _simulatedAxisValues = {};
   final Map<String, int> _variantQuantities = {};
   final Map<String, List<String>> _selectedOptions = {};
-  int _quantity = 1;
+  final int _quantity = 1;
   DateTime _simulatedSelectedDate = DateTime.now();
   String? _simulatedSelectedSlotId;
 
@@ -129,10 +129,12 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
         orElse: () => ItemVariant(),
       );
       final hasDiscount = variant.discountPrice != null && variant.discountPrice! > 0;
-      final price = hasDiscount
+      final basePrice = hasDiscount
           ? variant.discountPrice!
           : (variant.price ?? (state.discountPrice ?? state.price));
-      total += price * qty;
+      final publicPrice = state.calculateCustomerSinglePrice(basePrice);
+      final effectivePrice = publicPrice > 0 ? publicPrice : basePrice;
+      total += effectivePrice * qty;
     }
     return total;
   }
@@ -464,22 +466,28 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
     final variantDiscountPrice = matchedVariant?.discountPrice;
     final bool hasVariantDiscount = variantDiscountPrice != null && variantDiscountPrice > 0;
 
-    final double activePrice;
+    final double activeBasePrice;
     if (hasVariantDiscount) {
-      activePrice = variantDiscountPrice;
+      activeBasePrice = variantDiscountPrice;
     } else if (variantPrice != null && variantPrice > 0) {
-      activePrice = variantPrice;
+      activeBasePrice = variantPrice;
     } else if (state.discountPrice != null && state.discountPrice! > 0) {
-      activePrice = state.discountPrice!;
+      activeBasePrice = state.discountPrice!;
     } else {
-      activePrice = state.price;
+      activeBasePrice = state.price;
     }
+
+    final double calculatedActivePrice = state.calculateCustomerSinglePrice(activeBasePrice);
+    final double activePrice = calculatedActivePrice > 0 ? calculatedActivePrice : activeBasePrice;
 
     final double? originalPrice;
     if (hasVariantDiscount) {
-      originalPrice = variantPrice ?? state.price;
+      final base = variantPrice ?? state.price;
+      final pub = state.calculateCustomerSinglePrice(base);
+      originalPrice = pub > 0 ? pub : base;
     } else if (state.discountPrice != null && state.discountPrice! > 0) {
-      originalPrice = state.price;
+      final pub = state.calculateCustomerSinglePrice(state.price);
+      originalPrice = pub > 0 ? pub : state.price;
     } else {
       originalPrice = null;
     }

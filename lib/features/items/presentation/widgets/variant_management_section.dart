@@ -20,6 +20,7 @@ class _VariantManagementSectionState
     extends ConsumerState<VariantManagementSection> {
   final Map<String, GlobalKey> _targetKeys = {};
   final Map<String, TextEditingController> _stockControllers = {};
+  final Map<String, TextEditingController> _priceControllers = {};
 
   GlobalKey _getKeyFor(String id) {
     return _targetKeys.putIfAbsent(id, () => GlobalKey());
@@ -41,12 +42,42 @@ class _VariantManagementSectionState
     return ctrl;
   }
 
+  TextEditingController _getPriceController(
+    String key,
+    double? price,
+    double parentPrice,
+  ) {
+    final ctrl = _priceControllers.putIfAbsent(
+      key,
+      () {
+        final initialPrice = price ?? (parentPrice > 0 ? parentPrice : null);
+        return TextEditingController(
+          text: initialPrice != null ? initialPrice.toStringAsFixed(2) : '',
+        );
+      },
+    );
+    final currentParsed = double.tryParse(ctrl.text);
+    if (price != null &&
+        (currentParsed == null || (currentParsed - price).abs() > 0.001)) {
+      final formatted = price.toStringAsFixed(2);
+      ctrl.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+    return ctrl;
+  }
+
   @override
   void dispose() {
     for (final ctrl in _stockControllers.values) {
       ctrl.dispose();
     }
     _stockControllers.clear();
+    for (final ctrl in _priceControllers.values) {
+      ctrl.dispose();
+    }
+    _priceControllers.clear();
     super.dispose();
   }
 
@@ -389,6 +420,29 @@ class _VariantManagementSectionState
             ],
             if (state.variants.isNotEmpty && state.variantAxes.length > 1) ...[
               const Divider(height: 32),
+              if (state.hasVaryingVariantPrices) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Color(0xFFB45309), size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Precios variables configurados. El precio base del artículo se actualizará automáticamente al menor de las variantes en modo "A partir de".',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               _buildVariantsHeader(state, notifier),
               const SizedBox(height: 12),
               _buildBatchActionsBar(state, notifier),
@@ -1028,15 +1082,15 @@ class _VariantManagementSectionState
                 // Campo Precio
                 Expanded(
                   flex: 3,
-                  child: TextFormField(
+                  child: TextField(
                     key: ValueKey('price_$variantIndex'),
+                    controller: _getPriceController(
+                      'single_$variantIndex',
+                      variant.price,
+                      parentPrice,
+                    ),
                     selectAllOnFocus: false,
                     enabled: user?.canChangePrices ?? true,
-                    initialValue: variant.price != null
-                        ? variant.price!.toStringAsFixed(2)
-                        : (parentPrice > 0
-                              ? parentPrice.toStringAsFixed(2)
-                              : ''),
                     decoration: InputDecoration(
                       labelText: 'Precio Opción (\$)',
                       hintText: parentPrice > 0
@@ -1063,7 +1117,7 @@ class _VariantManagementSectionState
                       final p = double.tryParse(val);
                       notifier.updateVariant(
                         variantIndex,
-                        variant!.copyWith(price: p),
+                        variant!.copyWith(price: p, basePrice: p),
                       );
                     },
                   ),
@@ -1564,13 +1618,15 @@ class _VariantManagementSectionState
             children: [
               Expanded(
                 flex: 3,
-                child: TextFormField(
+                child: TextField(
                   key: ValueKey('combo_price_$index'),
+                  controller: _getPriceController(
+                    'combo_$index',
+                    variant.price,
+                    parentPrice,
+                  ),
                   selectAllOnFocus: false,
                   enabled: canChangePrice,
-                  initialValue: variant.price != null
-                      ? variant.price!.toStringAsFixed(2)
-                      : (parentPrice > 0 ? parentPrice.toStringAsFixed(2) : ''),
                   decoration: InputDecoration(
                     labelText: 'Precio Opción (\$)',
                     hintText: parentPrice > 0
@@ -1595,7 +1651,10 @@ class _VariantManagementSectionState
                   style: const TextStyle(fontSize: 13),
                   onChanged: (val) {
                     final p = double.tryParse(val);
-                    notifier.updateVariant(index, variant.copyWith(price: p));
+                    notifier.updateVariant(
+                      index,
+                      variant.copyWith(price: p, basePrice: p),
+                    );
                   },
                 ),
               ),

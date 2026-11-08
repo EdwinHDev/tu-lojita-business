@@ -89,6 +89,12 @@ class NotificationHelper {
     required String body,
     String? payload,
   }) async {
+    final effectiveTitle =
+        title.trim().isNotEmpty ? title.trim() : 'Tu Lojita Comercio';
+    final effectiveBody = body.trim().isNotEmpty
+        ? body.trim()
+        : 'Tienes una nueva notificación en tu comercio.';
+
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       'business_notifications',
@@ -108,8 +114,8 @@ class NotificationHelper {
 
     await flutterLocalNotificationsPlugin.show(
       id,
-      title,
-      body,
+      effectiveTitle,
+      effectiveBody,
       platformChannelSpecifics,
       payload: payload,
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/envs.dart';
+import '../../../../core/utils/notification_service.dart';
 import '../providers/ranking_providers.dart';
 import '../../domain/entities/ranking_models.dart';
 import 'ranking_shimmer_skeleton.dart';
@@ -212,13 +213,9 @@ class DailyMissionsCard extends ConsumerWidget {
                     .read(missionClaimNotifierProvider.notifier)
                     .claimMission(storeId, mission.code);
                 if (success && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '¡Misión completada! +${mission.prReward} PR sumados 🎉',
-                      ),
-                      backgroundColor: const Color(0xFF16A34A),
-                    ),
+                  NotificationService.showSuccess(
+                    context,
+                    '¡Misión completada! +${mission.prReward} PR sumados 🎉',
                   );
                 }
               },

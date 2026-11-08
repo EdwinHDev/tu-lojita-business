@@ -52,6 +52,11 @@ class OrderItemsCard extends StatelessWidget {
         item.item?.mainImage ??
         (item.item?.images.isNotEmpty == true ? item.item!.images.first : '');
     final imageUrl = OrderDetailHelpers.resolveImageUrl(rawImagePath);
+    final lineTotal = item.price * item.quantity;
+    final lineCommission = item.commissionAmount * item.quantity;
+    final lineNet = item.price > 0
+        ? ((item.price - item.commissionAmount) * item.quantity)
+        : (item.basePrice * item.quantity);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -123,7 +128,10 @@ class OrderItemsCard extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -140,7 +148,6 @@ class OrderItemsCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
                         Text(
                           '\$${item.price.toStringAsFixed(2)} c/u',
                           style: const TextStyle(
@@ -149,6 +156,40 @@ class OrderItemsCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if (lineCommission > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFFDE68A)),
+                            ),
+                            child: Text(
+                              'Comisión: -\$${lineCommission.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                          ),
+                        if (lineNet > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                            ),
+                            child: Text(
+                              'Neto: \$${lineNet.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF047857),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -156,7 +197,7 @@ class OrderItemsCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                '\$${(item.price * item.quantity).toStringAsFixed(2)}',
+                '\$${lineTotal.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 16,

@@ -26,22 +26,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkBranchPrerequisites();
+      if (!mounted) return;
+      final redirected = _checkBranchPrerequisites();
+      if (!redirected && mounted) {
+        ref
+            .read(firebaseMessagingServiceProvider)
+            .markAppReadyAndConsumePendingNotification();
+      }
     });
   }
 
-  void _checkBranchPrerequisites() {
-    if (!mounted) return;
+  bool _checkBranchPrerequisites() {
+    if (!mounted) return false;
     final authState = ref.read(authProvider);
-    if (authState is! Authenticated) return;
+    if (authState is! Authenticated) return false;
     final user = authState.user;
 
     // Colaboradores y administradores no configuran primera sede empresarial
-    if (user.role == 'ADMIN' || user.isCollaborator) return;
+    if (user.role == 'ADMIN' || user.isCollaborator) return false;
 
     final storesState = ref.read(storesProvider);
     // Si aún está cargando la primera vez y no hay datos, esperar
-    if (storesState.isLoading && storesState.stores.isEmpty) return;
+    if (storesState.isLoading && storesState.stores.isEmpty) return false;
 
     final stores = storesState.stores;
     final needsSetupWizard = stores.isEmpty ||
@@ -51,7 +57,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (needsSetupWizard) {
       context.go('/dashboard/store-setup-wizard');
+      return true;
     }
+    return false;
   }
 
   @override

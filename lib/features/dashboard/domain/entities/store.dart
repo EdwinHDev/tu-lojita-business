@@ -73,6 +73,8 @@ class Store {
   final String? tiktok;
   final DateTime? deletionScheduledAt;
   final bool isDeleted;
+  final bool aiEnabled;
+  final String? companyId;
 
   const Store({
     required this.id,
@@ -106,6 +108,8 @@ class Store {
     this.tiktok,
     this.deletionScheduledAt,
     this.isDeleted = false,
+    this.aiEnabled = false,
+    this.companyId,
   });
 
   bool get isCategoryOrSubcategoryRestricted =>
@@ -169,6 +173,8 @@ class Store {
     String? tiktok,
     DateTime? deletionScheduledAt,
     bool? isDeleted,
+    bool? aiEnabled,
+    String? companyId,
   }) {
     return Store(
       id: id ?? this.id,
@@ -202,6 +208,8 @@ class Store {
       tiktok: tiktok ?? this.tiktok,
       deletionScheduledAt: deletionScheduledAt ?? this.deletionScheduledAt,
       isDeleted: isDeleted ?? this.isDeleted,
+      aiEnabled: aiEnabled ?? this.aiEnabled,
+      companyId: companyId ?? this.companyId,
     );
   }
 }

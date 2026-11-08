@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/network/firebase_messaging_service.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/stores_notifier.dart';
@@ -11,7 +12,6 @@ import 'settings/store_health_sheet.dart';
 import '../widgets/chat_penalty_explanation_modal.dart';
 import 'package:tu_lojita_business/features/reports/presentation/widgets/report_detail_sheet.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
-import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/core/utils/achievement_image_helper.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/providers/ranking_providers.dart';
@@ -888,10 +888,11 @@ class _PremiumNotificationTile extends ConsumerWidget {
           body: notification.body,
         );
       }
-    } else if (notification.type == 'CHAT_PENALTY' ||
-        notification.title.toLowerCase().contains('moderación') ||
-        notification.title.toLowerCase().contains('suspensión') ||
-        notification.title.toLowerCase().contains('advertencia')) {
+    } else if (FirebaseMessagingService.isModerationNotice(
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+    )) {
       ChatPenaltyExplanationModal.show(
         context,
         title: notification.title,
@@ -1059,7 +1060,7 @@ class _PremiumNotificationTile extends ConsumerWidget {
           );
           return;
         }
-        context.push('/orders/${notification.targetId}/support-chat');
+        context.push('/dashboard/orders/${notification.targetId}/support-chat');
       } else if (notification.type == 'CHAT_MESSAGE') {
         if (!canAccess(['orders:chat'])) {
           NotificationService.showError(

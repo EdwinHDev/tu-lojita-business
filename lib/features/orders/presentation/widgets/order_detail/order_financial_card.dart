@@ -190,25 +190,49 @@ class OrderFinancialCard extends StatelessWidget {
             child: Divider(color: Color(0xFFF1F5F9), height: 1),
           ),
 
-          // Desglose de facturación
-          _buildRow('Subtotal (Productos)', '\$${order.totalAmount.toStringAsFixed(2)}', isBold: false),
-          if (order.feeAmount > 0) ...[
-            const SizedBox(height: 8),
-            _buildRow('Recargo por cuotas', '+\$${order.feeAmount.toStringAsFixed(2)}', isBold: false),
-          ],
-          if (order.platformCommissionAmount > 0) ...[
-            const SizedBox(height: 8),
+          // Desglose de facturación y liquidación para el comercio
+          if (order.feeAmount > 0 || order.platformCommissionAmount > 0) ...[
             _buildRow(
-              'Servicio Plataforma (+${order.platformCommissionRate.toStringAsFixed(1)}%)',
-              '+\$${order.platformCommissionAmount.toStringAsFixed(2)}',
+              'Subtotal Artículos (Público)',
+              '\$${order.totalAmount.toStringAsFixed(2)}',
               isBold: false,
             ),
+            const SizedBox(height: 8),
           ],
+          if (order.feeAmount > 0) ...[
+            _buildRow(
+              '• Recargo por cuotas tienda',
+              '+\$${order.feeAmount.toStringAsFixed(2)}',
+              isBold: false,
+            ),
+            const SizedBox(height: 8),
+          ],
+          _buildRow(
+            'Total Cobrado al Cliente',
+            '\$${order.finalAmount.toStringAsFixed(2)}',
+            isBold: true,
+          ),
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
+            padding: EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: Color(0xFFF1F5F9), height: 1),
           ),
-          _buildRow('Total Facturado', '\$${order.finalAmount.toStringAsFixed(2)}', isBold: true),
+          if (order.platformCommissionAmount > 0) ...[
+            _buildRow(
+              order.platformCommissionRate > 0
+                  ? 'Comisión Plataforma (${_formatRate(order.platformCommissionRate)}%)'
+                  : 'Comisión Plataforma (adeudada)',
+              '-\$${order.platformCommissionAmount.toStringAsFixed(2)}',
+              isBold: false,
+              valueColor: const Color(0xFFB45309),
+            ),
+            const SizedBox(height: 8),
+          ],
+          _buildRow(
+            'Tu Ingreso Neto Tienda',
+            '\$${(order.finalAmount - order.platformCommissionAmount).toStringAsFixed(2)}',
+            isBold: true,
+            valueColor: const Color(0xFF047857),
+          ),
 
           // Enlace directo a cuentas por cobrar si es a cuotas
           if (isInstallment && effectiveStoreId != null) ...[
@@ -275,7 +299,14 @@ class OrderFinancialCard extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(String label, String value, {required bool isBold}) {
+  String _formatRate(double rate) {
+    if ((rate - rate.roundToDouble()).abs() < 0.01) {
+      return rate.round().toString();
+    }
+    return rate.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+
+  Widget _buildRow(String label, String value, {required bool isBold, Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -290,7 +321,7 @@ class OrderFinancialCard extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: isBold ? const Color(0xFF4F46E5) : const Color(0xFF0F172A),
+            color: valueColor ?? (isBold ? const Color(0xFF4F46E5) : const Color(0xFF0F172A)),
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
             fontSize: isBold ? 17 : 13,
           ),

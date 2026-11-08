@@ -13,14 +13,13 @@ import '../providers/notifications_provider.dart';
 import '../widgets/store_details_skeletons.dart';
 import '../../../ranking/presentation/widgets/store_rank_header_card.dart';
 import '../../../ranking/presentation/widgets/daily_missions_card.dart';
-import '../../../ranking/presentation/widgets/store_rank_avatar.dart';
-import '../../../ranking/presentation/providers/ranking_providers.dart';
 import '../../../auth/presentation/providers/auth_notifier.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import 'settings/blocked_customers_screen.dart';
 import '../providers/dashboard_providers.dart';
 import '../providers/stores_notifier.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
 
 class StoreDetailsScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -82,6 +81,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
           children: [
             RefreshIndicator(
               onRefresh: () async {
+                ref.invalidate(platformAiGlobalEnabledProvider);
                 await ref.read(storeDetailsProvider.notifier).refresh(widget.storeId);
               },
               color: const Color(0xFF4F46E5),
@@ -210,10 +210,6 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
   }
 
   Widget _buildFloatingLogo(String logoUrl, {bool isLoading = false}) {
-    final rankingAsync = ref.watch(storeRankingProvider(widget.storeId));
-    final division = rankingAsync.value?.division ?? 'PUESTO_AMBULANTE';
-    final frameUrl = rankingAsync.value?.divisionFrameUrl;
-
     if (isLoading) {
       return const Positioned(
         top: 80,
@@ -230,11 +226,44 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
       left: 0,
       right: 0,
       child: Center(
-        child: StoreRankAvatar(
-          logoUrl: logoUrl,
-          division: division,
-          divisionFrameUrl: frameUrl,
-          size: 110,
+        child: Container(
+          width: 110,
+          height: 110,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: logoUrl.isNotEmpty
+                ? Image.network(
+                    logoUrl,
+                    width: 110,
+                    height: 110,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Center(
+                      child: HugeIcon(
+                        icon: HugeIcons.strokeRoundedStore01,
+                        color: Color(0xFF4F46E5),
+                        size: 50,
+                      ),
+                    ),
+                  )
+                : const Center(
+                    child: HugeIcon(
+                      icon: HugeIcons.strokeRoundedStore01,
+                      color: Color(0xFF4F46E5),
+                      size: 50,
+                    ),
+                  ),
+          ),
         ),
       ),
     );
@@ -519,19 +548,9 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                       final storeId = store.id;
                       final publicUrl = 'https://tulojita.com/tienda/$storeId';
                       Clipboard.setData(ClipboardData(text: publicUrl));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: const [
-                              Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(child: Text('Enlace público de tu tienda copiado')),
-                            ],
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFF10B981),
-                          duration: const Duration(seconds: 2),
-                        ),
+                      NotificationService.showSuccess(
+                        context,
+                        'Enlace público de tu tienda copiado',
                       );
                     },
                     borderRadius: BorderRadius.circular(14),

@@ -75,16 +75,47 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                   ],
                 ),
               ),
+            if (state.hasVaryingVariantPrices)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Color(0xFFB45309), size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Variantes con diferentes precios detectadas. El producto se establece obligatoriamente en "A partir de" usando el precio menor como referencia.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF92400E),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             _buildCard([
               // Price Type Dropdown
               DropdownButtonFormField<PriceType>(
-                key: ValueKey('priceType_${state.itemId ?? "new"}'),
+                key: ValueKey('priceType_${state.itemId ?? "new"}_${state.priceType.name}'),
                 initialValue: state.priceType,
                 decoration: _inputDecoration('Tipo de precio'),
                 items: [
                   DropdownMenuItem(
                     value: PriceType.fixed,
-                    child: _dropdownItem(HugeIcons.strokeRoundedCircleLock01, 'Precio Fijo'),
+                    enabled: !state.hasVaryingVariantPrices,
+                    child: _dropdownItem(
+                      HugeIcons.strokeRoundedCircleLock01,
+                      'Precio Fijo',
+                      isEnabled: !state.hasVaryingVariantPrices,
+                    ),
                   ),
                   DropdownMenuItem(
                     value: PriceType.startingAt,
@@ -103,7 +134,9 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                     child: _dropdownItem(HugeIcons.strokeRoundedStar, 'Gratis'),
                   ),
                 ],
-                onChanged: canChangePrice ? (v) => notifier.onPriceTypeChanged(v!) : null,
+                onChanged: canChangePrice && !state.hasVaryingVariantPrices
+                    ? (v) => notifier.onPriceTypeChanged(v!)
+                    : null,
               ),
               const SizedBox(height: 16),
 
@@ -118,7 +151,7 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                       initialValue: state.price == 0 ? '' : state.price.toString(),
                       enabled: canChangePrice,
                       decoration: _inputDecoration(
-                        'Precio Base',
+                        'Tu Ganancia / Precio Base',
                         hint: '0.00',
                         prefix: const Text(
                           '\$ ',
@@ -175,7 +208,7 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                 ],
               ),
 
-              // Calculadora de comisiones
+              // Calculadora de comisiones y precios finales al cliente
               if (state.effectivePrice > 0) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -198,7 +231,7 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Calculadora de Precio al Cliente',
+                              'Desglose de Ganancia y Precio al Cliente',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -212,9 +245,27 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          const Text(
+                            'Tu ganancia neta:',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                          ),
+                          Text(
+                            '\$${state.effectivePrice.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           Expanded(
                             child: Text(
-                              'Contado (+${state.singleCommissionRate.toStringAsFixed(1)}% com.):',
+                              'Precio al Contado (+${state.singleCommissionRate.toStringAsFixed(1)}% com.):',
                               style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
                             ),
                           ),
@@ -235,7 +286,7 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                         children: [
                           Expanded(
                             child: Text(
-                              'En Cuotas (+${state.installmentCommissionRate.toStringAsFixed(1)}% com.):',
+                              'Precio en Cuotas (+${state.installmentCommissionRate.toStringAsFixed(1)}% com.):',
                               style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
                             ),
                           ),
@@ -250,9 +301,9 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       const Text(
-                        '* La comisión de plataforma se añade a la factura del cliente y la tienda la transfiere en el corte semanal.',
+                        '* La comisión de la plataforma ya está incorporada en el precio al cliente. No se le mostrará ningún recargo de servicio de plataforma al pagar.',
                         style: TextStyle(
                           fontSize: 11,
                           fontStyle: FontStyle.italic,
@@ -463,12 +514,21 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
     );
   }
 
-  Widget _dropdownItem(dynamic iconData, String text) {
+  Widget _dropdownItem(dynamic iconData, String text, {bool isEnabled = true}) {
     return Row(
       children: [
-        HugeIcon(icon: iconData, size: 20, color: const Color(0xFF4F46E5)),
+        HugeIcon(
+          icon: iconData,
+          size: 20,
+          color: isEnabled ? const Color(0xFF4F46E5) : const Color(0xFF94A3B8),
+        ),
         const SizedBox(width: 12),
-        Text(text),
+        Text(
+          text,
+          style: TextStyle(
+            color: isEnabled ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
+          ),
+        ),
       ],
     );
   }

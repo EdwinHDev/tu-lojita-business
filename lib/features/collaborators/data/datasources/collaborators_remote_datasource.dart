@@ -16,6 +16,7 @@ abstract class CollaboratorsRemoteDataSource {
     String? phone,
     required String roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool hasFullBranchAccess = false,
   });
   Future<Collaborator> updateCollaborator(
@@ -27,6 +28,7 @@ abstract class CollaboratorsRemoteDataSource {
     String? phone,
     String? roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
     bool? isActive,
   });
@@ -80,6 +82,7 @@ class CollaboratorsRemoteDataSourceImpl implements CollaboratorsRemoteDataSource
     String? phone,
     required String roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool hasFullBranchAccess = false,
   }) async {
     final payload = <String, dynamic>{
@@ -96,6 +99,9 @@ class CollaboratorsRemoteDataSourceImpl implements CollaboratorsRemoteDataSource
     }
     if (storeIds != null) {
       payload['storeIds'] = storeIds;
+    }
+    if (aiAllowedStoreIds != null) {
+      payload['aiAllowedStoreIds'] = aiAllowedStoreIds;
     }
 
     final response = await dio.post(
@@ -122,6 +128,7 @@ class CollaboratorsRemoteDataSourceImpl implements CollaboratorsRemoteDataSource
     String? phone,
     String? roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
     bool? isActive,
   }) async {
@@ -132,6 +139,9 @@ class CollaboratorsRemoteDataSourceImpl implements CollaboratorsRemoteDataSource
     if (phone != null) payload['phone'] = phone;
     if (roleId != null) payload['roleId'] = roleId;
     if (storeIds != null) payload['storeIds'] = storeIds;
+    if (aiAllowedStoreIds != null) {
+      payload['aiAllowedStoreIds'] = aiAllowedStoreIds;
+    }
     if (hasFullBranchAccess != null) {
       payload['hasFullBranchAccess'] = hasFullBranchAccess;
     }

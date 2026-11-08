@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
 import '../widgets/platform_qr_dialog.dart';
@@ -266,13 +267,19 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '\$${debt.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 36,
+                    DualPriceText(
+                      amountInUsd: debt,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      usdStyle: TextStyle(
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
                         color: debt > 0 ? Colors.redAccent : const Color(0xFF10B981),
                         letterSpacing: -1,
+                      ),
+                      bsStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -337,10 +344,29 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
               else
                 ...recentOrders.map((ord) {
                   final orderId = (ord['id'] as String?)?.split('-')[0].toUpperCase() ?? '';
-                  final amount = double.tryParse(ord['finalAmount']?.toString() ?? '0') ?? 0.0;
+                  final totalAmount = double.tryParse(ord['totalAmount']?.toString() ?? '0') ?? 0.0;
+                  final rawFinalAmount = double.tryParse(ord['finalAmount']?.toString() ?? '0') ?? 0.0;
                   final comm = double.tryParse(ord['platformCommissionAmount']?.toString() ?? '0') ?? 0.0;
-                  final rate = double.tryParse(ord['platformCommissionRate']?.toString() ?? '0') ?? 0.0;
+                  double rate = double.tryParse(ord['platformCommissionRate']?.toString() ?? '0') ?? 0.0;
+                  if (comm > 0 && totalAmount > comm && (rate <= 0 || (rate - 4.76).abs() < 0.05)) {
+                    rate = double.parse(((comm / (totalAmount - comm)) * 100).toStringAsFixed(2));
+                  }
+                  final rateLabel = (rate - rate.roundToDouble()).abs() < 0.01
+                      ? '${rate.toStringAsFixed(1)}%'
+                      : '${rate.toStringAsFixed(2)}%';
                   final isPartial = ord['isPartialPayment'] == true;
+                  final status = (ord['status'] as String?) ?? '';
+                  final isFullyPaid = status == 'FULLY_PAID';
+                  final statusLabel = isFullyPaid ? 'Pagada' : 'Abonada';
+                  final statusColor = isFullyPaid
+                      ? const Color(0xFF047857)
+                      : const Color(0xFF4F46E5);
+                  final statusBg = isFullyPaid
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFEEF2FF);
+                  final amount = (totalAmount > 0 && !isPartial && rawFinalAmount > totalAmount + 0.009)
+                      ? totalAmount
+                      : rawFinalAmount;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -355,26 +381,54 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Orden #$orderId',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    'Orden #$orderId',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      statusLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Venta: \$${amount.toStringAsFixed(2)} • ${isPartial ? "En Cuotas" : "Contado"}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
+                              const SizedBox(height: 2),
+                              Text(
+                                'Venta: \$${amount.toStringAsFixed(2)} • ${isPartial ? "En Cuotas" : "Contado"}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
@@ -387,7 +441,7 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
                               ),
                             ),
                             Text(
-                              'Tasa: ${rate.toStringAsFixed(1)}%',
+                              'Tasa: $rateLabel',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey,

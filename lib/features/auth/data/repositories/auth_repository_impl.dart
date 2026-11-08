@@ -72,6 +72,14 @@ class AuthRepositoryImpl implements AuthRepository {
         isActive: user.isActive,
         accountSuspendedUntil: user.accountSuspendedUntil,
         accountSuspensionReason: user.accountSuspensionReason,
+        googleId: user.googleId,
+        isCollaborator: user.isCollaborator,
+        accessId: user.accessId,
+        collaboratorRole: user.collaboratorRole,
+        permissions: user.permissions,
+        allowedBranchIds: user.allowedBranchIds,
+        aiAllowedStoreIds: user.aiAllowedStoreIds,
+        hasFullBranchAccess: user.hasFullBranchAccess,
       );
       await _localDataSource.saveUser(model);
     }

@@ -23,6 +23,7 @@ class UserModel extends User {
     super.collaboratorRole,
     super.permissions = const [],
     super.allowedBranchIds = const [],
+    super.aiAllowedStoreIds = const [],
     super.hasFullBranchAccess = false,
   });
 
@@ -46,6 +47,11 @@ class UserModel extends User {
     final allowedBranchesRaw = source['allowedBranchIds'];
     final List<String> allowedBranchIdsList = allowedBranchesRaw is List
         ? allowedBranchesRaw.map((e) => e.toString()).toList()
+        : const [];
+
+    final aiAllowedRaw = source['aiAllowedStoreIds'];
+    final List<String> aiAllowedStoreIdsList = aiAllowedRaw is List
+        ? aiAllowedRaw.map((e) => e.toString()).toList()
         : const [];
 
     String? roleName;
@@ -87,6 +93,7 @@ class UserModel extends User {
       collaboratorRole: roleName,
       permissions: permissionsList,
       allowedBranchIds: allowedBranchIdsList,
+      aiAllowedStoreIds: aiAllowedStoreIdsList,
       hasFullBranchAccess: source['hasFullBranchAccess'] as bool? ?? false,
     );
   }
@@ -113,6 +120,7 @@ class UserModel extends User {
       'collaboratorRole': collaboratorRole,
       'permissions': permissions,
       'allowedBranchIds': allowedBranchIds,
+      'aiAllowedStoreIds': aiAllowedStoreIds,
       'hasFullBranchAccess': hasFullBranchAccess,
     };
   }
@@ -138,6 +146,7 @@ class UserModel extends User {
     String? collaboratorRole,
     List<String>? permissions,
     List<String>? allowedBranchIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
   }) {
     return UserModel(
@@ -160,6 +169,7 @@ class UserModel extends User {
       collaboratorRole: collaboratorRole ?? this.collaboratorRole,
       permissions: permissions ?? this.permissions,
       allowedBranchIds: allowedBranchIds ?? this.allowedBranchIds,
+      aiAllowedStoreIds: aiAllowedStoreIds ?? this.aiAllowedStoreIds,
       hasFullBranchAccess: hasFullBranchAccess ?? this.hasFullBranchAccess,
     );
   }

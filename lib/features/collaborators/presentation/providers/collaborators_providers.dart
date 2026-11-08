@@ -280,6 +280,7 @@ class CollaboratorsNotifier extends Notifier<CollaboratorsState> {
     required String roleId,
     required bool hasFullBranchAccess,
     required List<String> storeIds,
+    List<String>? aiAllowedStoreIds,
   }) async {
     final companyId = _getCompanyId();
     if (companyId == null) {
@@ -294,6 +295,7 @@ class CollaboratorsNotifier extends Notifier<CollaboratorsState> {
       roleId: roleId,
       hasFullBranchAccess: hasFullBranchAccess,
       storeIds: storeIds,
+      aiAllowedStoreIds: aiAllowedStoreIds,
     );
     final newCollab = res['collaborator'] as Collaborator?;
     if (newCollab != null) {
@@ -316,6 +318,7 @@ class CollaboratorsNotifier extends Notifier<CollaboratorsState> {
     String? roleId,
     bool? hasFullBranchAccess,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool? isActive,
   }) async {
     final companyId = _getCompanyId();
@@ -332,6 +335,7 @@ class CollaboratorsNotifier extends Notifier<CollaboratorsState> {
       roleId: roleId,
       hasFullBranchAccess: hasFullBranchAccess,
       storeIds: storeIds,
+      aiAllowedStoreIds: aiAllowedStoreIds,
       isActive: isActive,
     );
     state = state.copyWith(

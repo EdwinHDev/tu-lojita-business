@@ -35,6 +35,7 @@ class CollaboratorsRepositoryImpl implements CollaboratorsRepository {
     String? phone,
     required String roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool hasFullBranchAccess = false,
   }) {
     return remoteDataSource.createCollaborator(
@@ -45,6 +46,7 @@ class CollaboratorsRepositoryImpl implements CollaboratorsRepository {
       phone: phone,
       roleId: roleId,
       storeIds: storeIds,
+      aiAllowedStoreIds: aiAllowedStoreIds,
       hasFullBranchAccess: hasFullBranchAccess,
     );
   }
@@ -59,6 +61,7 @@ class CollaboratorsRepositoryImpl implements CollaboratorsRepository {
     String? phone,
     String? roleId,
     List<String>? storeIds,
+    List<String>? aiAllowedStoreIds,
     bool? hasFullBranchAccess,
     bool? isActive,
   }) {
@@ -71,6 +74,7 @@ class CollaboratorsRepositoryImpl implements CollaboratorsRepository {
       phone: phone,
       roleId: roleId,
       storeIds: storeIds,
+      aiAllowedStoreIds: aiAllowedStoreIds,
       hasFullBranchAccess: hasFullBranchAccess,
       isActive: isActive,
     );

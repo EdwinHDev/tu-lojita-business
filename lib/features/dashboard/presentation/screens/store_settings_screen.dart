@@ -18,6 +18,8 @@ import 'settings/blocked_customers_screen.dart';
 import 'settings/mediation_requests_screen.dart';
 import 'settings/store_health_sheet.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/screens/store_ai_settings_screen.dart';
 import '../../domain/entities/store.dart';
 
 class StoreSettingsScreen extends ConsumerStatefulWidget {
@@ -33,6 +35,7 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(platformAiGlobalEnabledProvider);
       ref.read(storeSettingsProvider.notifier).loadStore(widget.storeId);
     });
   }
@@ -42,8 +45,16 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
     final state = ref.watch(storeSettingsProvider);
     final authState = ref.watch(authProvider);
     final currentUser = authState is Authenticated ? authState.user : null;
+    final isGlobalAiEnabled =
+        ref.watch(platformAiGlobalEnabledProvider).value ?? false;
     final canManageLifecycle =
         currentUser == null || !currentUser.isCollaborator || currentUser.canManageBranches;
+    final canManageStoreAi = isGlobalAiEnabled &&
+        currentUser != null &&
+        !currentUser.isCollaborator &&
+        (state.store != null
+            ? state.store!.companyId != null
+            : (currentUser.hasCompany || currentUser.company != null));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -82,6 +93,10 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                     MaterialPageRoute(builder: (_) => AppearanceSettingsScreen(storeId: widget.storeId)),
                   ),
                 ),
+                if (canManageStoreAi) ...[
+                  const SizedBox(height: 12),
+                  _buildAiStudioTile(context, state.store),
+                ],
                 const SizedBox(height: 12),
                 _buildMenuTile(
                   icon: HugeIcons.strokeRoundedCreditCard,
@@ -307,6 +322,90 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
           style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
         ),
         trailing: const Icon(Icons.chevron_right, color: Color(0xFF6B7280), size: 20),
+      ),
+    );
+  }
+
+  Widget _buildAiStudioTile(BuildContext context, Store? store) {
+    final isAiActive = store?.aiEnabled == true;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F3FF).withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDD6FE)),
+      ),
+      child: ListTile(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StoreAiSettingsScreen(
+              storeId: widget.storeId,
+              storeDisplayName: store?.displayName,
+            ),
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.auto_awesome,
+            color: Color(0xFF7C3AED),
+            size: 24,
+          ),
+        ),
+        title: Row(
+          children: [
+            const Flexible(
+              child: Text(
+                'Estudio Fotográfico IA',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                  fontSize: 15,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: isAiActive
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isAiActive
+                      ? const Color(0xFFA7F3D0)
+                      : const Color(0xFFE5E7EB),
+                ),
+              ),
+              child: Text(
+                isAiActive ? 'Activa' : 'BYOK',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isAiActive
+                      ? const Color(0xFF047857)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: const Text(
+          'Mejora fotos de catálogo con tu propia API Key de Gemini',
+          style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: Color(0xFF7C3AED),
+          size: 20,
+        ),
       ),
     );
   }

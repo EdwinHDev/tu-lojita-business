@@ -111,8 +111,15 @@ class _CreateItemScreenState extends ConsumerState<CreateItemScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _titleController,
+                maxLength: 60,
                 decoration: _buildInputDecoration('Ej: Hamburguesa con queso', HugeIcons.strokeRoundedPackage01),
-                validator: (value) => value!.isEmpty ? 'Ingresa un título' : null,
+                validator: (value) {
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) return 'Ingresa un título';
+                  if (trimmed.length < 3) return 'El título debe tener al menos 3 caracteres';
+                  if (trimmed.length > 60) return 'El título no puede exceder 60 caracteres';
+                  return null;
+                },
               ),
               
               const SizedBox(height: 20),

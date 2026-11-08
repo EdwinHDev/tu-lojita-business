@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 
@@ -74,28 +75,9 @@ class _AccountSuspendedScreenState extends ConsumerState<AccountSuspendedScreen>
       if (authState is Authenticated) {
         final user = authState.user;
         if (!user.isAccountSuspended) {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '¡Tu cuenta comercial ha sido reactivada!',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: const Color(0xFF059669),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+          NotificationService.showSuccess(
+            context,
+            '¡Tu cuenta comercial ha sido reactivada!',
           );
           context.go('/splash');
           return;
@@ -112,39 +94,17 @@ class _AccountSuspendedScreenState extends ConsumerState<AccountSuspendedScreen>
           _currentSuspendedUntil == null || _currentSuspendedUntil!.trim().isEmpty;
       final formattedUntil = _formatSuspensionDate(_currentSuspendedUntil);
 
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isPermanent
-                ? 'Tu cuenta comercial continúa suspendida de manera permanente.'
-                : 'Tu cuenta comercial continúa suspendida hasta el $formattedUntil.',
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-          ),
-          backgroundColor: const Color(0xFF1E293B),
-          duration: const Duration(seconds: 4),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      NotificationService.showWarning(
+        context,
+        isPermanent
+            ? 'Tu cuenta comercial continúa suspendida de manera permanente.'
+            : 'Tu cuenta comercial continúa suspendida hasta el $formattedUntil.',
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'No se pudo verificar el estado en este momento. Revisa tu conexión a internet.',
-            style: TextStyle(fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: const Color(0xFFDC2626),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+      NotificationService.showError(
+        context,
+        'No se pudo verificar el estado en este momento. Revisa tu conexión a internet.',
       );
     } finally {
       if (mounted) {
@@ -163,11 +123,9 @@ class _AccountSuspendedScreenState extends ConsumerState<AccountSuspendedScreen>
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo abrir WhatsApp en este dispositivo.'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
+        NotificationService.showError(
+          context,
+          'No se pudo abrir WhatsApp en este dispositivo.',
         );
       }
     }

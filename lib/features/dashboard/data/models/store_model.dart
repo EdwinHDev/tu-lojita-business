@@ -34,6 +34,8 @@ class StoreModel extends Store {
     super.tiktok,
     super.deletionScheduledAt,
     super.isDeleted = false,
+    super.aiEnabled = false,
+    super.companyId,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +51,11 @@ class StoreModel extends Store {
     if (json['deletionScheduledAt'] != null) {
       deletionScheduledAtDate = DateTime.tryParse(json['deletionScheduledAt'].toString());
     }
+
+    final String? parsedCompanyId = json['companyId'] as String? ??
+        (json['company'] is Map
+            ? (json['company'] as Map)['id']?.toString()
+            : null);
 
     return StoreModel(
       id: json['id'] as String,
@@ -85,6 +92,8 @@ class StoreModel extends Store {
       tiktok: json['tiktok'] as String?,
       deletionScheduledAt: deletionScheduledAtDate,
       isDeleted: json['isDeleted'] == true,
+      aiEnabled: json['aiEnabled'] == true,
+      companyId: parsedCompanyId,
     );
   }
 
@@ -118,6 +127,8 @@ class StoreModel extends Store {
       'hasMultipleBranches': hasMultipleBranches,
       'instagram': instagram,
       'tiktok': tiktok,
+      'aiEnabled': aiEnabled,
+      'companyId': companyId,
     };
   }
 }

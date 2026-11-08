@@ -6,6 +6,7 @@ import '../widgets/daily_missions_card.dart';
 import '../../domain/entities/ranking_models.dart';
 import '../widgets/ranking_shimmer_skeleton.dart';
 import 'package:tu_lojita_business/core/utils/achievement_image_helper.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 
 class MyRankingScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -919,12 +920,9 @@ class _MyRankingScreenState extends ConsumerState<MyRankingScreen>
                         if (_selectedShowcaseIds.length < 5) {
                           _selectedShowcaseIds.add(ach.id);
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'La vitrina tiene un máximo de 5 insignias. Quita una para agregar otra.'),
-                              duration: Duration(seconds: 2),
-                            ),
+                          NotificationService.showWarning(
+                            context,
+                            'La vitrina tiene un máximo de 5 insignias. Quita una para agregar otra.',
                           );
                         }
                       } else {
@@ -1048,17 +1046,17 @@ class _MyRankingScreenState extends ConsumerState<MyRankingScreen>
           .updateShowcase(widget.storeId, _selectedShowcaseIds);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? '¡Vitrina actualizada exitosamente!'
-                  : 'Error al actualizar la vitrina',
-            ),
-            backgroundColor:
-                success ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-          ),
-        );
+        if (success) {
+          NotificationService.showSuccess(
+            context,
+            '¡Vitrina actualizada exitosamente!',
+          );
+        } else {
+          NotificationService.showError(
+            context,
+            'Error al actualizar la vitrina',
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -1196,12 +1194,9 @@ class _MyRankingScreenState extends ConsumerState<MyRankingScreen>
                         if (_selectedShowcaseIds.length < 5) {
                           _selectedShowcaseIds.add(ach.id);
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Máximo 5 insignias en la vitrina. Quita una para agregar esta.'),
-                              duration: Duration(seconds: 2),
-                            ),
+                          NotificationService.showWarning(
+                            context,
+                            'Máximo 5 insignias en la vitrina. Quita una para agregar esta.',
                           );
                         }
                       }

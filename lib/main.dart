@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'core/config/envs.dart';
 import 'core/router/app_router.dart';
@@ -44,6 +46,16 @@ void main() async {
         ? Envs.googleServerClientId
         : null,
   );
+
+  // Inicialización temprana de Firebase para capturar mensajes de arranque en frío sin carrera
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('Business Firebase early initialization warning: $e');
+  }
 
   // Inicializar notificaciones locales
   await NotificationHelper.init();

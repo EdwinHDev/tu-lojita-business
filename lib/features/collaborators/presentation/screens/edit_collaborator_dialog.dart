@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
 import '../../domain/entities/collaborator.dart';
 import '../providers/collaborators_providers.dart';
 
@@ -38,6 +40,7 @@ class _EditCollaboratorDialogState
   late String? _selectedRoleId;
   late bool _hasFullBranchAccess;
   late final Set<String> _selectedStoreIds;
+  late final Set<String> _selectedAiStoreIds;
   bool _isSubmitting = false;
 
   @override
@@ -51,6 +54,20 @@ class _EditCollaboratorDialogState
     _selectedRoleId = c.roleId.isNotEmpty ? c.roleId : null;
     _hasFullBranchAccess = c.hasFullBranchAccess;
     _selectedStoreIds = c.stores.map((s) => s.id).toSet();
+    _selectedAiStoreIds = c.aiAllowedStoreIds.toSet();
+  }
+
+  bool _roleHasInventoryEdit(RolesState rolesState) {
+    if (_selectedRoleId == null) return false;
+    final role =
+        rolesState.roles.where((r) => r.id == _selectedRoleId).firstOrNull;
+    if (role != null) {
+      return role.permissions.contains('inventory:edit');
+    }
+    if (_selectedRoleId == widget.collaborator.roleId) {
+      return widget.collaborator.permissions.contains('inventory:edit');
+    }
+    return false;
   }
 
   @override
@@ -81,6 +98,19 @@ class _EditCollaboratorDialogState
       return;
     }
 
+    final rolesState = ref.read(rolesNotifierProvider);
+    final storesState = ref.read(storesProvider);
+    final isGlobalAiEnabled =
+        ref.read(platformAiGlobalEnabledProvider).value ?? false;
+    final hasInventoryEdit = _roleHasInventoryEdit(rolesState);
+    final effectiveAiStoreIds = (!isGlobalAiEnabled || !hasInventoryEdit)
+        ? <String>[]
+        : _selectedAiStoreIds
+            .where((id) =>
+                (_hasFullBranchAccess || _selectedStoreIds.contains(id)) &&
+                storesState.stores.any((s) => s.id == id && s.aiEnabled))
+            .toList();
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -95,6 +125,7 @@ class _EditCollaboratorDialogState
             roleId: _selectedRoleId,
             hasFullBranchAccess: _hasFullBranchAccess,
             storeIds: _hasFullBranchAccess ? [] : _selectedStoreIds.toList(),
+            aiAllowedStoreIds: effectiveAiStoreIds,
           );
 
       if (!mounted) return;
@@ -119,6 +150,9 @@ class _EditCollaboratorDialogState
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final rolesState = ref.watch(rolesNotifierProvider);
     final storesState = ref.watch(storesProvider);
+    final isGlobalAiEnabled =
+        ref.watch(platformAiGlobalEnabledProvider).value ?? false;
+    final roleHasInventoryEdit = _roleHasInventoryEdit(rolesState);
 
     return Container(
       decoration: const BoxDecoration(
@@ -332,6 +366,12 @@ class _EditCollaboratorDialogState
                 },
               ),
 
+              if (_hasFullBranchAccess && roleHasInventoryEdit) ...[
+                const SizedBox(height: 8),
+                _buildFullAccessAiBranchesSection(storesState.stores,
+                    isGlobalAiEnabled: isGlobalAiEnabled),
+              ],
+
               if (!_hasFullBranchAccess) ...[
                 const SizedBox(height: 8),
                 const Text(
@@ -363,28 +403,37 @@ class _EditCollaboratorDialogState
                                 final isSelected =
                                     _selectedStoreIds.contains(store.id);
 
-                                return CheckboxListTile(
-                                  value: isSelected,
-                                  title: Text(store.name),
-                                  subtitle: (store.address != null &&
-                                          store.address!.isNotEmpty)
-                                      ? Text(
-                                          store.address!,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 11),
-                                        )
-                                      : null,
-                                  activeColor: const Color(0xFF4F46E5),
-                                  onChanged: (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedStoreIds.add(store.id);
-                                      } else {
-                                        _selectedStoreIds.remove(store.id);
-                                      }
-                                    });
-                                  },
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CheckboxListTile(
+                                      value: isSelected,
+                                      title: Text(store.name),
+                                      subtitle: (store.address != null &&
+                                              store.address!.isNotEmpty)
+                                          ? Text(
+                                              store.address!,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 11),
+                                            )
+                                          : null,
+                                      activeColor: const Color(0xFF4F46E5),
+                                      onChanged: (checked) {
+                                        setState(() {
+                                          if (checked == true) {
+                                            _selectedStoreIds.add(store.id);
+                                          } else {
+                                            _selectedStoreIds.remove(store.id);
+                                            _selectedAiStoreIds.remove(store.id);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    if (isSelected && roleHasInventoryEdit)
+                                      _buildAiSubBranchRow(store,
+                                          isGlobalAiEnabled: isGlobalAiEnabled),
+                                  ],
                                 );
                               },
                             ),
@@ -440,6 +489,235 @@ class _EditCollaboratorDialogState
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFullAccessAiBranchesSection(
+    List<Store> stores, {
+    required bool isGlobalAiEnabled,
+  }) {
+    if (stores.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F3FF).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDD6FE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF7C3AED)),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Permiso de Estudio IA por Sucursal',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4C1D95),
+                  ),
+                ),
+              ),
+              if (!isGlobalAiEnabled)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: const Text(
+                    'No disponible',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFB45309),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            !isGlobalAiEnabled
+                ? 'La funcionalidad de IA está temporalmente desactivada en la plataforma.'
+                : 'El rol permite crear/editar artículos. Activa el uso de IA por sucursal:',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 8),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: stores.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final store = stores[index];
+              final isAiActiveInStore = store.aiEnabled && isGlobalAiEnabled;
+              final isAllowed =
+                  isAiActiveInStore && _selectedAiStoreIds.contains(store.id);
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            store.displayName,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isAiActiveInStore
+                                  ? const Color(0xFF1E293B)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                          Text(
+                            !isGlobalAiEnabled
+                                ? 'Desactivado temporalmente en la plataforma'
+                                : (store.aiEnabled
+                                    ? 'Puede mejorar fotos con IA'
+                                    : 'IA no configurada o inactiva en esta sucursal'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isAiActiveInStore
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: !isGlobalAiEnabled
+                          ? () => NotificationService.showError(
+                                context,
+                                'No puedes habilitar el Estudio IA en este momento porque la funcionalidad no está disponible actualmente en la plataforma.',
+                              )
+                          : null,
+                      behavior: HitTestBehavior.opaque,
+                      child: IgnorePointer(
+                        ignoring: !isGlobalAiEnabled || !store.aiEnabled,
+                        child: Switch.adaptive(
+                          value: isAllowed,
+                          activeTrackColor: const Color(0xFF7C3AED),
+                          onChanged: (isAiActiveInStore && isGlobalAiEnabled)
+                              ? (enabled) {
+                                  setState(() {
+                                    if (enabled) {
+                                      _selectedAiStoreIds.add(store.id);
+                                    } else {
+                                      _selectedAiStoreIds.remove(store.id);
+                                    }
+                                  });
+                                }
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiSubBranchRow(Store store, {required bool isGlobalAiEnabled}) {
+    final isAiActiveInStore = store.aiEnabled && isGlobalAiEnabled;
+    final isAllowed =
+        isAiActiveInStore && _selectedAiStoreIds.contains(store.id);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(36, 0, 12, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isAiActiveInStore
+            ? const Color(0xFFF5F3FF)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isAiActiveInStore
+              ? const Color(0xFFDDD6FE)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isAiActiveInStore ? Icons.auto_awesome : Icons.lock_outline,
+            size: 15,
+            color: isAiActiveInStore
+                ? const Color(0xFF7C3AED)
+                : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Usar Estudio IA en esta sucursal',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isAiActiveInStore
+                        ? const Color(0xFF4C1D95)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+                Text(
+                  !isGlobalAiEnabled
+                      ? 'No disponible: IA desactivada temporalmente'
+                      : (store.aiEnabled
+                          ? 'Mejorar fotos de catálogo con IA'
+                          : 'IA inactiva en esta sucursal (bloqueado)'),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: !isGlobalAiEnabled
+                ? () => NotificationService.showError(
+                      context,
+                      'No puedes habilitar el Estudio IA en este momento porque la funcionalidad no está disponible actualmente en la plataforma.',
+                    )
+                : null,
+            behavior: HitTestBehavior.opaque,
+            child: IgnorePointer(
+              ignoring: !isGlobalAiEnabled || !store.aiEnabled,
+              child: Switch.adaptive(
+                value: isAllowed,
+                activeTrackColor: const Color(0xFF7C3AED),
+                onChanged: (isAiActiveInStore && isGlobalAiEnabled)
+                    ? (enabled) {
+                        setState(() {
+                          if (enabled) {
+                            _selectedAiStoreIds.add(store.id);
+                          } else {
+                            _selectedAiStoreIds.remove(store.id);
+                          }
+                        });
+                      }
+                    : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

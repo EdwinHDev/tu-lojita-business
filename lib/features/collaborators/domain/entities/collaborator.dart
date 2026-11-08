@@ -43,6 +43,7 @@ class Collaborator {
   final String roleName;
   final List<String> permissions;
   final List<CollaboratorStore> stores;
+  final List<String> aiAllowedStoreIds;
   final String? initialPassword;
 
   const Collaborator({
@@ -58,6 +59,7 @@ class Collaborator {
     required this.roleName,
     this.permissions = const [],
     this.stores = const [],
+    this.aiAllowedStoreIds = const [],
     this.initialPassword,
   });
 
@@ -95,6 +97,18 @@ class Collaborator {
           .toList();
     }
 
+    List<String> parsedAiStoreIds = [];
+    if (json['aiAllowedStoreIds'] is List) {
+      parsedAiStoreIds = (json['aiAllowedStoreIds'] as List)
+          .map((e) => e.toString())
+          .toList();
+    } else if (json['aiEnabledStores'] is List) {
+      parsedAiStoreIds = (json['aiEnabledStores'] as List)
+          .map((s) => s is Map ? (s['id']?.toString() ?? '') : s.toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
+
     return Collaborator(
       id: json['id'] as String? ?? '',
       accessId: json['accessId'] as String? ?? '',
@@ -108,6 +122,7 @@ class Collaborator {
       roleName: rName,
       permissions: perms,
       stores: parsedStores,
+      aiAllowedStoreIds: parsedAiStoreIds,
       initialPassword: json['initialPassword'] as String?,
     );
   }
@@ -125,6 +140,7 @@ class Collaborator {
     String? roleName,
     List<String>? permissions,
     List<CollaboratorStore>? stores,
+    List<String>? aiAllowedStoreIds,
     String? initialPassword,
   }) {
     return Collaborator(
@@ -140,6 +156,7 @@ class Collaborator {
       roleName: roleName ?? this.roleName,
       permissions: permissions ?? this.permissions,
       stores: stores ?? this.stores,
+      aiAllowedStoreIds: aiAllowedStoreIds ?? this.aiAllowedStoreIds,
       initialPassword: initialPassword ?? this.initialPassword,
     );
   }
@@ -158,6 +175,7 @@ class Collaborator {
       'roleName': roleName,
       'permissions': permissions,
       'stores': stores.map((s) => s.toJson()).toList(),
+      'aiAllowedStoreIds': aiAllowedStoreIds,
       'initialPassword': initialPassword,
     };
   }

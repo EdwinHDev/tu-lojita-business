@@ -214,26 +214,69 @@ class Order {
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
+    final parsedItems = (json['orderItems'] as List<dynamic>?)
+            ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [];
+    final rawTotalAmount =
+        double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0;
+    final rawFeeAmount =
+        double.tryParse(json['feeAmount']?.toString() ?? '0') ?? 0.0;
+    final rawFinalAmount =
+        double.tryParse(json['finalAmount']?.toString() ?? '0') ?? 0.0;
+
+    double commAmount =
+        double.tryParse(json['platformCommissionAmount']?.toString() ?? '0') ??
+            0.0;
+    if (commAmount <= 0 && parsedItems.isNotEmpty) {
+      commAmount = parsedItems.fold(
+        0.0,
+        (sum, item) => sum + (item.commissionAmount * item.quantity),
+      );
+    }
+
+    double commRate =
+        double.tryParse(json['platformCommissionRate']?.toString() ?? '0') ??
+            0.0;
+    final itemsBaseSum = parsedItems.fold(
+      0.0,
+      (sum, item) =>
+          sum +
+          ((item.basePrice > 0
+                  ? item.basePrice
+                  : (item.price - item.commissionAmount)) *
+              item.quantity),
+    );
+    if (commAmount > 0 && itemsBaseSum > 0) {
+      commRate =
+          double.parse(((commAmount / itemsBaseSum) * 100).toStringAsFixed(2));
+    } else if (commAmount > 0 && rawTotalAmount > commAmount) {
+      commRate = double.parse(
+        ((commAmount / (rawTotalAmount - commAmount)) * 100).toStringAsFixed(2),
+      );
+    }
+
+    final expectedPublicTotal = double.parse(
+      (rawTotalAmount + rawFeeAmount).toStringAsFixed(2),
+    );
+    final normalizedFinalAmount = (rawTotalAmount > 0 &&
+            rawFinalAmount > expectedPublicTotal + 0.009)
+        ? expectedPublicTotal
+        : rawFinalAmount;
+
     return Order(
       id: json['id'] ?? '',
       status: json['status'] ?? 'PENDING',
-      totalAmount: double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
-      feeAmount: double.tryParse(json['feeAmount']?.toString() ?? '0') ?? 0.0,
-      platformCommissionRate:
-          double.tryParse(json['platformCommissionRate']?.toString() ?? '0') ??
-              0.0,
-      platformCommissionAmount:
-          double.tryParse(json['platformCommissionAmount']?.toString() ?? '0') ??
-              0.0,
-      finalAmount: double.tryParse(json['finalAmount']?.toString() ?? '0') ?? 0.0,
+      totalAmount: rawTotalAmount,
+      feeAmount: rawFeeAmount,
+      platformCommissionRate: commRate,
+      platformCommissionAmount: commAmount,
+      finalAmount: normalizedFinalAmount,
       balance: double.tryParse(json['balance']?.toString() ?? '0') ?? 0.0,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : DateTime.now(),
-      orderItems: (json['orderItems'] as List<dynamic>?)
-              ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      orderItems: parsedItems,
       user: json['user'] as Map<String, dynamic>?,
       payments: (json['payments'] as List<dynamic>?)
               ?.map((e) => Payment.fromJson(e as Map<String, dynamic>))

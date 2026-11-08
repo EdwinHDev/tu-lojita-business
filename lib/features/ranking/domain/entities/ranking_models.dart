@@ -3,7 +3,6 @@ class StoreRankingData {
   final String division;
   final String divisionTitle;
   final String? divisionEmblemUrl;
-  final String? divisionFrameUrl;
   final int currentLp;
   final int currentPR;
   final int lifetimeLp;
@@ -29,7 +28,6 @@ class StoreRankingData {
     required this.division,
     required this.divisionTitle,
     this.divisionEmblemUrl,
-    this.divisionFrameUrl,
     required this.currentLp,
     required this.currentPR,
     required this.lifetimeLp,
@@ -58,7 +56,6 @@ class StoreRankingData {
       division: json['division']?.toString() ?? 'PUESTO_AMBULANTE',
       divisionTitle: json['divisionTitle']?.toString() ?? 'Puesto Ambulante',
       divisionEmblemUrl: json['divisionEmblemUrl'] as String?,
-      divisionFrameUrl: json['divisionFrameUrl'] as String?,
       currentLp: pr,
       currentPR: pr,
       lifetimeLp: json['lifetimeLp'] as int? ?? pr,

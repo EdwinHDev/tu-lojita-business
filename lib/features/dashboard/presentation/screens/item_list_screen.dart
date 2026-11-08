@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
@@ -618,14 +619,20 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Text(
-                          item.hasDifferentVariantPrices
-                              ? "Desde \$${item.variantPriceRange.min.toStringAsFixed(2)}"
-                              : "\$${item.price.toStringAsFixed(2)}",
-                          style: const TextStyle(
+                        DualPriceText(
+                          amountInUsd: item.hasDifferentVariantPrices
+                              ? item.variantPriceRange.min
+                              : item.price,
+                          prefix: item.hasDifferentVariantPrices ? 'Desde ' : null,
+                          usdStyle: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                             color: Color(0xFF111827),
+                          ),
+                          bsStyle: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B7280),
                           ),
                         ),
                         if (item.favoritesCount > 0) ...[
@@ -720,12 +727,17 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text(
-                      "\$${item.price.toStringAsFixed(2)}",
-                      style: TextStyle(
+                    DualPriceText(
+                      amountInUsd: item.price,
+                      usdStyle: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Colors.grey.shade600,
+                      ),
+                      bsStyle: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF9CA3AF),
                       ),
                     ),
                     const SizedBox(width: 12),
