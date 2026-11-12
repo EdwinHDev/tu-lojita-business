@@ -56,6 +56,12 @@ class HomeAttentionBanner extends ConsumerWidget {
     final scheduledStores = canAccessBranchAdmin
         ? authorizedStores.where((s) => s.isScheduledForDeletion).toList()
         : const <Store>[];
+    final suspendedStores = authorizedStores
+        .where(
+          (s) =>
+              s.status.toUpperCase() == 'SUSPENDED' && !s.isScheduledForDeletion,
+        )
+        .toList();
     final scheduledCount = !canAccessBranchAdmin
         ? 0
         : (isCollab && !user!.hasFullBranchAccess)
@@ -73,6 +79,56 @@ class HomeAttentionBanner extends ConsumerWidget {
     void openStoresTab() => ref.read(dashboardIndexProvider.notifier).state = 1;
 
     final pills = <Widget>[];
+
+    // 0. Prioridad crítica: sedes suspendidas
+    if (suspendedStores.isNotEmpty) {
+      final suspendedOptions = buildSuspendedOriginOptions(
+        stores: authorizedStores,
+        exchangeConfig: exchangeConfig,
+        canAccessFinancials: canAccessFinancials,
+      );
+      final String suspendedLabel;
+      if (suspendedOptions.length == 1) {
+        suspendedLabel =
+            'Suspendida · ${storeShortLabel(suspendedOptions.first.store)}';
+      } else {
+        suspendedLabel = '${suspendedOptions.length} sedes suspendidas';
+      }
+
+      pills.add(
+        _AttentionPill(
+          icon: HugeIcons.strokeRoundedAlertCircle,
+          label: suspendedLabel,
+          isCritical: true,
+          onTap: () async {
+            final storeId = await resolveOriginStoreId(
+              context,
+              selectedStoreId: selectedStoreId,
+              options: suspendedOptions,
+              title: 'Sedes suspendidas',
+              subtitle: 'Selecciona la sede para regularizar o revisar su estado',
+            );
+            if (!context.mounted) return;
+            if (storeId == null) {
+              openStoresTab();
+              return;
+            }
+            final targetStore = authorizedStores.firstWhere(
+              (s) => s.id == storeId,
+              orElse: () => suspendedStores.first,
+            );
+            final routeToDebts = canAccessFinancials &&
+                (targetStore.commissionDebt > 0 ||
+                    targetStore.pendingCommissionReportsCount > 0);
+            context.push(
+              routeToDebts
+                  ? '/dashboard/stores/$storeId/debts'
+                  : '/dashboard/stores/$storeId',
+            );
+          },
+        ),
+      );
+    }
 
     // 1. Pedidos pendientes con origen específico
     if (canAccessOrders && pendingOrders > 0) {

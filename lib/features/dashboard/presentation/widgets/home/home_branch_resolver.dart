@@ -157,6 +157,40 @@ List<OriginStoreOption> buildScheduledDeletionOriginOptions(List<Store> stores) 
       .toList();
 }
 
+List<OriginStoreOption> buildSuspendedOriginOptions({
+  required List<Store> stores,
+  required ExchangeRateConfig? exchangeConfig,
+  required bool canAccessFinancials,
+}) {
+  return stores
+      .where(
+        (s) =>
+            s.status.toUpperCase() == 'SUSPENDED' && !s.isScheduledForDeletion,
+      )
+      .map((s) {
+        final String badge;
+        final String subtitle;
+        if (canAccessFinancials && s.pendingCommissionReportsCount > 0) {
+          badge = 'Pago en rev.';
+          subtitle = 'Comprobante enviado en revisión';
+        } else if (canAccessFinancials && s.commissionDebt > 0) {
+          badge =
+              'Deuda ${PriceFormatter.formatDualInline(s.commissionDebt, exchangeConfig)}';
+          subtitle = 'Toca para pagar y reactivar';
+        } else {
+          badge = 'Suspendida';
+          subtitle = 'Toca para revisar el estado de la sede';
+        }
+        return OriginStoreOption(
+          store: s,
+          metricBadge: badge,
+          subtitle: subtitle,
+          useAmberBadge: true,
+        );
+      })
+      .toList();
+}
+
 /// Resolves an originating store ID strictly from contextual [options].
 ///
 /// - If [options] is empty, returns `null` (never opens a blind all-stores sheet).

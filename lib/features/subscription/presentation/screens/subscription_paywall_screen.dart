@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -11,7 +10,7 @@ import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import '../providers/subscription_provider.dart';
 import '../../domain/entities/platform_payment_method.dart';
 import '../../domain/entities/company_subscription.dart';
-import '../widgets/platform_qr_dialog.dart';
+import '../widgets/platform_payment_method_card.dart';
 
 class SubscriptionPaywallScreen extends ConsumerStatefulWidget {
   const SubscriptionPaywallScreen({super.key});
@@ -99,49 +98,6 @@ class _SubscriptionPaywallScreenState
         NotificationService.showError(context, 'Error al enviar comprobante: $e');
       }
     }
-  }
-
-  void _copyToClipboard(String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    NotificationService.showSuccess(context, '$label copiado al portapapeles');
-  }
-
-  void _copyAllPaymentDetails(PlatformPaymentMethod m) {
-    final d = m.accountDetails;
-    final buffer = StringBuffer();
-    buffer.writeln(m.title);
-
-    if (d['bankName'] != null && d['bankName'].toString().trim().isNotEmpty) {
-      buffer.writeln('Banco: ${d['bankName'].toString().trim()}');
-    }
-    if (d['accountHolder'] != null && d['accountHolder'].toString().trim().isNotEmpty) {
-      buffer.writeln('Titular: ${d['accountHolder'].toString().trim()}');
-    }
-    if (d['idNumber'] != null && d['idNumber'].toString().trim().isNotEmpty) {
-      buffer.writeln('C.I. / RIF: ${d['idNumber'].toString().trim()}');
-    }
-    if (d['phoneNumber'] != null && d['phoneNumber'].toString().trim().isNotEmpty) {
-      buffer.writeln('Teléfono: ${d['phoneNumber'].toString().trim()}');
-    }
-    if (d['accountNumber'] != null && d['accountNumber'].toString().trim().isNotEmpty) {
-      buffer.writeln('Nº Cuenta: ${d['accountNumber'].toString().trim()}');
-    }
-    if (d['accountType'] != null && d['accountType'].toString().trim().isNotEmpty) {
-      buffer.writeln('Tipo: ${d['accountType'].toString().trim()}');
-    }
-    if (d['binancePayId'] != null && d['binancePayId'].toString().trim().isNotEmpty) {
-      buffer.writeln('Binance Pay ID: ${d['binancePayId'].toString().trim()}');
-    }
-    if (d['email'] != null && d['email'].toString().trim().isNotEmpty) {
-      buffer.writeln('Correo: ${d['email'].toString().trim()}');
-    }
-
-    final fullText = buffer.toString().trim();
-    Clipboard.setData(ClipboardData(text: fullText));
-    NotificationService.showSuccess(
-      context,
-      'Datos de ${m.title} copiados al portapapeles',
-    );
   }
 
   @override
@@ -376,7 +332,10 @@ class _SubscriptionPaywallScreenState
                     const Text('No hay cuentas configuradas actualmente.')
                   else
                     ...subState.paymentMethods.map(
-                      (m) => _buildPaymentMethodCard(m, isDark),
+                      (m) => PlatformPaymentMethodCard(
+                        method: m,
+                        isDarkOverride: isDark,
+                      ),
                     ),
 
                   const SizedBox(height: 24),
@@ -586,181 +545,6 @@ class _SubscriptionPaywallScreenState
             child: Text(
               text,
               style: const TextStyle(fontSize: 13, height: 1.3),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethodCard(PlatformPaymentMethod m, bool isDark) {
-    final d = m.accountDetails;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                m.title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  m.type,
-                  style: const TextStyle(
-                    color: Colors.indigo,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          if (d['bankName'] != null)
-            _buildCopyField('Banco:', d['bankName'].toString()),
-          if (d['accountHolder'] != null)
-            _buildCopyField('Titular:', d['accountHolder'].toString()),
-          if (d['accountType'] != null)
-            _buildCopyField('Tipo:', d['accountType'].toString()),
-          if (d['phoneNumber'] != null)
-            _buildCopyField('Teléfono:', d['phoneNumber'].toString()),
-          if (d['idNumber'] != null)
-            _buildCopyField('C.I. / RIF:', d['idNumber'].toString()),
-          if (d['accountNumber'] != null)
-            _buildCopyField('Nº Cuenta:', d['accountNumber'].toString()),
-          if (d['binancePayId'] != null)
-            _buildCopyField('Binance Pay ID:', d['binancePayId'].toString()),
-          if (d['email'] != null)
-            _buildCopyField('Correo:', d['email'].toString()),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              InkWell(
-                onTap: () => _copyAllPaymentDetails(m),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.indigo.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      HugeIcon(
-                        icon: HugeIcons.strokeRoundedCopy01,
-                        color: Colors.indigo,
-                        size: 16,
-                      ),
-                      SizedBox(width: 6),
-                      Text(
-                        'Copiar todo',
-                        style: TextStyle(
-                          color: Colors.indigo,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (m.qrImageUrl != null && m.qrImageUrl!.trim().isNotEmpty)
-                InkWell(
-                  onTap: () => PlatformQrDialog.show(
-                    context,
-                    qrImageUrl: m.qrImageUrl!,
-                    title: m.title,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.indigo.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.indigo.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        HugeIcon(
-                          icon: HugeIcons.strokeRoundedQrCode,
-                          color: Colors.indigo,
-                          size: 18,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Ver Código QR para Escanear',
-                          style: TextStyle(
-                            color: Colors.indigo,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(width: 6),
-                        Icon(Icons.open_in_full_rounded, size: 14, color: Colors.indigo),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCopyField(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Text('$label ',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
-          InkWell(
-            onTap: () => _copyToClipboard(value, label.replaceAll(':', '')),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: HugeIcon(
-                icon: HugeIcons.strokeRoundedCopy01,
-                color: Colors.indigo,
-                size: 16,
-              ),
             ),
           ),
         ],

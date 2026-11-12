@@ -14,6 +14,7 @@ class StoreUrgentAlertsStrip extends StatelessWidget {
   final User? user;
   final int unreadDisputesCount;
   final VoidCallback onOpenHealthSheet;
+  final bool suppressCommissionPillsWhenSuspended;
 
   const StoreUrgentAlertsStrip({
     super.key,
@@ -22,6 +23,7 @@ class StoreUrgentAlertsStrip extends StatelessWidget {
     required this.user,
     this.unreadDisputesCount = 0,
     required this.onOpenHealthSheet,
+    this.suppressCommissionPillsWhenSuspended = true,
   });
 
   @override
@@ -55,6 +57,10 @@ class StoreUrgentAlertsStrip extends StatelessWidget {
         ? (stats?.pendingCommissionReportsCount ??
             store.pendingCommissionReportsCount)
         : 0;
+
+    final isSuspended = store.status.toUpperCase() == 'SUSPENDED';
+    final showCommissionPills =
+        !(isSuspended && suppressCommissionPillsWhenSuspended);
 
     final pills = <_UrgentAlertPill>[
       if (openDisputes > 0)
@@ -90,7 +96,7 @@ class StoreUrgentAlertsStrip extends StatelessWidget {
           onTap: () =>
               context.push('/dashboard/stores/${store.id}/mediation-requests'),
         ),
-      if (pendingReports > 0)
+      if (showCommissionPills && pendingReports > 0)
         _UrgentAlertPill(
           icon: HugeIcons.strokeRoundedClock01,
           label:
@@ -98,7 +104,7 @@ class StoreUrgentAlertsStrip extends StatelessWidget {
           tone: _AlertTone.amber,
           onTap: () => context.push('/dashboard/stores/${store.id}/debts'),
         ),
-      if (commissionDebt > 0)
+      if (showCommissionPills && commissionDebt > 0)
         _UrgentAlertPill(
           icon: HugeIcons.strokeRoundedInvoice01,
           label: 'Deuda: ${PriceFormatter.formatNumeric(commissionDebt)}',

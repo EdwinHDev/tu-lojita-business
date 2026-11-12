@@ -86,6 +86,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   'MEDIATION_REQUEST',
                   'MEDIATION_RESPONSE',
                   'DISPUTE_ESCALATED',
+                  'COMMISSION_DEBT_REMINDER',
+                  'COMMISSION_PAYMENT_REVIEWED',
                 ].contains(n.type))
             .toList();
       case NotificationFilter.all:
@@ -563,9 +565,33 @@ class _PremiumNotificationTile extends ConsumerWidget {
         categoryLabel = 'Sanción';
         break;
       case 'STORE_SUSPENDED':
+        final isDebtSusp = notification.channelType == 'COMMISSION_DEBT' ||
+            notification.title.toLowerCase().contains('deuda') ||
+            notification.title.toLowerCase().contains('comisi') ||
+            notification.body.toLowerCase().contains('mora');
         iconData = HugeIcons.strokeRoundedAlertCircle;
         iconColor = const Color(0xFFDC2626);
-        categoryLabel = 'Suspensión';
+        categoryLabel = isDebtSusp ? 'Mora comisiones' : 'Suspensión';
+        break;
+      case 'COMMISSION_DEBT_REMINDER':
+        final isSuspendedReminder =
+            notification.title.toLowerCase().contains('suspendida');
+        iconData = HugeIcons.strokeRoundedInvoice01;
+        iconColor = isSuspendedReminder
+            ? const Color(0xFFDC2626)
+            : const Color(0xFFD97706);
+        categoryLabel = 'Comisiones';
+        break;
+      case 'COMMISSION_PAYMENT_REVIEWED':
+        final isRejected =
+            notification.title.toLowerCase().contains('rechaz') ||
+                notification.body.toLowerCase().contains('rechaz');
+        iconData = isRejected
+            ? HugeIcons.strokeRoundedCancelCircle
+            : HugeIcons.strokeRoundedCheckmarkCircle02;
+        iconColor =
+            isRejected ? const Color(0xFFDC2626) : const Color(0xFF059669);
+        categoryLabel = 'Pago comisión';
         break;
       case 'ITEM_HIDDEN':
         iconData = HugeIcons.strokeRoundedViewOffSlash;
@@ -848,7 +874,43 @@ class _PremiumNotificationTile extends ConsumerWidget {
       return true;
     }
 
-    if (notification.type == 'STRIKE_APPLIED' ||
+    final bool isCommissionDebtAlert =
+        notification.type == 'COMMISSION_DEBT_REMINDER' ||
+            notification.type == 'COMMISSION_PAYMENT_REVIEWED' ||
+            (notification.type == 'STORE_SUSPENDED' &&
+                (notification.channelType == 'COMMISSION_DEBT' ||
+                    notification.title.toLowerCase().contains('deuda') ||
+                    notification.title.toLowerCase().contains('comisi') ||
+                    notification.body.toLowerCase().contains('mora') ||
+                    notification.body.toLowerCase().contains('comisi')));
+
+    if (isCommissionDebtAlert) {
+      final hasFinancialPerm =
+          canAccess(['finances:view_sensitive', 'metrics:view_financial']);
+      final canViewSuspendedStore = notification.type == 'STORE_SUSPENDED' &&
+          canAccess(['settings:manage']);
+      if (!hasFinancialPerm && !canViewSuspendedStore) {
+        NotificationService.showError(
+          context,
+          'No tienes permisos financieros para gestionar deudas de comisiones.',
+        );
+        return;
+      }
+      final storeId = await resolveEffectiveStoreId(
+        useTargetIdAsFallback: notification.type == 'STORE_SUSPENDED',
+      );
+      if (!checkBranchAccess(storeId)) return;
+      if (!context.mounted) return;
+      if (storeId.isNotEmpty) {
+        context.push(
+          hasFinancialPerm
+              ? '/dashboard/stores/$storeId/debts'
+              : '/dashboard/stores/$storeId',
+        );
+      } else {
+        context.push('/dashboard');
+      }
+    } else if (notification.type == 'STRIKE_APPLIED' ||
         notification.type == 'STORE_SUSPENDED') {
       if (!canAccess(['settings:manage'])) {
         NotificationService.showError(

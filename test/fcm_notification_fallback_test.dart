@@ -506,5 +506,68 @@ void main() {
       expect(pushedRoutes.map((e) => e.key), ['/dashboard/notifications']);
       expect(openedModals.single.key, 'GENERAL_INFO');
     });
+
+    test(
+        'routes COMMISSION_DEBT_REMINDER, COMMISSION_PAYMENT_REVIEWED, and commission STORE_SUSPENDED to debts hub while preserving strike STORE_HEALTH',
+        () async {
+      service.markAppReadyAndConsumePendingNotification();
+      allowedPermissions = {'finances:view_sensitive', 'settings:manage'};
+
+      // 1. COMMISSION_DEBT_REMINDER -> /dashboard/stores/:storeId/debts
+      await service.handleNotificationNavigation({
+        'notificationId': 'comm-rem-1',
+        'type': 'COMMISSION_DEBT_REMINDER',
+        'storeId': 'store-c1',
+        'channelType': 'COMMISSION_DEBT',
+      });
+      expect(pushedRoutes.single.key, '/dashboard/stores/store-c1/debts');
+
+      // 2. COMMISSION_PAYMENT_REVIEWED -> /dashboard/stores/:storeId/debts
+      pushedRoutes.clear();
+      await service.handleNotificationNavigation({
+        'notificationId': 'comm-rev-1',
+        'type': 'COMMISSION_PAYMENT_REVIEWED',
+        'storeId': 'store-c1',
+        'channelType': 'COMMISSION_DEBT',
+      });
+      expect(pushedRoutes.single.key, '/dashboard/stores/store-c1/debts');
+
+      // 3. STORE_SUSPENDED with COMMISSION_DEBT -> /dashboard/stores/:storeId/debts (NOT StoreHealthSheet)
+      pushedRoutes.clear();
+      openedModals.clear();
+      await service.handleNotificationNavigation({
+        'notificationId': 'comm-susp-1',
+        'type': 'STORE_SUSPENDED',
+        'storeId': 'store-c1',
+        'channelType': 'COMMISSION_DEBT',
+        'suspensionReason': 'COMMISSION_DEBT',
+      });
+      expect(pushedRoutes.single.key, '/dashboard/stores/store-c1/debts');
+      expect(openedModals, isEmpty);
+
+      // 4. STORE_SUSPENDED for strike/moderation -> preserves STORE_HEALTH modal
+      pushedRoutes.clear();
+      openedModals.clear();
+      await service.handleNotificationNavigation({
+        'notificationId': 'strike-susp-1',
+        'type': 'STORE_SUSPENDED',
+        'storeId': 'store-c1',
+        'title': 'Tienda suspendida por strikes',
+      });
+      expect(pushedRoutes, isEmpty);
+      expect(openedModals.single.key, 'STORE_HEALTH');
+      expect(openedModals.single.value['storeId'], 'store-c1');
+
+      // 5. Missing financial permission blocks COMMISSION_DEBT_REMINDER
+      pushedRoutes.clear();
+      allowedPermissions = {'orders:view'};
+      await service.handleNotificationNavigation({
+        'notificationId': 'comm-rem-blocked',
+        'type': 'COMMISSION_DEBT_REMINDER',
+        'storeId': 'store-c1',
+        'channelType': 'COMMISSION_DEBT',
+      });
+      expect(pushedRoutes, isEmpty);
+    });
   });
 }

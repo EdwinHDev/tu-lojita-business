@@ -607,6 +607,7 @@ class FirebaseMessagingService {
     final rawStoreId = data['storeId']?.toString() ?? '';
     final type = data['type']?.toString() ?? '';
     final channelType = (data['channelType'] ?? '').toString();
+    final suspensionReason = (data['suspensionReason'] ?? '').toString();
     final title = (data['title'] ?? '').toString();
     final body = (data['body'] ?? '').toString();
 
@@ -615,6 +616,18 @@ class FirebaseMessagingService {
       title: title,
       body: body,
     );
+
+    final bool isCommissionDebtSuspension = type == 'STORE_SUSPENDED' &&
+        (channelType == 'COMMISSION_DEBT' ||
+            suspensionReason == 'COMMISSION_DEBT' ||
+            title.toLowerCase().contains('deuda') ||
+            title.toLowerCase().contains('comisi') ||
+            body.toLowerCase().contains('mora') ||
+            body.toLowerCase().contains('comisi'));
+
+    final bool isCommissionDebtAlert = type == 'COMMISSION_DEBT_REMINDER' ||
+        type == 'COMMISSION_PAYMENT_REVIEWED' ||
+        isCommissionDebtSuspension;
 
     final bool isStoreMediation =
         (type == 'MEDIATION_REQUEST' || type == 'MEDIATION_RESPONSE') &&
@@ -628,6 +641,8 @@ class FirebaseMessagingService {
 
     final bool isStoreTargetedType = type == 'STRIKE_APPLIED' ||
         type == 'STORE_SUSPENDED' ||
+        type == 'COMMISSION_DEBT_REMINDER' ||
+        type == 'COMMISSION_PAYMENT_REVIEWED' ||
         type == 'STORE_FLAGGED' ||
         type == 'DIVISION_UP' ||
         type == 'DIVISION_DOWN' ||
@@ -699,7 +714,34 @@ class FirebaseMessagingService {
       return allowed;
     }
 
-    if (type == 'STRIKE_APPLIED' || type == 'STORE_SUSPENDED') {
+    if (isCommissionDebtAlert) {
+      final hasFinancialAccess = hasPermission == null ||
+          hasPermission!('finances:view_sensitive') ||
+          hasPermission!('metrics:view_financial');
+      final hasSettingsAccess =
+          type == 'STORE_SUSPENDED' && hasPermission?.call('settings:manage') == true;
+
+      if (!hasFinancialAccess && !hasSettingsAccess) {
+        if (ctx != null && ctx.mounted) {
+          NotificationService.showError(
+            ctx,
+            'No tienes los permisos financieros requeridos para gestionar comisiones.',
+          );
+        }
+        return;
+      }
+
+      if (resolvedStoreId.isNotEmpty) {
+        _pushRoute(
+          router,
+          hasFinancialAccess
+              ? '/dashboard/stores/$resolvedStoreId/debts'
+              : '/dashboard/stores/$resolvedStoreId',
+        );
+      } else {
+        _pushRoute(router, '/dashboard/notifications');
+      }
+    } else if (type == 'STRIKE_APPLIED' || type == 'STORE_SUSPENDED') {
       if (!checkPerms(
         ['settings:manage'],
         'No tienes los permisos requeridos para gestionar la salud de la sucursal.',

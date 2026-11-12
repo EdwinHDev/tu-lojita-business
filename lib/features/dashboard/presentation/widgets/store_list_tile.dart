@@ -29,6 +29,7 @@ class StoreListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDeleting = store.isScheduledForDeletion;
+    final isSuspended = store.status.toUpperCase() == 'SUSPENDED' && !isDeleting;
     final isInactive = store.status.toUpperCase() == 'INACTIVE' && !isDeleting;
     final logoUrl = resolveDashboardImageUrl(store.logo);
 
@@ -38,6 +39,10 @@ class StoreListTile extends StatelessWidget {
 
     if (isDeleting) {
       chipLabel = 'Eliminación en ${store.remainingGraceDays}d';
+      chipBgColor = TuLojitaBrandColors.dangerBg;
+      chipTextColor = TuLojitaBrandColors.danger;
+    } else if (isSuspended) {
+      chipLabel = 'Suspendida';
       chipBgColor = TuLojitaBrandColors.dangerBg;
       chipTextColor = TuLojitaBrandColors.danger;
     } else if (isInactive) {
@@ -51,6 +56,27 @@ class StoreListTile extends StatelessWidget {
     }
 
     final urgencyBadges = <Widget>[
+      if (isSuspended && !canViewFinancials)
+        const _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedAlertCircle,
+          label: 'Regularización pendiente',
+          isCritical: true,
+        ),
+      if (isSuspended && canViewFinancials && store.pendingCommissionReportsCount > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedInvoice01,
+          label: store.pendingCommissionReportsCount == 1
+              ? 'Pago en revisión'
+              : '${store.pendingCommissionReportsCount} pagos en revisión',
+          isCritical: false,
+        ),
+      if (isSuspended && canViewFinancials && store.commissionDebt > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedInvoice01,
+          label:
+              'Deuda: ${PriceFormatter.formatDualInline(store.commissionDebt, exchangeConfig)}',
+          isCritical: true,
+        ),
       if (store.pendingOrdersCount > 0)
         _VisualUrgencyPill(
           icon: HugeIcons.strokeRoundedPackage,
@@ -67,14 +93,14 @@ class StoreListTile extends StatelessWidget {
               : '$unreadDisputesCount reclamos',
           isCritical: true,
         ),
-      if (canViewFinancials && store.commissionDebt > 0)
+      if (!isSuspended && canViewFinancials && store.commissionDebt > 0)
         _VisualUrgencyPill(
           icon: HugeIcons.strokeRoundedInvoice01,
           label:
               'Comisión: ${PriceFormatter.formatDualInline(store.commissionDebt, exchangeConfig)}',
           isCritical: false,
         ),
-      if (canViewFinancials && store.pendingCommissionReportsCount > 0)
+      if (!isSuspended && canViewFinancials && store.pendingCommissionReportsCount > 0)
         _VisualUrgencyPill(
           icon: HugeIcons.strokeRoundedInvoice01,
           label: store.pendingCommissionReportsCount == 1
@@ -118,13 +144,15 @@ class StoreListTile extends StatelessWidget {
               border: Border.all(
                 color: isDeleting
                     ? const Color(0xFFFECACA)
-                    : TuLojitaBrandColors.borderSubtle,
-                width: isDeleting ? 1.6 : 1.5,
+                    : isSuspended
+                        ? const Color(0xFFFCA5A5)
+                        : TuLojitaBrandColors.borderSubtle,
+                width: (isDeleting || isSuspended) ? 1.6 : 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isDeleting
-                      ? const Color(0xFFEF4444).withValues(alpha: 0.05)
+                  color: (isDeleting || isSuspended)
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.06)
                       : Colors.black.withValues(alpha: 0.02),
                   blurRadius: 12,
                   offset: const Offset(0, 4),

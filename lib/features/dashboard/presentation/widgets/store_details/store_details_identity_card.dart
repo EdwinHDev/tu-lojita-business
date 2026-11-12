@@ -17,7 +17,10 @@ class StoreDetailsIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = store.status.toUpperCase() == 'ACTIVE';
+    final normalizedStatus = store.status.toUpperCase();
+    final isSuspended = normalizedStatus == 'SUSPENDED';
+    final isInactive = normalizedStatus == 'INACTIVE';
+    final isActive = !isSuspended && !isInactive;
     final shouldShowBranch = store.shouldShowBranch;
     final subcategoryName = store.subcategory?.name.trim();
     final allowsInstallments = store.allowPartialPayments;
@@ -153,18 +156,30 @@ class StoreDetailsIdentityCard extends StatelessWidget {
               _IdentityChip(
                 icon: isActive
                     ? HugeIcons.strokeRoundedCheckmarkCircle02
-                    : Icons.pause_circle_rounded,
+                    : isSuspended
+                        ? Icons.block_rounded
+                        : Icons.pause_circle_rounded,
                 isMaterialIcon: !isActive,
-                label: isActive ? 'Activa' : 'Desactivada',
+                label: isActive
+                    ? 'Activa'
+                    : isSuspended
+                        ? 'Suspendida'
+                        : 'Desactivada',
                 textColor: isActive
                     ? TuLojitaBrandColors.positive
-                    : TuLojitaBrandColors.danger,
+                    : isSuspended
+                        ? TuLojitaBrandColors.danger
+                        : TuLojitaBrandColors.amber800,
                 bgColor: isActive
                     ? TuLojitaBrandColors.positiveBg
-                    : TuLojitaBrandColors.dangerBg,
+                    : isSuspended
+                        ? TuLojitaBrandColors.dangerBg
+                        : TuLojitaBrandColors.amber100,
                 borderColor: isActive
                     ? const Color(0xFFA7F3D0)
-                    : const Color(0xFFFECACA),
+                    : isSuspended
+                        ? const Color(0xFFFECACA)
+                        : TuLojitaBrandColors.amber400,
               ),
               _IdentityChip(
                 icon: allowsInstallments
@@ -214,7 +229,7 @@ class StoreDetailsIdentityCard extends StatelessWidget {
               ],
             ),
           ],
-          if (!isActive) ...[
+          if (isInactive) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,

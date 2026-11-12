@@ -23,6 +23,7 @@ import '../widgets/store_details/store_details_management_sheet.dart';
 import '../widgets/store_details/store_details_metrics_bento.dart';
 import '../widgets/store_details/store_readiness_checklist_card.dart';
 import '../widgets/store_details/store_scheduled_deletion_card.dart';
+import '../widgets/store_details/store_suspension_banner_card.dart';
 import '../widgets/store_details/store_urgent_alerts_strip.dart';
 import '../widgets/store_details_skeletons.dart';
 import 'settings/store_health_sheet.dart';
@@ -146,6 +147,24 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                     child: StoreScheduledDeletionCard(
                       store: store,
                       canManageLifecycle: canManageBranches,
+                    ),
+                  ),
+                ),
+
+              // 2b. Store Suspension & Reactivation Bento Card
+              if (store != null && store.status.toUpperCase() == 'SUSPENDED')
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: StoreSuspensionBannerCard(
+                      store: store,
+                      stats: state.dashboard?.stats,
+                      canViewFinancials: canViewFinancials,
+                      onTapPayAndReactivate: () => context.push(
+                        '/dashboard/stores/${widget.storeId}/debts',
+                      ),
+                      onOpenHealthSheet: () =>
+                          StoreHealthSheet.show(context, widget.storeId),
                     ),
                   ),
                 ),
