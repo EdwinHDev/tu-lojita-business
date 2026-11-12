@@ -113,10 +113,11 @@ class HomeAttentionBanner extends ConsumerWidget {
               openStoresTab();
               return;
             }
-            final targetStore = authorizedStores.firstWhere(
-              (s) => s.id == storeId,
-              orElse: () => suspendedStores.first,
-            );
+            final targetStore = authorizedStores
+                    .cast<Store>()
+                    .where((s) => s.id == storeId)
+                    .firstOrNull ??
+                suspendedStores.first;
             final routeToDebts = canAccessFinancials &&
                 (targetStore.commissionDebt > 0 ||
                     targetStore.pendingCommissionReportsCount > 0);

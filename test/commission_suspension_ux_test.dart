@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tu_lojita_business/core/models/exchange_rate_config.dart';
 import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/features/auth/domain/entities/user.dart';
+import 'package:tu_lojita_business/features/dashboard/data/models/store_model.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/dashboard_analytics.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
 import 'package:tu_lojita_business/features/dashboard/domain/entities/store_dashboard.dart';
@@ -262,6 +263,71 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(pushedLocation, '/dashboard/stores/store-susp');
+    });
+
+    testWidgets(
+        'does not throw TypeError when stores list is runtime List<StoreModel>',
+        (tester) async {
+      String? pushedLocation;
+      final List<Store> covariantStores = <StoreModel>[
+        const StoreModel(
+          id: 'store-model-1',
+          name: 'Mi Tienda',
+          branchName: 'Principal',
+          logo: '',
+          status: 'SUSPENDED',
+          commissionDebt: 3.63,
+          hasMultipleBranches: true,
+        ),
+      ];
+
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: HomeAttentionBanner(
+                user: ownerUser,
+                pendingOrders: 0,
+                unreadDisputesCount: 0,
+                summary: const OperationalSummary(
+                  totalCommissionDebt: 3.63,
+                  storesWithDebtCount: 1,
+                ),
+                stores: covariantStores,
+                selectedStoreId: 'all',
+                canViewFinancials: true,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/stores/:storeId/debts',
+            builder: (context, state) {
+              pushedLocation = state.uri.toString();
+              return const Scaffold(body: Text('Debts Hub'));
+            },
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            exchangeRateProvider.overrideWith(
+              () => _FakeExchangeRateNotifier(enabledRate),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Suspendida · Principal'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(pushedLocation, '/dashboard/stores/store-model-1/debts');
     });
   });
 
