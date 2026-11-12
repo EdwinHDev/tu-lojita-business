@@ -107,10 +107,11 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
       errorMessage: null,
       isPaymentRejected: false,
     );
+    final imageDataSource = ref.read(imageRemoteDataSourceProvider);
+    String? uploadedReceiptUrl;
     try {
       // 1. Subir imagen del comprobante
-      final imageDataSource = ref.read(imageRemoteDataSourceProvider);
-      final receiptUrl = await imageDataSource.uploadImage(receiptFile);
+      uploadedReceiptUrl = await imageDataSource.uploadImage(receiptFile);
 
       // 2. Registrar reporte de pago
       await _dio.post(
@@ -119,7 +120,7 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
           'amount': amount,
           'paymentMethodId': paymentMethodId,
           'referenceNumber': referenceNumber,
-          'receiptImageUrl': receiptUrl,
+          'receiptImageUrl': uploadedReceiptUrl,
         },
       );
 
@@ -128,6 +129,9 @@ class SubscriptionNotifier extends Notifier<SubscriptionState> {
       state = state.copyWith(isReportingPayment: false);
       return true;
     } catch (e) {
+      if (uploadedReceiptUrl != null && uploadedReceiptUrl.isNotEmpty) {
+        await imageDataSource.deleteImage(uploadedReceiptUrl);
+      }
       state = state.copyWith(
         isReportingPayment: false,
         errorMessage: 'Error al enviar comprobante de pago',

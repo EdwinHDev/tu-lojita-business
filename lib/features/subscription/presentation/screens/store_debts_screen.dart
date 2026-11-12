@@ -10,6 +10,7 @@ import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/core/widgets/shimmer_widget.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_providers.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/home/home_image_resolver.dart';
 import '../../domain/entities/platform_payment_method.dart';
 import '../providers/subscription_provider.dart';
 import '../widgets/platform_payment_method_card.dart';
@@ -17,8 +18,13 @@ import '../widgets/platform_qr_dialog.dart';
 
 class StoreDebtsScreen extends ConsumerStatefulWidget {
   final String storeId;
+  final Future<File?> Function(ImageSource source)? receiptPickerOverride;
 
-  const StoreDebtsScreen({super.key, required this.storeId});
+  const StoreDebtsScreen({
+    super.key,
+    required this.storeId,
+    this.receiptPickerOverride,
+  });
 
   @override
   ConsumerState<StoreDebtsScreen> createState() => _StoreDebtsScreenState();
@@ -107,6 +113,7 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
         debtAmount: currentDebt,
         methods: methods,
         initialMethod: preselectedMethod,
+        receiptPickerOverride: widget.receiptPickerOverride,
         onSuccess: () {
           Navigator.of(ctx).pop();
           _loadDebtData();
@@ -902,6 +909,79 @@ class _BreakdownRow extends StatelessWidget {
   }
 }
 
+void _showReceiptPreviewDialog(
+  BuildContext context, {
+  File? file,
+  String? imageUrl,
+}) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      child: Stack(
+        alignment: Alignment.topRight,
+        children: [
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 520),
+            decoration: BoxDecoration(
+              color: TuLojitaBrandColors.surface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: file != null
+                  ? Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedImage01,
+                            color: TuLojitaBrandColors.inkSecondary,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Image.network(
+                      imageUrl ?? '',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedImage01,
+                            color: TuLojitaBrandColors.inkSecondary,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: CircleAvatar(
+              backgroundColor: Colors.black54,
+              radius: 16,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _PaymentReportHistoryCard extends StatelessWidget {
   final Map<String, dynamic> report;
 
@@ -916,6 +996,8 @@ class _PaymentReportHistoryCard extends StatelessWidget {
     final methodMap = report['paymentMethod'] as Map?;
     final methodTitle = methodMap?['title']?.toString() ?? 'Cuenta plataforma';
     final rejectionReason = report['rejectionReason']?.toString();
+    final receiptUrl =
+        resolveDashboardImageUrl(report['receiptImageUrl']?.toString());
     final createdAtRaw = report['createdAt']?.toString();
     final createdAt =
         createdAtRaw != null ? DateTime.tryParse(createdAtRaw)?.toLocal() : null;
@@ -992,25 +1074,72 @@ class _PaymentReportHistoryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            '$methodTitle${ref.isNotEmpty ? ' · Ref: $ref' : ''}',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: TuLojitaBrandColors.inkSecondary,
-            ),
-          ),
-          if (dateText.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              dateText,
-              style: const TextStyle(
-                fontSize: 11,
-                color: TuLojitaBrandColors.inkSecondary,
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$methodTitle${ref.isNotEmpty ? ' · Ref: $ref' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: TuLojitaBrandColors.inkSecondary,
+                      ),
+                    ),
+                    if (dateText.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        dateText,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: TuLojitaBrandColors.inkSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (receiptUrl.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () => _showReceiptPreviewDialog(
+                    context,
+                    imageUrl: receiptUrl,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: TuLojitaBrandColors.canvas,
+                        border: Border.all(
+                          color: TuLojitaBrandColors.borderSubtle,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Image.network(
+                        receiptUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const Center(
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedImage01,
+                            color: TuLojitaBrandColors.inkSecondary,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
           if (status == 'REJECTED' &&
               rejectionReason != null &&
               rejectionReason.trim().isNotEmpty) ...[
@@ -1379,6 +1508,7 @@ class _ReportCommissionPaymentModal extends ConsumerStatefulWidget {
   final double debtAmount;
   final List<PlatformPaymentMethod> methods;
   final PlatformPaymentMethod? initialMethod;
+  final Future<File?> Function(ImageSource source)? receiptPickerOverride;
   final VoidCallback onSuccess;
 
   const _ReportCommissionPaymentModal({
@@ -1387,6 +1517,7 @@ class _ReportCommissionPaymentModal extends ConsumerStatefulWidget {
     required this.debtAmount,
     required this.methods,
     this.initialMethod,
+    this.receiptPickerOverride,
     required this.onSuccess,
   });
 
@@ -1417,8 +1548,15 @@ class _ReportCommissionPaymentModalState
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    if (widget.receiptPickerOverride != null) {
+      final file = await widget.receiptPickerOverride!(source);
+      if (file != null && mounted) {
+        setState(() => _receiptFile = file);
+      }
+      return;
+    }
     final picked = await _picker.pickImage(source: source, imageQuality: 80);
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _receiptFile = File(picked.path));
     }
   }
@@ -1438,9 +1576,10 @@ class _ReportCommissionPaymentModalState
     }
 
     setState(() => _isSubmitting = true);
+    final imageDataSource = ref.read(imageRemoteDataSourceProvider);
+    String? uploadedReceiptUrl;
     try {
-      final imageDataSource = ref.read(imageRemoteDataSourceProvider);
-      final receiptUrl = await imageDataSource.uploadImage(_receiptFile!);
+      uploadedReceiptUrl = await imageDataSource.uploadImage(_receiptFile!);
 
       final dio = ref.read(dioProvider);
       await dio.post(
@@ -1450,12 +1589,15 @@ class _ReportCommissionPaymentModalState
           'amount': widget.debtAmount,
           'paymentMethodId': _selectedMethod!.id,
           'referenceNumber': _refController.text.trim(),
-          'receiptImageUrl': receiptUrl,
+          'receiptImageUrl': uploadedReceiptUrl,
         },
       );
 
       widget.onSuccess();
     } catch (_) {
+      if (uploadedReceiptUrl != null && uploadedReceiptUrl.isNotEmpty) {
+        await imageDataSource.deleteImage(uploadedReceiptUrl);
+      }
       if (mounted) {
         NotificationService.showError(
           context,
@@ -1617,44 +1759,134 @@ class _ReportCommissionPaymentModalState
                     val == null || val.trim().isEmpty ? 'Requerido' : null,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickImage(ImageSource.camera),
-                      icon: const HugeIcon(
-                        icon: HugeIcons.strokeRoundedCamera01,
-                        color: TuLojitaBrandColors.indigo600,
-                        size: 16,
-                      ),
-                      label: const Text('Cámara'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickImage(ImageSource.gallery),
-                      icon: const HugeIcon(
-                        icon: HugeIcons.strokeRoundedImage01,
-                        color: TuLojitaBrandColors.indigo600,
-                        size: 16,
-                      ),
-                      label: const Text('Galería'),
-                    ),
-                  ),
-                ],
+              const Text(
+                'Comprobante de Pago (Captura):',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: TuLojitaBrandColors.inkPrimary,
+                ),
               ),
+              const SizedBox(height: 8),
               if (_receiptFile != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '✓ Comprobante seleccionado: ${_receiptFile!.path.split('/').last}',
-                    style: const TextStyle(
-                      color: TuLojitaBrandColors.positive,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                Stack(
+                  children: [
+                    InkWell(
+                      onTap: () => _showReceiptPreviewDialog(
+                        context,
+                        file: _receiptFile,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        height: 168,
+                        decoration: BoxDecoration(
+                          color: TuLojitaBrandColors.canvas,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: TuLojitaBrandColors.indigo100,
+                            width: 1.4,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.file(
+                              _receiptFile!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const Center(
+                                child: HugeIcon(
+                                  icon: HugeIcons.strokeRoundedImage01,
+                                  color: TuLojitaBrandColors.inkSecondary,
+                                  size: 32,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 8,
+                              bottom: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.62),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.zoom_in_rounded,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Toca para ampliar',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: IconButton(
+                        key: const Key('remove_receipt_btn'),
+                        tooltip: 'Quitar imagen',
+                        onPressed: () => setState(() => _receiptFile = null),
+                        icon: const CircleAvatar(
+                          backgroundColor: Colors.black54,
+                          radius: 14,
+                          child: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickImage(ImageSource.camera),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedCamera01,
+                          color: TuLojitaBrandColors.indigo600,
+                          size: 16,
+                        ),
+                        label: const Text('Cámara'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickImage(ImageSource.gallery),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedImage01,
+                          color: TuLojitaBrandColors.indigo600,
+                          size: 16,
+                        ),
+                        label: const Text('Galería'),
+                      ),
+                    ),
+                  ],
                 ),
               const SizedBox(height: 20),
               ElevatedButton(

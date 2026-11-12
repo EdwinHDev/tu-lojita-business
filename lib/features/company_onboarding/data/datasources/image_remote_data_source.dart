@@ -62,9 +62,24 @@ class ImageRemoteDataSourceImpl implements ImageRemoteDataSource {
   @override
   Future<void> deleteImage(String imageUrl) async {
     try {
-      // imageUrl is usually like /img/UUID
-      final imageId = imageUrl.split('/').last;
-      
+      final trimmed = imageUrl.trim();
+      if (trimmed.isEmpty) return;
+
+      final uri = Uri.tryParse(trimmed);
+      final segments =
+          uri?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
+      final fallbackSegments = trimmed
+          .split('?')
+          .first
+          .split('/')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final lastSegment = segments.isNotEmpty
+          ? segments.last
+          : (fallbackSegments.isNotEmpty ? fallbackSegments.last : '');
+      final imageId = lastSegment.split('.').first;
+      if (imageId.isEmpty) return;
+
       await _dio.delete(
         '${Envs.apiBaseUrlImages}/img/$imageId',
         options: Options(
