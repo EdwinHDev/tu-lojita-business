@@ -36,6 +36,13 @@ class StoreModel extends Store {
     super.isDeleted = false,
     super.aiEnabled = false,
     super.companyId,
+    super.pendingOrdersCount = 0,
+    super.commissionDebt = 0.0,
+    super.pendingCommissionReportsCount = 0,
+    super.rankingDivisionTitle,
+    super.currentPR = 0,
+    super.consecutiveSalesDays = 0,
+    super.inDangerZone = false,
   });
 
   factory StoreModel.fromJson(Map<String, dynamic> json) {
@@ -94,6 +101,25 @@ class StoreModel extends Store {
       isDeleted: json['isDeleted'] == true,
       aiEnabled: json['aiEnabled'] == true,
       companyId: parsedCompanyId,
+      pendingOrdersCount:
+          int.tryParse(json['pendingOrdersCount']?.toString() ?? '0') ?? 0,
+      commissionDebt:
+          double.tryParse(json['commissionDebt']?.toString() ?? '0') ?? 0.0,
+      pendingCommissionReportsCount: int.tryParse(
+            json['pendingCommissionReportsCount']?.toString() ?? '0',
+          ) ??
+          0,
+      rankingDivisionTitle: json['rankingDivisionTitle']
+                  ?.toString()
+                  .trim()
+                  .isNotEmpty ==
+              true
+          ? json['rankingDivisionTitle']!.toString().trim()
+          : null,
+      currentPR: int.tryParse(json['currentPR']?.toString() ?? '0') ?? 0,
+      consecutiveSalesDays:
+          int.tryParse(json['consecutiveSalesDays']?.toString() ?? '0') ?? 0,
+      inDangerZone: json['inDangerZone'] == true,
     );
   }
 
@@ -129,6 +155,13 @@ class StoreModel extends Store {
       'tiktok': tiktok,
       'aiEnabled': aiEnabled,
       'companyId': companyId,
+      'pendingOrdersCount': pendingOrdersCount,
+      'commissionDebt': commissionDebt,
+      'pendingCommissionReportsCount': pendingCommissionReportsCount,
+      'rankingDivisionTitle': rankingDivisionTitle,
+      'currentPR': currentPR,
+      'consecutiveSalesDays': consecutiveSalesDays,
+      'inDangerZone': inDangerZone,
     };
   }
 }

@@ -1,161 +1,377 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
-import '../../../../core/config/envs.dart';
-import '../../domain/entities/store.dart';
+import 'package:tu_lojita_business/core/models/exchange_rate_config.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
+import 'package:tu_lojita_business/core/utils/price_formatter.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/home/home_image_resolver.dart';
 
+/// Pure standalone-safe single-tap Bento store scorecard.
+///
+/// Formats dual currency via pure [PriceFormatter] utilities without requiring
+/// `ProviderScope` so both full Views and bare `MaterialApp` widget tests work.
 class StoreListTile extends StatelessWidget {
   final Store store;
   final VoidCallback onTap;
+  final ExchangeRateConfig? exchangeConfig;
+  final int unreadDisputesCount;
+  final bool canViewFinancials;
 
   const StoreListTile({
     super.key,
     required this.store,
     required this.onTap,
+    this.exchangeConfig,
+    this.unreadDisputesCount = 0,
+    this.canViewFinancials = true,
   });
-
-  String _resolveLogoUrl(String logo) {
-    if (logo.isEmpty) return '';
-    if (logo.startsWith('http')) return logo;
-    // Remove leading slash if present to avoid double slashes
-    final path = logo.startsWith('/') ? logo.substring(1) : logo;
-    return '${Envs.apiBaseUrlImages}/$path';
-  }
 
   @override
   Widget build(BuildContext context) {
     final isDeleting = store.isScheduledForDeletion;
     final isInactive = store.status.toUpperCase() == 'INACTIVE' && !isDeleting;
-    final logoUrl = _resolveLogoUrl(store.logo);
+    final logoUrl = resolveDashboardImageUrl(store.logo);
 
-    String chipLabel;
-    Color chipBgColor;
-    Color chipTextColor;
+    final String chipLabel;
+    final Color chipBgColor;
+    final Color chipTextColor;
 
     if (isDeleting) {
       chipLabel = 'Eliminación en ${store.remainingGraceDays}d';
-      chipBgColor = const Color(0xFFFEF2F2);
-      chipTextColor = const Color(0xFFDC2626);
+      chipBgColor = TuLojitaBrandColors.dangerBg;
+      chipTextColor = TuLojitaBrandColors.danger;
     } else if (isInactive) {
       chipLabel = 'Desactivada';
-      chipBgColor = const Color(0xFFFEF3C7);
-      chipTextColor = const Color(0xFF92400E);
+      chipBgColor = TuLojitaBrandColors.amber100;
+      chipTextColor = TuLojitaBrandColors.amber800;
     } else {
       chipLabel = 'Activa';
-      chipBgColor = const Color(0xFFECFDF5);
-      chipTextColor = const Color(0xFF047857);
+      chipBgColor = TuLojitaBrandColors.positiveBg;
+      chipTextColor = TuLojitaBrandColors.positive;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDeleting ? const Color(0xFFFECACA) : const Color(0xFFF1F5F9),
-          width: isDeleting ? 1.8 : 1.5,
+    final urgencyBadges = <Widget>[
+      if (store.pendingOrdersCount > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedPackage,
+          label: store.pendingOrdersCount == 1
+              ? '1 ped. pend.'
+              : '${store.pendingOrdersCount} ped. pend.',
+          isCritical: false,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDeleting
-                ? const Color(0xFFEF4444).withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.02),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        onTap: onTap,
-        leading: Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: logoUrl.isNotEmpty ? Colors.white : const Color(0xFFEEF2FF),
-            borderRadius: BorderRadius.circular(12),
-            image: logoUrl.isNotEmpty
-                ? DecorationImage(
-                    image: NetworkImage(logoUrl),
-                    fit: BoxFit.cover,
-                  )
-                : null,
-          ),
-          child: logoUrl.isEmpty
-              ? const Center(
-                  child: HugeIcon(
-                    icon: HugeIcons.strokeRoundedStore01,
-                    color: Color(0xFF4F46E5),
-                    size: 24,
-                  ),
-                )
-              : null,
+      if (unreadDisputesCount > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedAlertCircle,
+          label: unreadDisputesCount == 1
+              ? '1 reclamo'
+              : '$unreadDisputesCount reclamos',
+          isCritical: true,
         ),
-        title: Text(
-          store.shouldShowBranch ? store.branchLabel : store.name,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            letterSpacing: -0.3,
-          ),
+      if (canViewFinancials && store.commissionDebt > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedInvoice01,
+          label:
+              'Comisión: ${PriceFormatter.formatDualInline(store.commissionDebt, exchangeConfig)}',
+          isCritical: false,
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (store.shouldShowBranch)
-              Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: 4),
-                child: Text(
-                  'Tienda: ${store.name}',
-                  style: const TextStyle(
-                    color: Color(0xFF4F46E5),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
+      if (canViewFinancials && store.pendingCommissionReportsCount > 0)
+        _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedInvoice01,
+          label: store.pendingCommissionReportsCount == 1
+              ? '1 pago rev.'
+              : '${store.pendingCommissionReportsCount} pagos rev.',
+          isCritical: false,
+        ),
+      if (store.inDangerZone)
+        const _VisualUrgencyPill(
+          icon: HugeIcons.strokeRoundedAlert02,
+          label: 'En riesgo',
+          isCritical: true,
+        ),
+    ];
+
+    final footerParts = <String>[
+      if (store.rankingDivisionTitle != null &&
+          store.rankingDivisionTitle!.trim().isNotEmpty)
+        store.currentPR > 0
+            ? '${store.rankingDivisionTitle!.trim()} (${store.currentPR} PR)'
+            : store.rankingDivisionTitle!.trim(),
+      if (store.consecutiveSalesDays > 0) '${store.consecutiveSalesDays}d racha',
+      if (store.aiEnabled) 'Estudio IA',
+    ];
+    final footerText = footerParts.isEmpty ? null : footerParts.join(' · ');
+    final salesLines =
+        PriceFormatter.formatDualLines(store.salesToday, exchangeConfig);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: TuLojitaBrandColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDeleting
+                    ? const Color(0xFFFECACA)
+                    : TuLojitaBrandColors.borderSubtle,
+                width: isDeleting ? 1.6 : 1.5,
               ),
-            if (store.address != null && store.address!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  store.address!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-                ),
-              ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                _buildChip(
-                  chipLabel,
-                  chipBgColor,
-                  chipTextColor,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${store.productsCount} productos',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDeleting
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-          ],
-        ),
-        trailing: const HugeIcon(
-          icon: HugeIcons.strokeRoundedArrowRight01,
-          color: Colors.grey,
-          size: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Clean borderless store logo
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        color: TuLojitaBrandColors.indigo50,
+                        child: logoUrl.isNotEmpty
+                            ? Image.network(
+                                logoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: HugeIcon(
+                                    icon: HugeIcons.strokeRoundedStore01,
+                                    color: TuLojitaBrandColors.indigo600,
+                                    size: 22,
+                                  ),
+                                ),
+                              )
+                            : const Center(
+                                child: HugeIcon(
+                                  icon: HugeIcons.strokeRoundedStore01,
+                                  color: TuLojitaBrandColors.indigo600,
+                                  size: 22,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  store.shouldShowBranch
+                                      ? store.branchLabel
+                                      : store.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15.5,
+                                    letterSpacing: -0.3,
+                                    color: TuLojitaBrandColors.inkPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const HugeIcon(
+                                icon: HugeIcons.strokeRoundedArrowRight01,
+                                color: TuLojitaBrandColors.inkSecondary,
+                                size: 17,
+                              ),
+                            ],
+                          ),
+                          if (store.shouldShowBranch) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              store.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: TuLojitaBrandColors.indigo600,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                          if (store.address != null &&
+                              store.address!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              store.address!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: TuLojitaBrandColors.inkSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 7),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              _StatusChip(
+                                label: chipLabel,
+                                bgColor: chipBgColor,
+                                textColor: chipTextColor,
+                              ),
+                              Text(
+                                '${store.productsCount} productos',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: TuLojitaBrandColors.inkSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (canViewFinancials) ...[
+                  const SizedBox(height: 11),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: TuLojitaBrandColors.canvas,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Ventas hoy',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: TuLojitaBrandColors.inkSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                salesLines[0],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: TuLojitaBrandColors.indigo600,
+                                ),
+                              ),
+                              if (salesLines.length > 1)
+                                Text(
+                                  salesLines[1],
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: TuLojitaBrandColors.inkSecondary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (urgencyBadges.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: urgencyBadges,
+                  ),
+                ],
+
+                if (footerText != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 1,
+                    color: TuLojitaBrandColors.borderSubtle,
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      const HugeIcon(
+                        icon: HugeIcons.strokeRoundedAward01,
+                        color: TuLojitaBrandColors.amber700,
+                        size: 13,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          footerText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: TuLojitaBrandColors.inkSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildChip(String label, Color bgColor, Color textColor) {
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final Color bgColor;
+  final Color textColor;
+
+  const _StatusChip({
+    required this.label,
+    required this.bgColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
@@ -173,13 +389,70 @@ class StoreListTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisualUrgencyPill extends StatelessWidget {
+  final dynamic icon;
+  final String label;
+  final bool isCritical;
+
+  const _VisualUrgencyPill({
+    required this.icon,
+    required this.label,
+    required this.isCritical,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isCritical
+        ? TuLojitaBrandColors.dangerBg
+        : TuLojitaBrandColors.amber50;
+    final border = isCritical
+        ? const Color(0xFFFECACA)
+        : TuLojitaBrandColors.amber100;
+    final fg = isCritical
+        ? TuLojitaBrandColors.danger
+        : TuLojitaBrandColors.amber800;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(icon: icon, color: fg, size: 12),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
             ),
           ),
         ],

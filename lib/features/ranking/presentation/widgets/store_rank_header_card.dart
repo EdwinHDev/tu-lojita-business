@@ -77,51 +77,62 @@ class StoreRankHeaderCard extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                'RANGO',
-                                style: TextStyle(
-                                  color: Colors.amber.shade300,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
+                          SizedBox(
+                            width: double.infinity,
+                            child: Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  'RANGO',
+                                  style: TextStyle(
+                                    color: Colors.amber.shade300,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                  ),
                                 ),
-                              ),
-                              const Spacer(),
-                              if (ranking.consecutiveSalesDays > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade800
-                                        .withValues(alpha: 0.8),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.amber.shade400,
-                                      width: 1,
+                                if (ranking.consecutiveSalesDays > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade800
+                                          .withValues(alpha: 0.8),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.amber.shade400,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            '🔥',
+                                            style: TextStyle(fontSize: 11),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            '${ranking.consecutiveSalesDays}d (${ranking.streakMultiplier}x)',
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        '🔥',
-                                        style: TextStyle(fontSize: 11),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        '${ranking.consecutiveSalesDays}d (${ranking.streakMultiplier}x)',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(

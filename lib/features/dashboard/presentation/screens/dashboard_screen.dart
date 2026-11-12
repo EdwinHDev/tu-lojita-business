@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/stores_notifier.dart';
@@ -74,43 +75,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final unreadDisputesCount = ref.watch(unreadBusinessDisputeOrdersCountProvider);
 
     return Scaffold(
-      appBar: currentIndex == 2
-          ? null
-          : AppBar(
-              title: const Text('Dashboard'),
-              actions: [
-                ref.watch(notificationsProvider).maybeWhen(
-                  data: (notifications) {
-                    final unreadCount = notifications.where((n) => !n.isRead).length;
-                    return IconButton(
-                      icon: Badge(
-                        isLabelVisible: unreadCount > 0,
-                        label: Text('$unreadCount'),
-                        backgroundColor: Colors.redAccent,
-                        child: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedNotification01,
-                          color: Colors.indigo,
-                          size: 24,
-                        ),
-                      ),
-                      onPressed: () => context.go('/dashboard/notifications'),
-                    );
-                  },
-                  orElse: () => IconButton(
-                    icon: const HugeIcon(
-                      icon: HugeIcons.strokeRoundedNotification01,
-                      color: Colors.indigo,
-                      size: 24,
-                    ),
-                    onPressed: () => context.go('/dashboard/notifications'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
       body: SafeArea(child: IndexedStack(index: currentIndex, children: _views)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
+        indicatorColor: TuLojitaBrandColors.indigo50,
         onDestinationSelected: (index) {
           ref.read(dashboardIndexProvider.notifier).state = index;
         },
@@ -122,14 +90,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             selectedIcon: HugeIcon(
               icon: HugeIcons.strokeRoundedHome01,
-              color: Colors.indigo,
+              color: TuLojitaBrandColors.indigo600,
             ),
             label: 'Inicio',
           ),
           NavigationDestination(
             icon: Badge(
               isLabelVisible: unreadDisputesCount > 0,
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: TuLojitaBrandColors.danger,
               child: const HugeIcon(
                 icon: HugeIcons.strokeRoundedStore01,
                 color: Colors.grey,
@@ -137,10 +105,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             selectedIcon: Badge(
               isLabelVisible: unreadDisputesCount > 0,
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: TuLojitaBrandColors.danger,
               child: const HugeIcon(
                 icon: HugeIcons.strokeRoundedStore01,
-                color: Colors.indigo,
+                color: TuLojitaBrandColors.indigo600,
               ),
             ),
             label: 'Tiendas',
@@ -152,7 +120,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             selectedIcon: HugeIcon(
               icon: HugeIcons.strokeRoundedUserAccount,
-              color: Colors.indigo,
+              color: TuLojitaBrandColors.indigo600,
             ),
             label: 'Mi Cuenta',
           ),

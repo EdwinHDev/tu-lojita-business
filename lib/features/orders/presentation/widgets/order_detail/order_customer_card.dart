@@ -18,29 +18,35 @@ class OrderCustomerCard extends ConsumerWidget {
     this.storeId,
   });
 
-  String _maskPhone(String raw) {
-    final clean = raw.trim();
-    if (clean.length <= 4) return '****';
-    final visible = clean.substring(clean.length - 4);
-    return '***-***-$visible';
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final currentUser = authState is Authenticated ? authState.user : null;
     final canViewCustomerData = currentUser?.canViewSensitiveCustomerData ?? true;
+    final canRestrictCustomer =
+        !(currentUser?.isCollaborator ?? false) && canViewCustomerData;
 
     final user = order.user;
     final firstName = user?['firstName'] as String? ?? 'Cliente';
     final lastName = user?['lastName'] as String? ?? '';
     final fullName = '$firstName $lastName'.trim();
-    final email = user?['email'] as String? ?? 'Sin correo registrado';
+    final rawEmail = user?['email'] as String?;
+    final hasRawEmail = rawEmail != null &&
+        rawEmail.trim().isNotEmpty &&
+        rawEmail != 'Sin correo registrado';
+    final displayEmail = !canViewCustomerData
+        ? 'Correo protegido'
+        : (hasRawEmail ? rawEmail : 'Sin correo registrado');
     final phone = user?['phone'] as String?;
     final address = user?['address'] as String?;
     final hasPhone = phone != null && phone.trim().isNotEmpty;
-    final displayPhone = (hasPhone && !canViewCustomerData) ? _maskPhone(phone) : phone;
+    final displayPhone = !canViewCustomerData
+        ? 'Contacto protegido'
+        : phone;
     final hasAddress = address != null && address.trim().isNotEmpty;
+    final displayAddress = !canViewCustomerData
+        ? 'Dirección protegida'
+        : address;
     final customerId = user?['id']?.toString() ?? '';
     final effectiveStoreId = (storeId != null && storeId!.isNotEmpty) ? storeId! : (order.storeId ?? '');
 
@@ -76,17 +82,20 @@ class OrderCustomerCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text(
-                'Datos del Cliente',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: 0.3,
+              const Expanded(
+                child: Text(
+                  'Datos del Cliente',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: 0.3,
+                  ),
                 ),
               ),
-              const Spacer(),
-              if (customerId.isNotEmpty && effectiveStoreId.isNotEmpty)
+              if (canRestrictCustomer && customerId.isNotEmpty && effectiveStoreId.isNotEmpty) ...[
+                const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: () {
                     BlockCustomerDialog.show(
@@ -94,7 +103,7 @@ class OrderCustomerCard extends ConsumerWidget {
                       storeId: effectiveStoreId,
                       customerId: customerId,
                       customerName: fullName,
-                      customerEmail: email != 'Sin correo registrado' ? email : null,
+                      customerEmail: hasRawEmail ? rawEmail : null,
                     );
                   },
                   icon: const HugeIcon(
@@ -121,6 +130,7 @@ class OrderCustomerCard extends ConsumerWidget {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -153,7 +163,7 @@ class OrderCustomerCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      email,
+                      displayEmail,
                       style: const TextStyle(
                         color: Color(0xFF64748B),
                         fontSize: 13,
@@ -164,7 +174,7 @@ class OrderCustomerCard extends ConsumerWidget {
               ),
             ],
           ),
-          if (hasPhone) ...[
+          if (hasPhone || !canViewCustomerData) ...[
             const SizedBox(height: 14),
             const Divider(color: Color(0xFFF1F5F9), height: 1),
             const SizedBox(height: 12),
@@ -174,7 +184,7 @@ class OrderCustomerCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    displayPhone ?? '',
+                    displayPhone ?? 'Sin teléfono registrado',
                     style: const TextStyle(
                       color: Color(0xFF334155),
                       fontSize: 13,
@@ -184,7 +194,7 @@ class OrderCustomerCard extends ConsumerWidget {
                 ),
               ],
             ),
-            if (canViewCustomerData) ...[
+            if (canViewCustomerData && hasPhone) ...[
               const SizedBox(height: 12),
               // Fila de acciones interactivas para el comerciante
               Row(
@@ -271,7 +281,7 @@ class OrderCustomerCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        address,
+                        displayAddress ?? '',
                         style: const TextStyle(
                           color: Color(0xFF334155),
                           fontSize: 13,
@@ -281,20 +291,21 @@ class OrderCustomerCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => OrderDetailHelpers.copyToClipboard(
-                    context: context,
-                    text: address,
-                    label: 'Dirección',
+                if (canViewCustomerData)
+                  IconButton(
+                    onPressed: () => OrderDetailHelpers.copyToClipboard(
+                      context: context,
+                      text: address,
+                      label: 'Dirección',
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF64748B)),
+                    tooltip: 'Copiar dirección',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFFF8FAFC),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
-                  icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF64748B)),
-                  tooltip: 'Copiar dirección',
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFF8FAFC),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
               ],
             ),
           ],

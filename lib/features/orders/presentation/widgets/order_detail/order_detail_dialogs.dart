@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/company_onboarding/presentation/providers/company_onboarding_providers.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'order_detail_helpers.dart';
@@ -289,8 +290,23 @@ class OrderDetailDialogs {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Estás a punto de verificar un pago de \$${payment.amount.toStringAsFixed(2)} (${payment.displayLabel}).',
+                    'Estás a punto de verificar el pago (${payment.displayLabel}) por:',
                     style: const TextStyle(color: Color(0xFF334155), fontSize: 14, height: 1.4),
+                  ),
+                  const SizedBox(height: 8),
+                  DualPriceText(
+                    amountInUsd: payment.amount,
+                    useScaleDown: true,
+                    usdStyle: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    bsStyle: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (payment.reference != null && payment.reference!.isNotEmpty) ...[
                     const SizedBox(height: 6),
@@ -381,10 +397,12 @@ class OrderDetailDialogs {
     BuildContext context, {
     required Payment payment,
     bool initialRestrictCustomer = false,
+    bool allowRestrictCustomer = true,
   }) async {
     String selectedReason = 'Referencia bancaria no encontrada';
     final customNotesController = TextEditingController();
-    bool shouldRestrictCustomer = initialRestrictCustomer;
+    bool shouldRestrictCustomer =
+        allowRestrictCustomer ? initialRestrictCustomer : false;
 
     final reasons = [
       'Referencia bancaria no encontrada',
@@ -555,111 +573,115 @@ class OrderDetailDialogs {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                if (allowRestrictCustomer) ...[
+                                  const SizedBox(height: 16),
 
-                                // Tarjeta interactiva para restringir cliente
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: shouldRestrictCustomer
-                                        ? const Color(0xFFFEF2F2)
-                                        : const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
+                                  // Tarjeta interactiva para restringir cliente
+                                  Container(
+                                    decoration: BoxDecoration(
                                       color: shouldRestrictCustomer
-                                          ? const Color(0xFFFCA5A5)
-                                          : const Color(0xFFE2E8F0),
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () {
-                                        setModalState(() {
-                                          shouldRestrictCustomer = !shouldRestrictCustomer;
-                                        });
-                                      },
+                                          ? const Color(0xFFFEF2F2)
+                                          : const Color(0xFFF8FAFC),
                                       borderRadius: BorderRadius.circular(14),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            SizedBox(
-                                              width: 22,
-                                              height: 22,
-                                              child: Checkbox(
-                                                value: shouldRestrictCustomer,
-                                                onChanged: (val) {
-                                                  setModalState(() {
-                                                    shouldRestrictCustomer = val ?? false;
-                                                  });
-                                                },
-                                                activeColor: const Color(0xFFDC2626),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(5),
+                                      border: Border.all(
+                                        color: shouldRestrictCustomer
+                                            ? const Color(0xFFFCA5A5)
+                                            : const Color(0xFFE2E8F0),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          setModalState(() {
+                                            shouldRestrictCustomer = !shouldRestrictCustomer;
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              SizedBox(
+                                                width: 22,
+                                                height: 22,
+                                                child: Checkbox(
+                                                  value: shouldRestrictCustomer,
+                                                  onChanged: (val) {
+                                                    setModalState(() {
+                                                      shouldRestrictCustomer = val ?? false;
+                                                    });
+                                                  },
+                                                  activeColor: const Color(0xFFDC2626),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(5),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Row(
-                                                    children: [
-                                                      Text(
-                                                        'Restringir cliente también',
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: shouldRestrictCustomer
-                                                              ? const Color(0xFF991B1B)
-                                                              : const Color(0xFF0F172A),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 6),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                        decoration: BoxDecoration(
-                                                          color: shouldRestrictCustomer
-                                                              ? const Color(0xFFFEE2E2)
-                                                              : const Color(0xFFE2E8F0),
-                                                          borderRadius: BorderRadius.circular(6),
-                                                        ),
-                                                        child: Text(
-                                                          'Seguridad',
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Wrap(
+                                                      spacing: 6,
+                                                      runSpacing: 4,
+                                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                                      children: [
+                                                        Text(
+                                                          'Restringir cliente también',
                                                           style: TextStyle(
-                                                            fontSize: 10,
+                                                            fontSize: 13,
                                                             fontWeight: FontWeight.bold,
                                                             color: shouldRestrictCustomer
-                                                                ? const Color(0xFFDC2626)
-                                                                : const Color(0xFF64748B),
+                                                                ? const Color(0xFF991B1B)
+                                                                : const Color(0xFF0F172A),
                                                           ),
                                                         ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(height: 3),
-                                                  Text(
-                                                    'Impide que este cliente realice compras o pedidos futuros en tu tienda si sospechas de estafa o fraude.',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: shouldRestrictCustomer
-                                                          ? const Color(0xFFB91C1C)
-                                                          : const Color(0xFF64748B),
-                                                      height: 1.25,
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: shouldRestrictCustomer
+                                                                ? const Color(0xFFFEE2E2)
+                                                                : const Color(0xFFE2E8F0),
+                                                            borderRadius: BorderRadius.circular(6),
+                                                          ),
+                                                          child: Text(
+                                                            'Seguridad',
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: shouldRestrictCustomer
+                                                                  ? const Color(0xFFDC2626)
+                                                                  : const Color(0xFF64748B),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ),
-                                                ],
+                                                    const SizedBox(height: 3),
+                                                    Text(
+                                                      'Impide que este cliente realice compras o pedidos futuros en tu tienda si sospechas de estafa o fraude.',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: shouldRestrictCustomer
+                                                            ? const Color(0xFFB91C1C)
+                                                            : const Color(0xFF64748B),
+                                                        height: 1.25,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                ],
                                 const SizedBox(height: 12),
                               ],
                             ),
@@ -904,17 +926,30 @@ class OrderDetailDialogs {
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Monto a reembolsar:',
-                                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                const Expanded(
+                                  child: Text(
+                                    'Monto a reembolsar:',
+                                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                  ),
                                 ),
-                                Text(
-                                  '\$${payment.amount.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: DualPriceText(
+                                    amountInUsd: payment.amount,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    useScaleDown: true,
+                                    usdStyle: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                    bsStyle: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1230,9 +1265,24 @@ class OrderDetailDialogs {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '¿Confirmas que no recibiste el pago de \$${payment.amount.toStringAsFixed(2)} en tus cuentas?',
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 14),
+                  const Text(
+                    '¿Confirmas que no recibiste en tus cuentas el pago reportado por?',
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  DualPriceText(
+                    amountInUsd: payment.amount,
+                    useScaleDown: true,
+                    usdStyle: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    bsStyle: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(

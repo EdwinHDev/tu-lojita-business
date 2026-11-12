@@ -3,10 +3,12 @@ import 'package:hugeicons/hugeicons.dart';
 
 class StoreEmptyState extends StatelessWidget {
   final VoidCallback onCreatePressed;
+  final bool canCreateStore;
 
   const StoreEmptyState({
     super.key,
     required this.onCreatePressed,
+    this.canCreateStore = true,
   });
 
   @override
@@ -32,7 +34,9 @@ class StoreEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             Text(
-              'No tienes tiendas aún',
+              canCreateStore
+                  ? 'No tienes tiendas aún'
+                  : 'Sin sucursales asignadas',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -43,7 +47,9 @@ class StoreEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Crea tu primera sucursal para empezar a vender tus productos en la plataforma de manera profesional.',
+              canCreateStore
+                  ? 'Crea tu primera sucursal para empezar a vender tus productos en la plataforma de manera profesional.'
+                  : 'Aún no tienes sucursales autorizadas. Solicita a un administrador que te asigne acceso.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey.shade500,
@@ -51,32 +57,35 @@ class StoreEmptyState extends StatelessWidget {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 36),
-            ElevatedButton.icon(
-              onPressed: onCreatePressed,
-              icon: const HugeIcon(
-                icon: HugeIcons.strokeRoundedAdd01,
-                color: Colors.white,
-                size: 20,
-              ),
-              label: const Text(
-                'Crear mi primera tienda',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
+            if (canCreateStore) ...[
+              const SizedBox(height: 36),
+              ElevatedButton.icon(
+                onPressed: onCreatePressed,
+                icon: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedAdd01,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                label: const Text(
+                  'Crear mi primera tienda',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
+            ],
           ],
         ),
       ),

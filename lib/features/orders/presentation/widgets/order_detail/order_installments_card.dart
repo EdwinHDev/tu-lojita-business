@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'order_detail_helpers.dart';
 
@@ -7,6 +8,7 @@ import 'order_detail_helpers.dart';
 class OrderInstallmentsCard extends StatelessWidget {
   final Order order;
   final bool isUpdating;
+  final bool canApproveInstallments;
   final ValueChanged<Installment>? onApproveExtension;
   final ValueChanged<Installment>? onRejectExtension;
 
@@ -14,6 +16,7 @@ class OrderInstallmentsCard extends StatelessWidget {
     super.key,
     required this.order,
     this.isUpdating = false,
+    this.canApproveInstallments = true,
     this.onApproveExtension,
     this.onRejectExtension,
   });
@@ -172,9 +175,11 @@ class OrderInstallmentsCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '\$${installment.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
+                    DualPriceText(
+                      amountInUsd: installment.amount,
+                      useScaleDown: true,
+                      usdStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
+                      bsStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11, color: Color(0xFF64748B)),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -225,12 +230,14 @@ class OrderInstallmentsCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 16),
                       const SizedBox(width: 6),
-                      Text(
-                        'Solicitud de Prórroga (+${installment.extensionRequestedDays ?? 7} días)',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFB45309),
+                      Expanded(
+                        child: Text(
+                          'Solicitud de Prórroga (+${installment.extensionRequestedDays ?? 7} días)',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFB45309),
+                          ),
                         ),
                       ),
                     ],
@@ -247,37 +254,51 @@ class OrderInstallmentsCard extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedButton(
-                        onPressed: isUpdating ? null : () => onRejectExtension?.call(installment),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
-                          side: const BorderSide(color: Color(0xFFFCA5A5)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text('Rechazar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  if (canApproveInstallments)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: isUpdating ? null : () => onRejectExtension?.call(installment),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(color: Color(0xFFFCA5A5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Rechazar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                          ElevatedButton(
+                            onPressed: isUpdating ? null : () => onApproveExtension?.call(installment),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              elevation: 0,
+                            ),
+                            child: const Text('Aprobar Prórroga', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: isUpdating ? null : () => onApproveExtension?.call(installment),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          elevation: 0,
-                        ),
-                        child: const Text('Aprobar Prórroga', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    )
+                  else
+                    const Text(
+                      'Pendiente de aprobación por encargado autorizado',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB45309),
                       ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),

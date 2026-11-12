@@ -42,7 +42,31 @@ class OrdersState {
   }
 }
 
-typedef OrderFilter = ({String storeId, String? status, bool? hasDispute});
+typedef OrderFilter = ({
+  String storeId,
+  String? status,
+  bool? hasDispute,
+  bool? hasPendingPayment,
+  String? search,
+});
+
+OrderFilter buildOrderFilter({
+  required String storeId,
+  String? status,
+  bool? hasDispute,
+  bool? hasPendingPayment,
+  String? search,
+}) {
+  final normalizedSearch =
+      (search != null && search.trim().isNotEmpty) ? search.trim() : null;
+  return (
+    storeId: storeId,
+    status: status,
+    hasDispute: hasDispute,
+    hasPendingPayment: hasPendingPayment,
+    search: normalizedSearch,
+  );
+}
 
 // ------------------------------------------------------------------
 // Notifier — receives filter via constructor (Riverpod v3 pattern)
@@ -72,6 +96,8 @@ class OrdersNotifier extends Notifier<OrdersState> {
         0,
         status: filter.status,
         hasDispute: filter.hasDispute,
+        hasPendingPayment: filter.hasPendingPayment,
+        search: filter.search,
       );
       
       if (!ref.mounted) return;
@@ -104,6 +130,8 @@ class OrdersNotifier extends Notifier<OrdersState> {
         _currentOffset,
         status: filter.status,
         hasDispute: filter.hasDispute,
+        hasPendingPayment: filter.hasPendingPayment,
+        search: filter.search,
       );
       
       if (!ref.mounted) return;
@@ -227,7 +255,7 @@ final registerManualPaymentProvider = FutureProvider.family<Map<String, dynamic>
 
 final ordersWithActiveDisputesCountProvider = Provider.family<int, String>((ref, storeId) {
   final disputedOrdersState = ref.watch(
-    ordersNotifierProvider((storeId: storeId, status: null, hasDispute: true)),
+    ordersNotifierProvider(buildOrderFilter(storeId: storeId, hasDispute: true)),
   );
   return disputedOrdersState.orders.where((o) => o.hasActiveDispute).length;
 });

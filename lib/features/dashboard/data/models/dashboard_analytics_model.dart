@@ -13,12 +13,18 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
     required super.topProducts,
     super.topDesiredProducts = const [],
     required super.paymentMethods,
+    super.operationalSummary = const OperationalSummary(),
   });
 
+  static Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return const {};
+  }
+
   factory DashboardAnalyticsModel.fromJson(Map<String, dynamic> json) {
-    final kpisJson = json['kpis'] as Map<String, dynamic>? ?? {};
-    final ratioJson = kpisJson['installmentRatio'] as Map<String, dynamic>? ?? {};
-    final growthJson = kpisJson['growth'] as Map<String, dynamic>? ?? {};
+    final kpisJson = _asMap(json['kpis']);
+    final ratioJson = _asMap(kpisJson['installmentRatio']);
+    final growthJson = _asMap(kpisJson['growth']);
 
     final kpis = KpiMetrics(
       totalSales: double.tryParse(kpisJson['totalSales']?.toString() ?? '0') ?? 0.0,
@@ -66,6 +72,8 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
               mainImage: tp['mainImage']?.toString(),
               unitsSold: int.tryParse(tp['unitsSold']?.toString() ?? '0') ?? 0,
               totalRevenue: double.tryParse(tp['totalRevenue']?.toString() ?? '0') ?? 0.0,
+              storeId: tp['storeId']?.toString(),
+              storeName: tp['storeName']?.toString(),
             ))
         .toList();
 
@@ -91,8 +99,102 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
                   : null,
               trackInventory: td['trackInventory'] == true,
               hasVariants: td['hasVariants'] == true,
+              storeId: td['storeId']?.toString(),
+              storeName: td['storeName']?.toString(),
             ))
         .toList();
+
+    final opRaw = json['operationalSummary'];
+    final opMap = opRaw is Map ? Map<String, dynamic>.from(opRaw) : null;
+    final storeAlertsRaw = opMap?['storeAlerts'] as List<dynamic>? ?? const [];
+    final storeAlerts = storeAlertsRaw
+        .whereType<Map>()
+        .map((raw) {
+          final sa = Map<String, dynamic>.from(raw);
+          return StoreOperationalAlert(
+            storeId: sa['storeId']?.toString() ?? '',
+            storeName: sa['storeName']?.toString() ?? '',
+            pendingOrders:
+                int.tryParse(sa['pendingOrders']?.toString() ?? '0') ?? 0,
+            accountsReceivable: double.tryParse(
+                  sa['accountsReceivable']?.toString() ?? '0',
+                ) ??
+                0.0,
+            commissionDebt:
+                double.tryParse(sa['commissionDebt']?.toString() ?? '0') ?? 0.0,
+            pendingCommissionReportsCount: int.tryParse(
+                  sa['pendingCommissionReportsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            activePromotionsCount: int.tryParse(
+                  sa['activePromotionsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            pendingPromotionsCount: int.tryParse(
+                  sa['pendingPromotionsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            isScheduledForDeletion: sa['isScheduledForDeletion'] == true,
+          );
+        })
+        .where((sa) => sa.storeId.isNotEmpty)
+        .toList();
+
+    final rawTopStoreId = opMap?['topRankingStoreId']?.toString();
+    final rawTopStoreName = opMap?['topRankingStoreName']?.toString();
+
+    final operationalSummary = opMap == null
+        ? const OperationalSummary()
+        : OperationalSummary(
+            totalCommissionDebt: double.tryParse(
+                  opMap['totalCommissionDebt']?.toString() ?? '0',
+                ) ??
+                0.0,
+            storesWithDebtCount: int.tryParse(
+                  opMap['storesWithDebtCount']?.toString() ?? '0',
+                ) ??
+                0,
+            pendingCommissionReportsCount: int.tryParse(
+                  opMap['pendingCommissionReportsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            activePromotionsCount: int.tryParse(
+                  opMap['activePromotionsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            pendingPromotionsCount: int.tryParse(
+                  opMap['pendingPromotionsCount']?.toString() ?? '0',
+                ) ??
+                0,
+            topDivision: opMap['topDivision']?.toString(),
+            topDivisionTitle: opMap['topDivisionTitle']?.toString(),
+            highestPR:
+                int.tryParse(opMap['highestPR']?.toString() ?? '0') ?? 0,
+            maxConsecutiveSalesDays: int.tryParse(
+                  opMap['maxConsecutiveSalesDays']?.toString() ?? '0',
+                ) ??
+                0,
+            dailyMissionsCompletedToday: int.tryParse(
+                  opMap['dailyMissionsCompletedToday']?.toString() ?? '0',
+                ) ??
+                0,
+            storesInDangerZoneCount: int.tryParse(
+                  opMap['storesInDangerZoneCount']?.toString() ?? '0',
+                ) ??
+                0,
+            storesScheduledForDeletionCount: int.tryParse(
+                  opMap['storesScheduledForDeletionCount']?.toString() ?? '0',
+                ) ??
+                0,
+            storeAlerts: storeAlerts,
+            topRankingStoreId: (rawTopStoreId != null && rawTopStoreId.isNotEmpty)
+                ? rawTopStoreId
+                : null,
+            topRankingStoreName:
+                (rawTopStoreName != null && rawTopStoreName.isNotEmpty)
+                    ? rawTopStoreName
+                    : null,
+          );
 
     return DashboardAnalyticsModel(
       period: json['period']?.toString() ?? 'month',
@@ -106,6 +208,7 @@ class DashboardAnalyticsModel extends DashboardAnalytics {
       topProducts: topProducts,
       topDesiredProducts: topDesiredProducts,
       paymentMethods: paymentMethods,
+      operationalSummary: operationalSummary,
     );
   }
 }

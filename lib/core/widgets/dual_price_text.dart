@@ -43,9 +43,9 @@ class DualPriceText extends ConsumerWidget {
           color: Color(0xFF111827),
         );
 
-    final showBs = config != null && config.enabled && config.rate > 0;
+    final showBs = PriceFormatter.isDualEnabled(config);
 
-    if (!showBs) {
+    if (!showBs || config == null) {
       final singleText = Text(
         usdText,
         style: defaultUsdStyle,
@@ -61,8 +61,12 @@ class DualPriceText extends ConsumerWidget {
           : singleText;
     }
 
-    final bsAmount = config.toBolivares(amountInUsd);
-    final bsFormatted = PriceFormatter.formatBsNumeric(bsAmount);
+    final activeConfig = config;
+    final bsAmount = activeConfig.toBolivares(amountInUsd);
+    final bsFormatted = PriceFormatter.formatBsNumeric(
+      bsAmount,
+      symbol: activeConfig.symbol,
+    );
     final bsText = '~ $bsFormatted';
 
     final defaultBsStyle = bsStyle ??

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/shimmer_widget.dart';
 
-/// Skeleton for the Store Info Card in StoreDetailsScreen.
-/// Replaces false/default data ("Solo Contado", "0 Productos", "Cargando...")
-/// with smooth shimmers that preserve the exact layout.
+/// Skeleton for StoreDetailsIdentityCard.
+/// Completely free of fixed-width row overflow on 320px viewports and free of ProviderScope.
 class StoreHeaderCardSkeleton extends StatelessWidget {
   const StoreHeaderCardSkeleton({super.key});
 
@@ -11,72 +11,69 @@ class StoreHeaderCardSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: TuLojitaBrandColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        border: Border.all(color: TuLojitaBrandColors.borderSubtle, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.035),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(20, 52, 20, 18),
-      child: Column(
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Título de la Tienda Shimmer
-          const ShimmerWidget(
-            width: 170,
-            height: 22,
-            borderRadius: BorderRadius.all(Radius.circular(6)),
-          ),
-          const SizedBox(height: 10),
-
-          // 2. Subcategoría / Rubro Shimmer
-          const ShimmerWidget(
-            width: 110,
-            height: 22,
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
-          const SizedBox(height: 12),
-
-          // 3. Pastillas de Régimen y Catálogo Shimmer
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Row(
             children: [
               ShimmerWidget(
-                width: 130,
-                height: 28,
-                borderRadius: BorderRadius.all(Radius.circular(10)),
+                width: 56,
+                height: 56,
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
-              SizedBox(width: 8),
-              ShimmerWidget(
-                width: 105,
-                height: 28,
-                borderRadius: BorderRadius.all(Radius.circular(10)),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShimmerWidget(
+                      width: 160,
+                      height: 18,
+                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                    ),
+                    SizedBox(height: 8),
+                    ShimmerWidget(
+                      width: 110,
+                      height: 13,
+                      borderRadius: BorderRadius.all(Radius.circular(5)),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 12),
-
-          // 4. Botones de Acción Rápida Shimmer (IconButtons)
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
               ShimmerWidget(
-                width: 44,
-                height: 44,
-                borderRadius: BorderRadius.all(Radius.circular(14)),
+                width: 78,
+                height: 26,
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
-              SizedBox(width: 14),
               ShimmerWidget(
-                width: 44,
-                height: 44,
-                borderRadius: BorderRadius.all(Radius.circular(14)),
+                width: 102,
+                height: 26,
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+              ShimmerWidget(
+                width: 96,
+                height: 26,
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ],
           ),
@@ -86,15 +83,14 @@ class StoreHeaderCardSkeleton extends StatelessWidget {
   }
 }
 
-/// Skeleton for the 3 Key Metrics Cards in StoreDetailsScreen.
-/// Preserves exact height and width to prevent layout shifts when dashboard loads.
+/// Skeleton for StoreDetailsMetricsBento preserving 'Métricas Clave' header and standalone testability.
 class StoreMetricsSkeleton extends StatelessWidget {
   const StoreMetricsSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -105,7 +101,7 @@ class StoreMetricsSkeleton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+                  color: TuLojitaBrandColors.inkPrimary,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -121,10 +117,37 @@ class StoreMetricsSkeleton extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: TuLojitaBrandColors.indigo50,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: TuLojitaBrandColors.indigo100,
+                width: 1.5,
+              ),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShimmerWidget(
+                  width: 110,
+                  height: 13,
+                  borderRadius: BorderRadius.all(Radius.circular(4)),
+                ),
+                SizedBox(height: 12),
+                ShimmerWidget(
+                  width: 145,
+                  height: 24,
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildMetricCardSkeleton()),
-              const SizedBox(width: 10),
               Expanded(child: _buildMetricCardSkeleton()),
               const SizedBox(width: 10),
               Expanded(child: _buildMetricCardSkeleton()),
@@ -139,34 +162,27 @@ class StoreMetricsSkeleton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: TuLojitaBrandColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: TuLojitaBrandColors.borderSubtle, width: 1.5),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ShimmerWidget(
-            width: 32,
-            height: 32,
+            width: 30,
+            height: 30,
             borderRadius: BorderRadius.all(Radius.circular(10)),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 10),
           ShimmerWidget(
-            width: 60,
+            width: 56,
             height: 16,
             borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
           SizedBox(height: 5),
           ShimmerWidget(
-            width: 48,
+            width: 68,
             height: 10,
             borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
@@ -176,14 +192,14 @@ class StoreMetricsSkeleton extends StatelessWidget {
   }
 }
 
-/// Skeleton for the Recent Sales section in StoreDetailsScreen.
+/// Skeleton for StoreDetailsActivitySection.
 class StoreRecentSalesSkeleton extends StatelessWidget {
   const StoreRecentSalesSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -192,7 +208,7 @@ class StoreRecentSalesSkeleton extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
+              color: TuLojitaBrandColors.inkPrimary,
               letterSpacing: -0.3,
             ),
           ),
@@ -200,9 +216,12 @@ class StoreRecentSalesSkeleton extends StatelessWidget {
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: TuLojitaBrandColors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+              border: Border.all(
+                color: TuLojitaBrandColors.borderSubtle,
+                width: 1.5,
+              ),
             ),
             child: ListView.separated(
               shrinkWrap: true,
@@ -211,27 +230,25 @@ class StoreRecentSalesSkeleton extends StatelessWidget {
               itemCount: 2,
               separatorBuilder: (context, index) => const Divider(
                 height: 1,
-                color: Color(0xFFF1F5F9),
+                color: TuLojitaBrandColors.borderSubtle,
                 indent: 64,
               ),
               itemBuilder: (context, index) => const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 child: Row(
                   children: [
-                    // Product Thumbnail
                     ShimmerWidget(
                       width: 44,
                       height: 44,
                       borderRadius: BorderRadius.all(Radius.circular(10)),
                     ),
                     SizedBox(width: 12),
-                    // Item Title and Subtitle
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           ShimmerWidget(
-                            width: 130,
+                            width: 120,
                             height: 14,
                             borderRadius: BorderRadius.all(Radius.circular(4)),
                           ),
@@ -244,18 +261,17 @@ class StoreRecentSalesSkeleton extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Amount and Status Badge
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         ShimmerWidget(
-                          width: 50,
+                          width: 48,
                           height: 14,
                           borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
                         SizedBox(height: 6),
                         ShimmerWidget(
-                          width: 55,
+                          width: 54,
                           height: 16,
                           borderRadius: BorderRadius.all(Radius.circular(8)),
                         ),

@@ -146,9 +146,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     for (final sId in storeIds) {
       const statuses = [null, 'PENDING', 'PARTIALLY_PAID', 'FULLY_PAID', 'CANCELLED'];
       for (final status in statuses) {
-        ref.invalidate(ordersNotifierProvider((storeId: sId, status: status, hasDispute: null)));
+        ref.invalidate(ordersNotifierProvider(buildOrderFilter(storeId: sId, status: status)));
       }
-      ref.invalidate(ordersNotifierProvider((storeId: sId, status: null, hasDispute: true)));
+      ref.invalidate(ordersNotifierProvider(buildOrderFilter(storeId: sId, hasPendingPayment: true)));
+      ref.invalidate(ordersNotifierProvider(buildOrderFilter(storeId: sId, hasDispute: true)));
       if (canViewInstallments) {
         ref.invalidate(storeInstallmentsProvider(sId));
         ref.invalidate(storeReceivablesProvider(sId));

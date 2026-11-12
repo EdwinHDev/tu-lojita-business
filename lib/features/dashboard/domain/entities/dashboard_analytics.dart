@@ -10,6 +10,7 @@ class DashboardAnalytics {
   final List<TopProduct> topProducts;
   final List<TopDesiredProduct> topDesiredProducts;
   final List<PaymentMethodShare> paymentMethods;
+  final OperationalSummary operationalSummary;
 
   const DashboardAnalytics({
     required this.period,
@@ -23,6 +24,67 @@ class DashboardAnalytics {
     required this.topProducts,
     this.topDesiredProducts = const [],
     required this.paymentMethods,
+    this.operationalSummary = const OperationalSummary(),
+  });
+}
+
+class StoreOperationalAlert {
+  final String storeId;
+  final String storeName;
+  final int pendingOrders;
+  final double accountsReceivable;
+  final double commissionDebt;
+  final int pendingCommissionReportsCount;
+  final int activePromotionsCount;
+  final int pendingPromotionsCount;
+  final bool isScheduledForDeletion;
+
+  const StoreOperationalAlert({
+    required this.storeId,
+    required this.storeName,
+    this.pendingOrders = 0,
+    this.accountsReceivable = 0.0,
+    this.commissionDebt = 0.0,
+    this.pendingCommissionReportsCount = 0,
+    this.activePromotionsCount = 0,
+    this.pendingPromotionsCount = 0,
+    this.isScheduledForDeletion = false,
+  });
+}
+
+class OperationalSummary {
+  final double totalCommissionDebt;
+  final int storesWithDebtCount;
+  final int pendingCommissionReportsCount;
+  final int activePromotionsCount;
+  final int pendingPromotionsCount;
+  final String? topDivision;
+  final String? topDivisionTitle;
+  final int highestPR;
+  final int maxConsecutiveSalesDays;
+  final int dailyMissionsCompletedToday;
+  final int storesInDangerZoneCount;
+  final int storesScheduledForDeletionCount;
+  final List<StoreOperationalAlert> storeAlerts;
+  final String? topRankingStoreId;
+  final String? topRankingStoreName;
+
+  const OperationalSummary({
+    this.totalCommissionDebt = 0.0,
+    this.storesWithDebtCount = 0,
+    this.pendingCommissionReportsCount = 0,
+    this.activePromotionsCount = 0,
+    this.pendingPromotionsCount = 0,
+    this.topDivision,
+    this.topDivisionTitle,
+    this.highestPR = 0,
+    this.maxConsecutiveSalesDays = 0,
+    this.dailyMissionsCompletedToday = 0,
+    this.storesInDangerZoneCount = 0,
+    this.storesScheduledForDeletionCount = 0,
+    this.storeAlerts = const [],
+    this.topRankingStoreId,
+    this.topRankingStoreName,
   });
 }
 
@@ -110,6 +172,8 @@ class TopProduct {
   final String? mainImage;
   final int unitsSold;
   final double totalRevenue;
+  final String? storeId;
+  final String? storeName;
 
   const TopProduct({
     required this.itemId,
@@ -117,6 +181,8 @@ class TopProduct {
     this.mainImage,
     required this.unitsSold,
     required this.totalRevenue,
+    this.storeId,
+    this.storeName,
   });
 }
 
@@ -145,6 +211,8 @@ class TopDesiredProduct {
   final double? stockQuantity;
   final bool trackInventory;
   final bool hasVariants;
+  final String? storeId;
+  final String? storeName;
 
   bool get isOutOfStock =>
       trackInventory && (stockQuantity == null || stockQuantity! <= 0);
@@ -158,5 +226,7 @@ class TopDesiredProduct {
     this.stockQuantity,
     required this.trackInventory,
     this.hasVariants = false,
+    this.storeId,
+    this.storeName,
   });
 }

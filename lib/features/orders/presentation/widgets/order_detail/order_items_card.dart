@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order_item.dart';
@@ -8,10 +9,12 @@ import 'order_detail_helpers.dart';
 /// Tarjeta que muestra los artículos del pedido con miniaturas, cantidades, extras y subtotales.
 class OrderItemsCard extends StatelessWidget {
   final Order order;
+  final bool canViewSensitiveFinances;
 
   const OrderItemsCard({
     super.key,
     required this.order,
+    this.canViewSensitiveFinances = true,
   });
 
   @override
@@ -148,15 +151,23 @@ class OrderItemsCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        Text(
-                          '\$${item.price.toStringAsFixed(2)} c/u',
-                          style: const TextStyle(
+                        DualPriceText(
+                          amountInUsd: item.price,
+                          suffix: ' c/u',
+                          isInline: true,
+                          useScaleDown: true,
+                          usdStyle: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.w500,
                           ),
+                          bsStyle: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        if (lineCommission > 0)
+                        if (canViewSensitiveFinances && lineCommission > 0)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
@@ -164,16 +175,39 @@ class OrderItemsCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: const Color(0xFFFDE68A)),
                             ),
-                            child: Text(
-                              'Comisión: -\$${lineCommission.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF92400E),
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'Comisión: ',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                                Flexible(
+                                  child: DualPriceText(
+                                    amountInUsd: lineCommission,
+                                    prefix: '-',
+                                    isInline: true,
+                                    useScaleDown: true,
+                                    usdStyle: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF92400E),
+                                    ),
+                                    bsStyle: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        if (lineNet > 0)
+                        if (canViewSensitiveFinances && lineNet > 0)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
@@ -181,13 +215,35 @@ class OrderItemsCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: const Color(0xFFA7F3D0)),
                             ),
-                            child: Text(
-                              'Neto: \$${lineNet.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF047857),
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'Neto: ',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF047857),
+                                  ),
+                                ),
+                                Flexible(
+                                  child: DualPriceText(
+                                    amountInUsd: lineNet,
+                                    isInline: true,
+                                    useScaleDown: true,
+                                    usdStyle: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF047857),
+                                    ),
+                                    bsStyle: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF059669),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -196,12 +252,22 @@ class OrderItemsCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                '\$${lineTotal.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  color: Color(0xFF0F172A),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 112),
+                child: DualPriceText(
+                  amountInUsd: lineTotal,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  useScaleDown: true,
+                  usdStyle: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: Color(0xFF0F172A),
+                  ),
+                  bsStyle: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10.5,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
               ),
             ],
@@ -297,15 +363,28 @@ class OrderItemsCard extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            if (opt.price > 0)
-                              Text(
-                                '+\$${(opt.price * count).toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F172A),
+                            if (opt.price > 0) ...[
+                              const SizedBox(width: 8),
+                              Flexible(
+                                flex: 0,
+                                child: DualPriceText(
+                                  amountInUsd: opt.price * count,
+                                  prefix: '+',
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  useScaleDown: true,
+                                  usdStyle: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                  bsStyle: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF64748B),
+                                  ),
                                 ),
                               ),
+                            ],
                           ],
                         ),
                       );

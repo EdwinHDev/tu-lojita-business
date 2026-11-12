@@ -122,6 +122,10 @@ class NotificationHelper {
   }
 
   static Future<void> cancelNotification(int id) async {
-    await flutterLocalNotificationsPlugin.cancel(id);
+    try {
+      await flutterLocalNotificationsPlugin.cancel(id);
+    } catch (e) {
+      debugPrint('Notification cancellation skipped: $e');
+    }
   }
 }

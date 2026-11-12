@@ -66,6 +66,9 @@ class User {
   bool get canViewFinancialMetrics =>
       hasPermission('metrics:view_financial');
 
+  bool get canViewSensitiveFinances =>
+      hasPermission('finances:view_sensitive') || canViewFinancialMetrics;
+
   bool get canViewSalesHistory =>
       hasPermission('metrics:view_sales_history') ||
       canViewFinancialMetrics;
@@ -101,10 +104,14 @@ class User {
 
   bool get canViewInstallments =>
       hasPermission('installments:view') ||
-      hasPermission('installments:approve_payment');
+      hasPermission('installments:approve_payment') ||
+      hasPermission('installments:reject_payment');
 
   bool get canApproveInstallments =>
       hasPermission('installments:approve_payment');
+
+  bool get canRejectInstallments =>
+      hasPermission('installments:reject_payment');
 
   bool get canViewDisputes =>
       hasPermission('disputes:view') ||

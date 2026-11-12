@@ -1,24 +1,77 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/dashboard_stats.dart';
+import 'package:tu_lojita_business/features/dashboard/domain/entities/store.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import '../providers/stores_notifier.dart';
 import '../providers/stores_state.dart';
-import '../widgets/store_list_tile.dart';
-import '../widgets/store_metric_card.dart';
 import '../widgets/store_empty_state.dart';
-import '../widgets/store_list_tile_skeleton.dart';
-import '../../../../core/widgets/shimmer_widget.dart';
+import '../widgets/store_list_tile.dart';
+import '../widgets/stores/single_store_quick_actions_card.dart';
+import '../widgets/stores/stores_filters_bar.dart';
+import '../widgets/stores/stores_header_banner.dart';
+import '../widgets/stores/stores_shimmer_skeleton.dart';
+import '../widgets/stores/stores_summary_bento_card.dart';
 
-class StoresView extends ConsumerWidget {
+class StoresView extends ConsumerStatefulWidget {
   const StoresView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StoresView> createState() => _StoresViewState();
+}
+
+class _StoresViewState extends ConsumerState<StoresView> {
+  StoresFilterOption _selectedFilter = StoresFilterOption.all;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  DashboardStats _effectiveStats(StoresState state, List<Store> stores) {
+    if (state.stats != null) return state.stats!;
+    final salesTodaySum =
+        stores.fold<double>(0.0, (sum, s) => sum + s.salesToday);
+    final productsSum =
+        stores.fold<int>(0, (sum, s) => sum + s.productsCount);
+    return DashboardStats(
+      salesToday: SalesStats(
+        amount: salesTodaySum,
+        percentage: 0,
+        currency: 'USD',
+      ),
+      totalStores: CountStats(count: stores.length, increment: 0),
+      totalProducts: CountStats(count: productsSum, increment: 0),
+      totalCustomers: const CountStats(count: 0, increment: 0),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final storesState = ref.watch(storesProvider);
+    final authState = ref.watch(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    final isCollaborator = user?.isCollaborator ?? false;
+    final canManageBranches =
+        !isCollaborator || (user?.canManageBranches ?? false);
+    final canViewFinancials =
+        !isCollaborator || (user?.canViewFinancialMetrics ?? false);
+
+    final exchangeConfig = ref.watch(exchangeRateProvider).asData?.value;
+    final unreadDisputesByStore =
+        ref.watch(unreadBusinessDisputeCountByStoreProvider);
 
     if (storesState.isLoading && storesState.stores.isEmpty) {
-      return _buildLoadingSkeleton();
+      return const StoresShimmerSkeleton();
     }
 
     if (storesState.errorMessage != null && storesState.stores.isEmpty) {
@@ -31,43 +84,50 @@ class StoresView extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFEF2F2),
+                  color: TuLojitaBrandColors.dangerBg,
                   shape: BoxShape.circle,
                 ),
                 child: const HugeIcon(
                   icon: HugeIcons.strokeRoundedAlertCircle,
-                  color: Color(0xFFB91C1C),
+                  color: TuLojitaBrandColors.danger,
                   size: 40,
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
+              const Text(
                 'Ocurrió un error',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade900,
+                  color: TuLojitaBrandColors.inkPrimary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 storesState.errorMessage!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                style: const TextStyle(
+                  color: TuLojitaBrandColors.inkSecondary,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () => ref.read(storesProvider.notifier).loadData(),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
+                  backgroundColor: TuLojitaBrandColors.indigo600,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Reintentar', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: const Text(
+                  'Reintentar',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -75,242 +135,198 @@ class StoresView extends ConsumerWidget {
       );
     }
 
-    if (storesState.stores.isEmpty) {
-      return StoreEmptyState(
-        onCreatePressed: () => context.go('/dashboard/stores/create'),
+    final stores = storesState.stores;
+
+    if (stores.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => Future.wait([
+          ref.read(storesProvider.notifier).loadData(),
+          ref.read(exchangeRateProvider.notifier).refreshRate(),
+          ref.read(notificationsProvider.notifier).loadNotifications(),
+        ]),
+        color: TuLojitaBrandColors.indigo600,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StoresHeaderBanner(
+                storeCount: 0,
+                canManageBranches: canManageBranches,
+                onCreateStore: () => context.go('/dashboard/stores/create'),
+              ),
+              const SizedBox(height: 12),
+              StoreEmptyState(
+                canCreateStore: canManageBranches,
+                onCreatePressed: () => context.go('/dashboard/stores/create'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
+    final effectiveFilter =
+        stores.length >= 2 ? _selectedFilter : StoresFilterOption.all;
+    final effectiveQuery = stores.length >= 4 ? _searchQuery : '';
+    final filteredStores = applyStoresFilter(
+      stores: stores,
+      filter: effectiveFilter,
+      query: effectiveQuery,
+      unreadDisputesByStore: unreadDisputesByStore,
+      canViewFinancials: canViewFinancials,
+    );
+
+    final stats = _effectiveStats(storesState, stores);
+
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/dashboard/stores/create'),
-        backgroundColor: const Color(0xFF4F46E5),
-        elevation: 4,
-        child: const HugeIcon(
-          icon: HugeIcons.strokeRoundedAdd01,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
+      backgroundColor: TuLojitaBrandColors.canvas,
       body: RefreshIndicator(
-        onRefresh: () => ref.read(storesProvider.notifier).loadData(),
+        onRefresh: () => Future.wait([
+          ref.read(storesProvider.notifier).loadData(),
+          ref.read(exchangeRateProvider.notifier).refreshRate(),
+          ref.read(notificationsProvider.notifier).loadNotifications(),
+        ]),
+        color: TuLojitaBrandColors.indigo600,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'Resumen de hoy',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _buildMetrics(storesState),
-                  const SizedBox(height: 28),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      storesState.stores.length > 1 ? 'Mis Sucursales' : 'Mi Tienda',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-              ),
-            ),
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final store = storesState.stores[index];
-                    return StoreListTile(
-                      store: store,
-                      onTap: () {
-                        context.go('/dashboard/stores/${store.id}');
-                      },
-                    );
-                  },
-                  childCount: storesState.stores.length,
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingSkeleton() {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                'Resumen de hoy',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            _buildMetricsSkeleton(),
-            const SizedBox(height: 28),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                'Mis Sucursales',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  StoreListTileSkeleton(),
-                  StoreListTileSkeleton(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMetricsSkeleton() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Row(
-          children: List.generate(
-            3,
-            (index) => Container(
-              width: 170,
-              height: 110,
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ShimmerWidget(
-                        width: 70,
-                        height: 13,
-                        borderRadius: BorderRadius.all(Radius.circular(4)),
-                      ),
-                      ShimmerWidget(
-                        width: 24,
-                        height: 24,
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StoresHeaderBanner(
+                      storeCount: stores.length,
+                      canManageBranches: canManageBranches,
+                      onCreateStore: () =>
+                          context.go('/dashboard/stores/create'),
+                    ),
+                    const SizedBox(height: 14),
+                    StoresSummaryBentoCard(
+                      stats: stats,
+                      stores: stores,
+                      unreadDisputesByStore: unreadDisputesByStore,
+                      canViewFinancials: canViewFinancials,
+                    ),
+                    if (stores.length >= 2) ...[
+                      const SizedBox(height: 16),
+                      StoresFiltersBar(
+                        stores: stores,
+                        unreadDisputesByStore: unreadDisputesByStore,
+                        canViewFinancials: canViewFinancials,
+                        selectedFilter: _selectedFilter,
+                        onFilterSelected: (opt) {
+                          setState(() => _selectedFilter = opt);
+                        },
+                        searchController: _searchController,
+                        searchQuery: _searchQuery,
+                        onSearchChanged: (value) {
+                          setState(() => _searchQuery = value);
+                        },
                       ),
                     ],
-                  ),
-                  ShimmerWidget(
-                    width: 100,
-                    height: 20,
-                    borderRadius: BorderRadius.all(Radius.circular(4)),
-                  ),
-                  ShimmerWidget(
-                    width: 50,
-                    height: 11,
-                    borderRadius: BorderRadius.all(Radius.circular(4)),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMetrics(StoresState storesState) {
-    final stats = storesState.stats;
-    if (stats == null) return _buildMetricsSkeleton();
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Row(
-          children: [
-            StoreMetricCard(
-              title: 'Ventas Hoy',
-              value: '${stats.salesToday.amount.toStringAsFixed(2)} ${stats.salesToday.currency}',
-              icon: HugeIcons.strokeRoundedMoney01,
-              color: Colors.green,
-              subtitle: '+${stats.salesToday.percentage}%',
-            ),
-            const SizedBox(width: 12),
-            StoreMetricCard(
-              title: 'Tiendas',
-              value: '${stats.totalStores.count}',
-              icon: HugeIcons.strokeRoundedStore01,
-              color: Colors.blue,
-              subtitle: stats.totalStores.increment > 0 ? '+${stats.totalStores.increment} mes' : null,
-            ),
-            const SizedBox(width: 12),
-            StoreMetricCard(
-              title: 'Productos',
-              value: '${stats.totalProducts.count}',
-              icon: HugeIcons.strokeRoundedPackage,
-              color: Colors.orange,
-              subtitle: stats.totalProducts.increment > 0 ? '+${stats.totalProducts.increment} sem' : null,
-            ),
+            if (filteredStores.isEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                sliver: SliverToBoxAdapter(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: TuLojitaBrandColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: TuLojitaBrandColors.borderSubtle,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const HugeIcon(
+                          icon: HugeIcons.strokeRoundedSearch01,
+                          color: TuLojitaBrandColors.inkSecondary,
+                          size: 28,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Ninguna sucursal coincide con el filtro',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: TuLojitaBrandColors.inkPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _selectedFilter = StoresFilterOption.all;
+                              _searchQuery = '';
+                            });
+                          },
+                          child: const Text(
+                            'Limpiar filtros',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: TuLojitaBrandColors.indigo600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final store = filteredStores[index];
+                      return StoreListTile(
+                        store: store,
+                        exchangeConfig: exchangeConfig,
+                        unreadDisputesCount:
+                            unreadDisputesByStore[store.id] ?? 0,
+                        canViewFinancials: canViewFinancials,
+                        onTap: () => context.go('/dashboard/stores/${store.id}'),
+                      );
+                    },
+                    childCount: filteredStores.length,
+                  ),
+                ),
+              ),
+            if (stores.length == 1)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 0),
+                sliver: SliverToBoxAdapter(
+                  child: SingleStoreQuickActionsCard(
+                    store: stores.first,
+                    user: user,
+                    unreadDisputesCount:
+                        unreadDisputesByStore[stores.first.id] ?? 0,
+                  ),
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ),
       ),
     );
   }
 }
-

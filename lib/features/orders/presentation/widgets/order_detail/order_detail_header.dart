@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
@@ -244,27 +245,37 @@ class OrderStatusCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Total del Pedido',
-                    style: TextStyle(
-                      color: textColor.withValues(alpha: 0.75),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total del Pedido',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: textColor.withValues(alpha: 0.75),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '\$${order.finalAmount.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
+                    const SizedBox(height: 2),
+                    DualPriceText(
+                      amountInUsd: order.finalAmount,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      useScaleDown: true,
+                      usdStyle: TextStyle(
+                        color: textColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                      ),
+                      bsStyle: TextStyle(
+                        color: textColor.withValues(alpha: 0.78),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

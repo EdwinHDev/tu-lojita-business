@@ -27,6 +27,7 @@ import 'package:tu_lojita_business/features/items/presentation/screens/item_form
 import 'package:tu_lojita_business/features/items/presentation/screens/item_detail_screen.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
+import 'package:tu_lojita_business/features/store_ai/presentation/screens/store_ai_settings_screen.dart';
 import 'package:tu_lojita_business/features/orders/presentation/screens/order_list_screen.dart';
 import 'package:tu_lojita_business/features/orders/presentation/screens/order_details_screen.dart';
 import 'package:tu_lojita_business/features/chat/presentation/screens/order_chat_screen.dart';
@@ -39,6 +40,8 @@ import 'package:tu_lojita_business/features/subscription/presentation/screens/su
 import 'package:tu_lojita_business/features/subscription/presentation/screens/subscription_rejected_screen.dart';
 import 'package:tu_lojita_business/features/subscription/presentation/screens/store_debts_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings/mediation_requests_screen.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings/blocked_customers_screen.dart';
+import 'package:tu_lojita_business/features/payment_methods/presentation/screens/payment_methods_list_screen.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/screens/my_ranking_screen.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/screens/rank_celebration_screen.dart';
 import 'package:tu_lojita_business/features/ranking/presentation/screens/division_down_screen.dart';
@@ -222,6 +225,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                 },
               ),
               GoRoute(
+                path: 'ai-settings',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  final extraName =
+                      state.extra is String ? state.extra as String : null;
+                  return StoreAiSettingsScreen(
+                    storeId: storeId,
+                    storeDisplayName: extraName,
+                  );
+                },
+              ),
+              GoRoute(
                 path: 'categories',
                 builder: (context, state) {
                   final storeId = state.pathParameters['storeId']!;
@@ -298,6 +313,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) {
                   final storeId = state.pathParameters['storeId']!;
                   return MediationRequestsScreen(storeId: storeId);
+                },
+              ),
+              GoRoute(
+                path: 'payment-methods',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return PaymentMethodsListScreen(storeId: storeId);
+                },
+              ),
+              GoRoute(
+                path: 'blocked-customers',
+                builder: (context, state) {
+                  final storeId = state.pathParameters['storeId']!;
+                  return BlockedCustomersScreen(storeId: storeId);
                 },
               ),
               GoRoute(

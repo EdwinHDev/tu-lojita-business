@@ -22,6 +22,8 @@ import '../widgets/order_detail/order_payments_card.dart';
 import '../widgets/order_detail/order_detail_bottom_bar.dart';
 import '../widgets/order_detail/order_detail_dialogs.dart';
 import '../widgets/order_detail/order_dispute_bottom_sheet.dart';
+import '../widgets/order_detail/order_urgent_action_card.dart';
+import '../widgets/orders_bento_shimmer.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/widgets/block_customer_dialog.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
@@ -53,6 +55,20 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   StreamSubscription<OrderSyncEvent>? _orderSyncSub;
   late final String _screenSyncKey;
   AppLifecycleSyncObserver? _lifecycleSyncObserver;
+  final GlobalKey _paymentsSectionKey = GlobalKey();
+  final GlobalKey _installmentsSectionKey = GlobalKey();
+  final GlobalKey _preOrderSectionKey = GlobalKey();
+
+  void _scrollToSection(GlobalKey sectionKey) {
+    final targetContext = sectionKey.currentContext;
+    if (targetContext == null) return;
+    Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
+  }
 
   @override
   void initState() {
@@ -152,7 +168,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       ref.invalidate(storeDisputesByOrderProvider(orderId));
     }
     if (storeId != null && storeId.isNotEmpty) {
-      ref.invalidate(ordersNotifierProvider((storeId: storeId, status: null, hasDispute: null)));
+      ref.invalidate(ordersNotifierProvider);
       ref.invalidate(storeInstallmentsProvider(storeId));
       ref.invalidate(storeReceivablesProvider(storeId));
     }
@@ -168,7 +184,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
     setState(() => _isUpdating = true);
     final updatedOrder = await ref
-        .read(ordersNotifierProvider((storeId: storeId, status: null, hasDispute: null)).notifier)
+        .read(ordersNotifierProvider(buildOrderFilter(storeId: storeId)).notifier)
         .updateOrderStatus(currentOrder!.id, 'FULLY_PAID');
 
     if (!mounted) return;
@@ -197,7 +213,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
     setState(() => _isUpdating = true);
     final updatedOrder = await ref
-        .read(ordersNotifierProvider((storeId: storeId, status: null, hasDispute: null)).notifier)
+        .read(ordersNotifierProvider(buildOrderFilter(storeId: storeId)).notifier)
         .updateOrderStatus(currentOrder!.id, 'CANCELLED', reason: reason);
 
     if (!mounted) return;
@@ -254,9 +270,14 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   Future<void> _rejectIndividualPayment(Payment payment) async {
     if (_isUpdating || currentOrder == null) return;
 
+    final authState = ref.read(authProvider);
+    final actor = authState is Authenticated ? authState.user : null;
+    final allowRestrict = !(actor?.isCollaborator ?? false);
+
     final action = await OrderDetailDialogs.showRejectPaymentBottomSheet(
       context,
       payment: payment,
+      allowRestrictCustomer: allowRestrict,
     );
     if (action == null) return;
 
@@ -572,6 +593,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     final user = authState is Authenticated ? authState.user : null;
     final canProcess = user?.canProcessOrders ?? true;
     final canCancel = user?.canCancelOrders ?? true;
+    final canApproveInstallments = user?.canApproveInstallments ?? true;
+    final canRejectInstallments = user?.canRejectInstallments ?? true;
+    final canViewSensitiveFinances = user?.canViewSensitiveFinances ?? true;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -600,15 +624,33 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               OrderStatusCard(order: order),
+              if (OrderUrgentActionCard.hasUrgentActions(order)) ...[
+                const SizedBox(height: 16),
+                OrderUrgentActionCard(
+                  order: order,
+                  canApproveInstallments: canApproveInstallments,
+                  canRejectInstallments: canRejectInstallments,
+                  canProcessOrders: canProcess,
+                  onJumpToPayments: () => _scrollToSection(_paymentsSectionKey),
+                  onJumpToInstallments: () => _scrollToSection(_installmentsSectionKey),
+                  onJumpToPreOrder: () => _scrollToSection(_preOrderSectionKey),
+                ),
+              ],
               const SizedBox(height: 16),
               OrderReviewVendorCard(order: order),
               BuyerReviewCard(order: order),
               OrderCustomerCard(order: order, storeId: widget.storeId),
               if (order.isPreOrder) ...[
                 const SizedBox(height: 16),
-                _buildSectionTitle('Control de Preventa (Bajo Demanda)'),
-                const SizedBox(height: 8),
-                _buildPreOrderCard(order),
+                Column(
+                  key: _preOrderSectionKey,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('Control de Preventa (Bajo Demanda)'),
+                    const SizedBox(height: 8),
+                    _buildPreOrderCard(order, canProcess: canProcess),
+                  ],
+                ),
               ],
               if (order.hasSlotBookings) ...[
                 const SizedBox(height: 16),
@@ -619,34 +661,54 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               const SizedBox(height: 16),
               _buildSectionTitle('Artículos del pedido'),
               const SizedBox(height: 8),
-              OrderItemsCard(order: order),
+              OrderItemsCard(
+                order: order,
+                canViewSensitiveFinances: canViewSensitiveFinances,
+              ),
               const SizedBox(height: 16),
               OrderFinancialCard(
                 order: order,
                 storeId: widget.storeId,
+                canViewSensitiveFinances: canViewSensitiveFinances,
               ),
               if (order.installments.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _buildSectionTitle('Plan de Pagos / Cuotas'),
-                const SizedBox(height: 8),
-                OrderInstallmentsCard(
-                  order: order,
-                  isUpdating: _isUpdating,
-                  onApproveExtension: _approveExtension,
-                  onRejectExtension: _rejectExtension,
+                Column(
+                  key: _installmentsSectionKey,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('Plan de Pagos / Cuotas'),
+                    const SizedBox(height: 8),
+                    OrderInstallmentsCard(
+                      order: order,
+                      isUpdating: _isUpdating,
+                      canApproveInstallments: canApproveInstallments,
+                      onApproveExtension: _approveExtension,
+                      onRejectExtension: _rejectExtension,
+                    ),
+                  ],
                 ),
               ],
               if (order.payments.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _buildSectionTitle('Comprobantes de Pago'),
-                const SizedBox(height: 8),
-                OrderPaymentsCard(
-                  order: order,
-                  isUpdating: _isUpdating,
-                  onApprovePayment: _approveIndividualPayment,
-                  onRejectPayment: _rejectIndividualPayment,
-                  onRefundPayment: _refundIndividualPayment,
-                  onMarkPaymentNotReceived: _markPaymentNotReceived,
+                Column(
+                  key: _paymentsSectionKey,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('Comprobantes de Pago'),
+                    const SizedBox(height: 8),
+                    OrderPaymentsCard(
+                      order: order,
+                      isUpdating: _isUpdating,
+                      canApproveInstallments: canApproveInstallments,
+                      canRejectInstallments: canRejectInstallments,
+                      canProcessOrders: canProcess,
+                      onApprovePayment: _approveIndividualPayment,
+                      onRejectPayment: _rejectIndividualPayment,
+                      onRefundPayment: _refundIndividualPayment,
+                      onMarkPaymentNotReceived: _markPaymentNotReceived,
+                    ),
+                  ],
                 ),
               ],
               const SizedBox(height: 80),
@@ -665,7 +727,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildPreOrderCard(Order order) {
+  Widget _buildPreOrderCard(Order order, {bool canProcess = true}) {
     String statusLabel = 'En Espera';
     Color statusColor = const Color(0xFF2563EB);
     switch (order.preOrderStatus) {
@@ -762,7 +824,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               ),
             ),
           ],
-          if (order.isAwaitingStock) ...[
+          if (order.isAwaitingStock && canProcess) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -908,9 +970,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
-      body: const Center(
-        child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
-      ),
+      body: const OrderDetailsBentoShimmer(),
     );
   }
 

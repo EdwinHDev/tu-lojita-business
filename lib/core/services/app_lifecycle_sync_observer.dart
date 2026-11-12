@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 
 class AppLifecycleSyncObserver with WidgetsBindingObserver {
@@ -72,9 +73,13 @@ class AppLifecycleSyncObserver with WidgetsBindingObserver {
       log('Error re-initializing socket on resume: $e', name: 'LifecycleSync');
     }
 
-    // 2. Refresh unread notifications
+    // 2. Refresh unread notifications and active exchange rate (non-destructive)
     try {
       _ref.invalidate(notificationsProvider);
+    } catch (_) {}
+
+    try {
+      unawaited(_ref.read(exchangeRateProvider.notifier).refreshRate());
     } catch (_) {}
 
     // 3. Trigger scoped sync on currently mounted screens without resetting UI

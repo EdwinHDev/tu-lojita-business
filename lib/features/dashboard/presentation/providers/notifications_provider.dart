@@ -242,37 +242,54 @@ final unreadNotificationsCountProvider = Provider<int>((ref) {
   return notifications.where((n) => !n.isRead).length;
 });
 
+bool _isUnreadBusinessOrderDispute(AppNotification n) {
+  if (n.isRead) return false;
+  if (n.type != 'MEDIATION_REQUEST' &&
+      n.type != 'MEDIATION_RESPONSE' &&
+      n.type != 'DISPUTE_ESCALATED') {
+    return false;
+  }
+  final targetId = n.targetId ?? '';
+  if (targetId.isEmpty) return false;
+  // Excluir mediaciones de bloqueo a nivel de tienda (donde targetId == storeId)
+  if (n.storeId != null &&
+      n.storeId!.isNotEmpty &&
+      targetId == n.storeId) {
+    return false;
+  }
+  final ch = (n.channelType ?? '').toUpperCase();
+  return n.type == 'DISPUTE_ESCALATED' ||
+      ch == 'DISPUTE_BUYER_SELLER' ||
+      ch.contains('DISPUTE') ||
+      n.title.toLowerCase().contains('reclamo') ||
+      n.body.toLowerCase().contains('reclamo') ||
+      n.body.toLowerCase().contains('pedido') ||
+      n.body.toLowerCase().contains('orden');
+}
+
 /// Conjunto de IDs de órdenes con reclamos no leídos para comercio (Nivel 3 y 2)
 final unreadBusinessDisputeOrderIdsProvider = Provider<Set<String>>((ref) {
   final notifications = ref.watch(notificationsProvider).value ?? [];
   return notifications
-      .where((n) {
-        if (n.isRead) return false;
-        if (n.type != 'MEDIATION_REQUEST' &&
-            n.type != 'MEDIATION_RESPONSE' &&
-            n.type != 'DISPUTE_ESCALATED') {
-          return false;
-        }
-        final targetId = n.targetId ?? '';
-        if (targetId.isEmpty) return false;
-        // Excluir mediaciones de bloqueo a nivel de tienda (donde targetId == storeId)
-        if (n.storeId != null &&
-            n.storeId!.isNotEmpty &&
-            targetId == n.storeId) {
-          return false;
-        }
-        final ch = (n.channelType ?? '').toUpperCase();
-        final isOrderDispute = n.type == 'DISPUTE_ESCALATED' ||
-            ch == 'DISPUTE_BUYER_SELLER' ||
-            ch.contains('DISPUTE') ||
-            n.title.toLowerCase().contains('reclamo') ||
-            n.body.toLowerCase().contains('reclamo') ||
-            n.body.toLowerCase().contains('pedido') ||
-            n.body.toLowerCase().contains('orden');
-        return isOrderDispute;
-      })
+      .where(_isUnreadBusinessOrderDispute)
       .map((n) => n.targetId!)
       .toSet();
+});
+
+/// Conteo de órdenes únicas con reclamo no leído agrupadas por `storeId`
+final unreadBusinessDisputeCountByStoreProvider =
+    Provider<Map<String, int>>((ref) {
+  final notifications = ref.watch(notificationsProvider).value ?? [];
+  final perStoreOrders = <String, Set<String>>{};
+  for (final n in notifications) {
+    if (!_isUnreadBusinessOrderDispute(n)) continue;
+    final storeId = n.storeId?.trim() ?? '';
+    if (storeId.isEmpty) continue;
+    perStoreOrders.putIfAbsent(storeId, () => <String>{}).add(n.targetId!);
+  }
+  return {
+    for (final entry in perStoreOrders.entries) entry.key: entry.value.length,
+  };
 });
 
 /// Conteo de órdenes con reclamos no leídos para el comercio (Nivel 1 Bottom Navigation Bar)

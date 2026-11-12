@@ -13,26 +13,37 @@ class ExchangeRateNotifier extends AsyncNotifier<ExchangeRateConfig> {
     return _fetchExchangeRate();
   }
 
-  Future<ExchangeRateConfig> _fetchExchangeRate() async {
+  Future<ExchangeRateConfig> _fetchExchangeRate({
+    ExchangeRateConfig? previousConfig,
+  }) async {
     try {
       final dio = ref.read(dioProvider);
       final response = await dio.get('/platform-settings/public');
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        final exchangeJson = data['exchangeRate'] as Map<String, dynamic>?;
-        if (exchangeJson != null) {
-          return ExchangeRateConfig.fromJson(exchangeJson);
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = Map<String, dynamic>.from(response.data as Map);
+        final exchangeRaw = data['exchangeRate'];
+        if (exchangeRaw is Map) {
+          return ExchangeRateConfig.fromJson(
+            Map<String, dynamic>.from(exchangeRaw),
+          );
         }
+        return ExchangeRateConfig.disabled();
       }
-      return ExchangeRateConfig.disabled();
+      return previousConfig ?? ExchangeRateConfig.disabled();
     } catch (_) {
-      return ExchangeRateConfig.disabled();
+      return previousConfig ?? ExchangeRateConfig.disabled();
     }
   }
 
+  /// Refreshes the active exchange rate without clearing any valid cached rate
+  /// while fetching or if a transient network error occurs.
   Future<void> refreshRate() async {
-    state = const AsyncValue.loading();
-    state = AsyncValue.data(await _fetchExchangeRate());
+    final previousConfig = state.asData?.value;
+    if (previousConfig == null) {
+      state = const AsyncValue.loading();
+    }
+    final nextConfig = await _fetchExchangeRate(previousConfig: previousConfig);
+    if (!ref.mounted) return;
+    state = AsyncValue.data(nextConfig);
   }
 }
-

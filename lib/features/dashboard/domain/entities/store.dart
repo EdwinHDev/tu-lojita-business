@@ -75,6 +75,13 @@ class Store {
   final bool isDeleted;
   final bool aiEnabled;
   final String? companyId;
+  final int pendingOrdersCount;
+  final double commissionDebt;
+  final int pendingCommissionReportsCount;
+  final String? rankingDivisionTitle;
+  final int currentPR;
+  final int consecutiveSalesDays;
+  final bool inDangerZone;
 
   const Store({
     required this.id,
@@ -110,6 +117,13 @@ class Store {
     this.isDeleted = false,
     this.aiEnabled = false,
     this.companyId,
+    this.pendingOrdersCount = 0,
+    this.commissionDebt = 0.0,
+    this.pendingCommissionReportsCount = 0,
+    this.rankingDivisionTitle,
+    this.currentPR = 0,
+    this.consecutiveSalesDays = 0,
+    this.inDangerZone = false,
   });
 
   bool get isCategoryOrSubcategoryRestricted =>
@@ -140,6 +154,18 @@ class Store {
   String get displayName => shouldShowBranch 
       ? '$branchLabel ($name)' 
       : name;
+
+  bool needsOperationalAttention({
+    int unreadDisputesCount = 0,
+    bool canViewFinancials = true,
+  }) {
+    return pendingOrdersCount > 0 ||
+        unreadDisputesCount > 0 ||
+        (canViewFinancials &&
+            (commissionDebt > 0 || pendingCommissionReportsCount > 0)) ||
+        isScheduledForDeletion ||
+        inDangerZone;
+  }
 
   Store copyWith({
     String? id,
@@ -175,6 +201,13 @@ class Store {
     bool? isDeleted,
     bool? aiEnabled,
     String? companyId,
+    int? pendingOrdersCount,
+    double? commissionDebt,
+    int? pendingCommissionReportsCount,
+    String? rankingDivisionTitle,
+    int? currentPR,
+    int? consecutiveSalesDays,
+    bool? inDangerZone,
   }) {
     return Store(
       id: id ?? this.id,
@@ -210,6 +243,14 @@ class Store {
       isDeleted: isDeleted ?? this.isDeleted,
       aiEnabled: aiEnabled ?? this.aiEnabled,
       companyId: companyId ?? this.companyId,
+      pendingOrdersCount: pendingOrdersCount ?? this.pendingOrdersCount,
+      commissionDebt: commissionDebt ?? this.commissionDebt,
+      pendingCommissionReportsCount:
+          pendingCommissionReportsCount ?? this.pendingCommissionReportsCount,
+      rankingDivisionTitle: rankingDivisionTitle ?? this.rankingDivisionTitle,
+      currentPR: currentPR ?? this.currentPR,
+      consecutiveSalesDays: consecutiveSalesDays ?? this.consecutiveSalesDays,
+      inDangerZone: inDangerZone ?? this.inDangerZone,
     );
   }
 }

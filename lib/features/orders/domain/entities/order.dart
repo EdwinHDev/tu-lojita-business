@@ -1,6 +1,7 @@
 import 'order_item.dart';
 import 'order_dispute.dart';
 import '../../data/models/order_dispute_model.dart';
+import '../../presentation/widgets/order_detail/order_detail_helpers.dart';
 
 class Payment {
   final String id;
@@ -51,18 +52,7 @@ class Payment {
 }
 
 extension PaymentX on Payment {
-  String get displayLabel {
-    switch (paymentMethod) {
-      case 'PAGO_MOVIL':
-        return 'Pago Móvil';
-      case 'TRANSFER':
-        return 'Transferencia Bancaria';
-      case 'BINANCE':
-        return 'Binance Pay';
-      default:
-        return paymentMethod;
-    }
-  }
+  String get displayLabel => OrderDetailHelpers.formatPaymentMethod(paymentMethod);
 
   String get quotaLabel {
     if (installmentIndex == null) return 'Pago Total';

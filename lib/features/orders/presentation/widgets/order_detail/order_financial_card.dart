@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 
 /// Tarjeta de resumen financiero con barra de progreso, desglose de montos y métodos de pago.
 class OrderFinancialCard extends StatelessWidget {
   final Order order;
   final String? storeId;
+  final bool canViewSensitiveFinances;
 
   const OrderFinancialCard({
     super.key,
     required this.order,
     this.storeId,
+    this.canViewSensitiveFinances = true,
   });
 
   @override
@@ -108,14 +111,42 @@ class OrderFinancialCard extends StatelessWidget {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Progreso de Cobro (${(percentPaid * 100).toStringAsFixed(0)}%)',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                  Expanded(
+                    child: Text(
+                      'Progreso de Cobro (${(percentPaid * 100).toStringAsFixed(0)}%)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                    ),
                   ),
-                  Text(
-                    '\$${paidAmount.toStringAsFixed(2)} / \$${order.finalAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        DualPriceText(
+                          amountInUsd: paidAmount,
+                          isInline: true,
+                          useScaleDown: true,
+                          usdStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
+                          bsStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF94A3B8)),
+                        ),
+                        const Text(
+                          '/',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                        ),
+                        DualPriceText(
+                          amountInUsd: order.finalAmount,
+                          isInline: true,
+                          useScaleDown: true,
+                          usdStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                          bsStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -138,17 +169,18 @@ class OrderFinancialCard extends StatelessWidget {
 
           // Métricas destacadas: Abonado vs Pendiente
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildMetricTile(
                 label: 'Abonado',
-                value: '\$${paidAmount.toStringAsFixed(2)}',
+                amountInUsd: paidAmount,
                 color: const Color(0xFF047857),
                 icon: Icons.check_circle_outline,
               ),
               const SizedBox(width: 12),
               _buildMetricTile(
                 label: 'Pendiente',
-                value: '\$${order.balance.toStringAsFixed(2)}',
+                amountInUsd: order.balance,
                 color: hasDebt ? const Color(0xFFB91C1C) : const Color(0xFF475569),
                 icon: Icons.error_outline,
               ),
@@ -191,10 +223,10 @@ class OrderFinancialCard extends StatelessWidget {
           ),
 
           // Desglose de facturación y liquidación para el comercio
-          if (order.feeAmount > 0 || order.platformCommissionAmount > 0) ...[
+          if (order.feeAmount > 0 || (canViewSensitiveFinances && order.platformCommissionAmount > 0)) ...[
             _buildRow(
               'Subtotal Artículos (Público)',
-              '\$${order.totalAmount.toStringAsFixed(2)}',
+              amountInUsd: order.totalAmount,
               isBold: false,
             ),
             const SizedBox(height: 8),
@@ -202,37 +234,41 @@ class OrderFinancialCard extends StatelessWidget {
           if (order.feeAmount > 0) ...[
             _buildRow(
               '• Recargo por cuotas tienda',
-              '+\$${order.feeAmount.toStringAsFixed(2)}',
+              amountInUsd: order.feeAmount,
+              prefix: '+',
               isBold: false,
             ),
             const SizedBox(height: 8),
           ],
           _buildRow(
             'Total Cobrado al Cliente',
-            '\$${order.finalAmount.toStringAsFixed(2)}',
+            amountInUsd: order.finalAmount,
             isBold: true,
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Divider(color: Color(0xFFF1F5F9), height: 1),
-          ),
-          if (order.platformCommissionAmount > 0) ...[
-            _buildRow(
-              order.platformCommissionRate > 0
-                  ? 'Comisión Plataforma (${_formatRate(order.platformCommissionRate)}%)'
-                  : 'Comisión Plataforma (adeudada)',
-              '-\$${order.platformCommissionAmount.toStringAsFixed(2)}',
-              isBold: false,
-              valueColor: const Color(0xFFB45309),
+          if (canViewSensitiveFinances) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(color: Color(0xFFF1F5F9), height: 1),
             ),
-            const SizedBox(height: 8),
+            if (order.platformCommissionAmount > 0) ...[
+              _buildRow(
+                order.platformCommissionRate > 0
+                    ? 'Comisión Plataforma (${_formatRate(order.platformCommissionRate)}%)'
+                    : 'Comisión Plataforma (adeudada)',
+                amountInUsd: order.platformCommissionAmount,
+                prefix: '-',
+                isBold: false,
+                valueColor: const Color(0xFFB45309),
+              ),
+              const SizedBox(height: 8),
+            ],
+            _buildRow(
+              'Tu Ingreso Neto Tienda',
+              amountInUsd: order.finalAmount - order.platformCommissionAmount,
+              isBold: true,
+              valueColor: const Color(0xFF047857),
+            ),
           ],
-          _buildRow(
-            'Tu Ingreso Neto Tienda',
-            '\$${(order.finalAmount - order.platformCommissionAmount).toStringAsFixed(2)}',
-            isBold: true,
-            valueColor: const Color(0xFF047857),
-          ),
 
           // Enlace directo a cuentas por cobrar si es a cuotas
           if (isInstallment && effectiveStoreId != null) ...[
@@ -263,7 +299,7 @@ class OrderFinancialCard extends StatelessWidget {
 
   Widget _buildMetricTile({
     required String label,
-    required String value,
+    required double amountInUsd,
     required Color color,
     required IconData icon,
   }) {
@@ -282,16 +318,22 @@ class OrderFinancialCard extends StatelessWidget {
               children: [
                 Icon(icon, size: 14, color: color),
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+            DualPriceText(
+              amountInUsd: amountInUsd,
+              useScaleDown: true,
+              usdStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+              bsStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.78)),
             ),
           ],
         ),
@@ -306,24 +348,44 @@ class OrderFinancialCard extends StatelessWidget {
     return rate.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
-  Widget _buildRow(String label, String value, {required bool isBold, Color? valueColor}) {
+  Widget _buildRow(
+    String label, {
+    required double amountInUsd,
+    required bool isBold,
+    Color? valueColor,
+    String? prefix,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: isBold ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            fontSize: isBold ? 15 : 13,
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isBold ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: isBold ? 15 : 13,
+            ),
           ),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            color: valueColor ?? (isBold ? const Color(0xFF4F46E5) : const Color(0xFF0F172A)),
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
-            fontSize: isBold ? 17 : 13,
+        const SizedBox(width: 10),
+        Flexible(
+          child: DualPriceText(
+            amountInUsd: amountInUsd,
+            prefix: prefix,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            useScaleDown: true,
+            usdStyle: TextStyle(
+              color: valueColor ?? (isBold ? const Color(0xFF4F46E5) : const Color(0xFF0F172A)),
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+              fontSize: isBold ? 17 : 13,
+            ),
+            bsStyle: const TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+              fontSize: 11,
+            ),
           ),
         ),
       ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import '../receipt_image_viewer.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'order_detail_helpers.dart';
@@ -10,6 +11,9 @@ import 'refund_required_card.dart';
 class OrderPaymentsCard extends StatelessWidget {
   final Order order;
   final bool isUpdating;
+  final bool canApproveInstallments;
+  final bool canRejectInstallments;
+  final bool canProcessOrders;
   final ValueChanged<Payment>? onApprovePayment;
   final ValueChanged<Payment>? onRejectPayment;
   final ValueChanged<Payment>? onRefundPayment;
@@ -19,6 +23,9 @@ class OrderPaymentsCard extends StatelessWidget {
     super.key,
     required this.order,
     this.isUpdating = false,
+    this.canApproveInstallments = true,
+    this.canRejectInstallments = true,
+    this.canProcessOrders = true,
     this.onApprovePayment,
     this.onRejectPayment,
     this.onRefundPayment,
@@ -152,12 +159,22 @@ class OrderPaymentsCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '\$${payment.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: Color(0xFF0F172A),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 118),
+                    child: DualPriceText(
+                      amountInUsd: payment.amount,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      useScaleDown: true,
+                      usdStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: Color(0xFF0F172A),
+                      ),
+                      bsStyle: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
                 ],
@@ -297,21 +314,51 @@ class OrderPaymentsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            isSufficient ? Icons.check_circle_outline : Icons.error_outline_rounded,
-                            size: 14,
-                            color: isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: Icon(
+                              isSufficient ? Icons.check_circle_outline : Icons.error_outline_rounded,
+                              size: 14,
+                              color: isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                            ),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            isSufficient
-                                ? 'Monto suficiente ✓  (mínimo \$${installmentCtx.minRequired.toStringAsFixed(2)})'
-                                : 'Monto insuficiente — requiere \$${installmentCtx.minRequired.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  isSufficient
+                                      ? 'Monto suficiente ✓ (mínimo'
+                                      : 'Monto insuficiente — requiere',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                                  ),
+                                ),
+                                DualPriceText(
+                                  amountInUsd: installmentCtx.minRequired,
+                                  suffix: isSufficient ? ')' : null,
+                                  isInline: true,
+                                  useScaleDown: true,
+                                  usdStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626),
+                                  ),
+                                  bsStyle: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: (isSufficient ? const Color(0xFF15803D) : const Color(0xFFDC2626))
+                                        .withValues(alpha: 0.78),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -421,36 +468,62 @@ class OrderPaymentsCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: Color(0xFFF1F5F9)),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: isUpdating ? null : () => onRejectPayment?.call(payment),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFDC2626),
-                        side: const BorderSide(color: Color(0xFFFCA5A5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      ),
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Rechazar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                if ((canRejectInstallments && onRejectPayment != null) ||
+                    (canApproveInstallments && onApprovePayment != null))
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        if (canRejectInstallments && onRejectPayment != null)
+                          OutlinedButton.icon(
+                            onPressed: isUpdating ? null : () => onRejectPayment?.call(payment),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(color: Color(0xFFFCA5A5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                            label: const Text('Rechazar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        if (canApproveInstallments && onApprovePayment != null)
+                          ElevatedButton.icon(
+                            onPressed: isUpdating ? null : () => onApprovePayment?.call(payment),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(0, 40),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              elevation: 0,
+                            ),
+                            icon: const Icon(Icons.check_rounded, size: 16),
+                            label: const Text('Aprobar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: isUpdating ? null : () => onApprovePayment?.call(payment),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 40),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        elevation: 0,
-                      ),
-                      icon: const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('Aprobar Pago', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                  ],
-                ),
+                    child: const Text(
+                      'Requiere permiso para verificar este comprobante',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
               ],
 
               // Reembolso requerido si la orden fue cancelada y el pago está pendiente/en revisión o esperando confirmación
@@ -459,6 +532,7 @@ class OrderPaymentsCard extends StatelessWidget {
                   order: order,
                   payment: payment,
                   isUpdating: isUpdating,
+                  canProcessOrders: canProcessOrders,
                   onProcessRefund: () => onRefundPayment?.call(payment),
                   onMarkPaymentNotReceived: () => onMarkPaymentNotReceived?.call(payment),
                 ),
@@ -606,15 +680,39 @@ class _PaymentImpactPreviewState extends State<PaymentImpactPreview> {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            isPaid
-                                ? 'Cuota ${impact.index + 1} → PAGADA (\$${installment.amount.toStringAsFixed(2)})'
-                                : 'Cuota ${impact.index + 1} → queda \$${impact.remaining.toStringAsFixed(2)} pendiente',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isPaid ? const Color(0xFF065F46) : const Color(0xFF92400E),
-                            ),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                isPaid
+                                    ? 'Cuota ${impact.index + 1} → PAGADA ('
+                                    : 'Cuota ${impact.index + 1} → queda',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isPaid ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                                ),
+                              ),
+                              DualPriceText(
+                                amountInUsd: isPaid ? installment.amount : impact.remaining,
+                                suffix: isPaid ? ')' : ' pendiente',
+                                isInline: true,
+                                useScaleDown: true,
+                                usdStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isPaid ? const Color(0xFF065F46) : const Color(0xFF92400E),
+                                ),
+                                bsStyle: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: (isPaid ? const Color(0xFF065F46) : const Color(0xFF92400E))
+                                      .withValues(alpha: 0.78),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

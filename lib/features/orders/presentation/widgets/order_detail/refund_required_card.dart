@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
 import 'package:tu_lojita_business/features/orders/presentation/providers/dispute_providers.dart';
 import 'order_dispute_bottom_sheet.dart';
@@ -11,6 +12,7 @@ class RefundRequiredCard extends ConsumerWidget {
   final Order order;
   final Payment payment;
   final bool isUpdating;
+  final bool canProcessOrders;
   final VoidCallback? onProcessRefund;
   final VoidCallback? onMarkPaymentNotReceived;
 
@@ -19,6 +21,7 @@ class RefundRequiredCard extends ConsumerWidget {
     required this.order,
     required this.payment,
     this.isUpdating = false,
+    this.canProcessOrders = true,
     this.onProcessRefund,
     this.onMarkPaymentNotReceived,
   });
@@ -89,10 +92,26 @@ class RefundRequiredCard extends ConsumerWidget {
                     ),
                     Text(
                       isPendingConfirmation
-                          ? 'Se notificó al cliente. Esperando que confirme la recepción de \$${payment.amount.toStringAsFixed(2)}.'
-                          : 'El cliente canceló la orden tras reportar \$${payment.amount.toStringAsFixed(2)}',
+                          ? 'Se notificó al cliente. Esperando confirmación de recepción por:'
+                          : 'El cliente canceló la orden tras reportar:',
                       style: TextStyle(
                         fontSize: 11.5,
+                        color: isPendingConfirmation ? const Color(0xFF3B82F6) : const Color(0xFFB45309),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    DualPriceText(
+                      amountInUsd: payment.amount,
+                      isInline: true,
+                      useScaleDown: true,
+                      usdStyle: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: isPendingConfirmation ? const Color(0xFF1E40AF) : const Color(0xFF92400E),
+                      ),
+                      bsStyle: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
                         color: isPendingConfirmation ? const Color(0xFF3B82F6) : const Color(0xFFB45309),
                       ),
                     ),
@@ -210,7 +229,7 @@ class RefundRequiredCard extends ConsumerWidget {
           ),
 
           // Botón de acción para registrar el reembolso (solo antes de emitirlo)
-          if (!isPendingConfirmation) ...[
+          if (!isPendingConfirmation && canProcessOrders) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -244,6 +263,25 @@ class RefundRequiredCard extends ConsumerWidget {
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                   ),
+                ),
+              ),
+            ),
+          ] else if (!isPendingConfirmation && !canProcessOrders) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Text(
+                'Requiere permiso de gestión de pedidos para registrar reembolsos',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF92400E),
                 ),
               ),
             ),
@@ -302,7 +340,7 @@ class RefundRequiredCard extends ConsumerWidget {
 
           // Opciones alternativas: Pago no recibido y Mutuo acuerdo
           // Opción alternativa: Declarar pago no recibido
-          if (!isPendingConfirmation) ...[
+          if (!isPendingConfirmation && canProcessOrders) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/core/utils/date_utils.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import '../../domain/entities/order.dart';
 import '../../domain/entities/order_item.dart';
 import '../../domain/entities/order_dispute.dart';
@@ -12,6 +14,7 @@ class OrderCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool hasActiveDispute;
   final bool hasUnreadDispute;
+  final bool canViewCustomerData;
   final VoidCallback? onChatTap;
   final VoidCallback? onDisputeTap;
 
@@ -21,6 +24,7 @@ class OrderCard extends StatelessWidget {
     required this.onTap,
     this.hasActiveDispute = false,
     this.hasUnreadDispute = false,
+    this.canViewCustomerData = true,
     this.onChatTap,
     this.onDisputeTap,
   });
@@ -29,12 +33,20 @@ class OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeDispute = order.activeDispute;
     final isDisputed = hasActiveDispute || activeDispute != null;
+    final hasPendingReceipt = !order.isCancelled &&
+        order.payments.any(
+          (p) => p.status.toUpperCase() == 'WAITING_VERIFICATION',
+        );
+    final hasPendingExtension =
+        order.installments.any((i) => i.extensionStatus == 'PENDING');
 
     final customerName = order.user?['firstName'] != null
         ? '${order.user!['firstName']} ${order.user!['lastName'] ?? ''}'.trim()
         : 'Cliente';
-    final customerPhone = order.user?['phone']?.toString();
-    final customerAvatar = order.user?['avatar']?.toString() ??
+    final rawPhone = order.user?['phone']?.toString();
+    final customerPhone = canViewCustomerData ? rawPhone : null;
+    final customerAvatar = order.user?['avatarUrl']?.toString() ??
+        order.user?['avatar']?.toString() ??
         order.user?['profileImage']?.toString();
 
     final firstItem = order.orderItems.isNotEmpty ? order.orderItems.first : null;
@@ -52,30 +64,27 @@ class OrderCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: TuLojitaBrandColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDisputed
               ? const Color(0xFFFCA5A5)
-              : const Color(0xFFF1F5F9),
-          width: isDisputed ? 1.8 : 1.4,
+              : (hasPendingReceipt
+                  ? TuLojitaBrandColors.amber400
+                  : TuLojitaBrandColors.borderSubtle),
+          width: (isDisputed || hasPendingReceipt) ? 1.6 : 1.4,
         ),
         boxShadow: [
           if (isDisputed)
             BoxShadow(
-              color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+              color: TuLojitaBrandColors.danger.withValues(alpha: 0.08),
               blurRadius: 14,
               offset: const Offset(0, 4),
             ),
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+            color: TuLojitaBrandColors.inkPrimary.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.01),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -85,40 +94,66 @@ class OrderCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            splashColor: const Color(0xFF4F46E5).withValues(alpha: 0.04),
-            highlightColor: const Color(0xFF4F46E5).withValues(alpha: 0.01),
+            splashColor: TuLojitaBrandColors.indigo600.withValues(alpha: 0.04),
+            highlightColor:
+                TuLojitaBrandColors.indigo600.withValues(alpha: 0.01),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Cabecera: ID, chips de reclamo y estado
                   _buildHeaderRow(isDisputed, activeDispute),
-
                   const SizedBox(height: 12),
-
-                  // 2. Previa del Producto con Miniatura
                   _buildProductPreview(firstItem, imageUrl),
-
                   const SizedBox(height: 12),
-
-                  // 3. Resumen del Cliente y Pills de contexto (Envío / Pago)
-                  _buildCustomerAndPillsRow(customerName, customerPhone, customerAvatar, paymentMethod),
-
-                  // 4. Banner de Reclamo Activo (si aplica)
+                  _buildCustomerAndPillsRow(
+                    customerName,
+                    customerPhone,
+                    customerAvatar,
+                    paymentMethod,
+                  ),
+                  if (hasPendingReceipt ||
+                      hasPendingExtension ||
+                      order.balance > 0) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (hasPendingReceipt)
+                          const _OperationalBadgeChip(
+                            icon: Icons.fact_check_rounded,
+                            label: 'Comprobante en revisión',
+                            bgColor: TuLojitaBrandColors.amber50,
+                            borderColor: TuLojitaBrandColors.amber400,
+                            textColor: TuLojitaBrandColors.amber800,
+                          ),
+                        if (hasPendingExtension)
+                          const _OperationalBadgeChip(
+                            icon: Icons.more_time_rounded,
+                            label: 'Prórroga pendiente',
+                            bgColor: TuLojitaBrandColors.indigo50,
+                            borderColor: TuLojitaBrandColors.indigo100,
+                            textColor: TuLojitaBrandColors.indigo700,
+                          ),
+                        if (order.balance > 0 && !order.isCancelled)
+                          const _OperationalBadgeChip(
+                            icon: Icons.account_balance_wallet_outlined,
+                            label: 'Saldo pendiente',
+                            bgColor: Color(0xFFFFF7ED),
+                            borderColor: Color(0xFFFED7AA),
+                            textColor: Color(0xFFC2410C),
+                          ),
+                      ],
+                    ),
+                  ],
                   if (isDisputed && activeDispute != null) ...[
                     const SizedBox(height: 12),
                     _buildDisputeNoticeBanner(activeDispute),
                   ],
-
                   const SizedBox(height: 14),
-
-                  // 5. Separador
-                  Container(height: 1, color: const Color(0xFFF1F5F9)),
-
+                  Container(height: 1, color: TuLojitaBrandColors.borderSubtle),
                   const SizedBox(height: 12),
-
-                  // 6. Barra inferior: Total y Botones de Acción Rápida
                   _buildFooterActionsRow(context, isDisputed),
                 ],
               ),
@@ -129,52 +164,58 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  /// Fila superior con ID de orden, chip de estado del reclamo y estado de orden
+  /// Fila superior con ID de orden y chips de estado con ajuste seguro a 320px @ 1.35x.
   Widget _buildHeaderRow(bool isDisputed, OrderDispute? activeDispute) {
     final orderShortId = order.id.length > 8
         ? order.id.substring(0, 8).toUpperCase()
         : order.id.toUpperCase();
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(8),
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: TuLojitaBrandColors.borderSubtle,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedInvoice01,
+                  color: TuLojitaBrandColors.inkSecondary,
+                  size: 14,
+                ),
               ),
-              child: const HugeIcon(
-                icon: HugeIcons.strokeRoundedInvoice01,
-                color: Color(0xFF64748B),
-                size: 14,
+              const SizedBox(width: 8),
+              Text(
+                '#$orderShortId',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: TuLojitaBrandColors.inkPrimary,
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '#$orderShortId',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-                fontSize: 13,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isDisputed) ...[
-              _buildDisputeStatusChip(activeDispute),
-              const SizedBox(width: 6),
             ],
-            _buildStatusChip(order.status),
-          ],
-        ),
-      ],
+          ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (isDisputed) _buildDisputeStatusChip(activeDispute),
+              _buildStatusChip(order.status),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -187,9 +228,9 @@ class OrderCard extends StatelessWidget {
     IconData icon;
 
     if (dispute == null || dispute.status == DisputeStatus.open) {
-      bg = const Color(0xFFFEF2F2);
+      bg = TuLojitaBrandColors.dangerBg;
       border = const Color(0xFFFCA5A5);
-      text = const Color(0xFFDC2626);
+      text = TuLojitaBrandColors.danger;
       label = 'Reclamo Abierto';
       icon = Icons.gavel_rounded;
     } else if (dispute.status == DisputeStatus.merchantResponded) {
@@ -205,9 +246,9 @@ class OrderCard extends StatelessWidget {
       label = 'En Mediación';
       icon = Icons.shield_outlined;
     } else {
-      bg = const Color(0xFFF0FDF4);
+      bg = TuLojitaBrandColors.positiveBg;
       border = const Color(0xFFBBF7D0);
-      text = const Color(0xFF16A34A);
+      text = TuLojitaBrandColors.positive;
       label = 'Reclamo Resuelto';
       icon = Icons.check_circle_outline_rounded;
     }
@@ -224,12 +265,16 @@ class OrderCard extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: text),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: text,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: text,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           if (hasUnreadDispute) ...[
@@ -254,7 +299,6 @@ class OrderCard extends StatelessWidget {
 
     return Row(
       children: [
-        // Miniatura
         Stack(
           children: [
             ClipRRect(
@@ -262,13 +306,14 @@ class OrderCard extends StatelessWidget {
               child: Container(
                 width: 52,
                 height: 52,
-                color: const Color(0xFFF8FAFC),
+                color: TuLojitaBrandColors.canvas,
                 child: imageUrl.isNotEmpty
                     ? Image.network(
                         imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _buildPlaceholder(),
-                        loadingBuilder: (_, child, progress) {
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildPlaceholder(),
+                        loadingBuilder: (context, child, progress) {
                           if (progress == null) return child;
                           return const Center(
                             child: SizedBox(
@@ -290,7 +335,8 @@ class OrderCard extends StatelessWidget {
                 right: 3,
                 bottom: 3,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.72),
                     borderRadius: BorderRadius.circular(6),
@@ -308,7 +354,6 @@ class OrderCard extends StatelessWidget {
           ],
         ),
         const SizedBox(width: 12),
-        // Nombre y detalles del ítem
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,25 +363,26 @@ class OrderCard extends StatelessWidget {
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
-                  color: Color(0xFF0F172A),
+                  color: TuLojitaBrandColors.inkPrimary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     '$itemCount artículo${itemCount != 1 ? 's' : ''}',
                     style: const TextStyle(
-                      color: Color(0xFF64748B),
+                      color: TuLojitaBrandColors.inkSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 6),
                   const Text('•', style: TextStyle(color: Color(0xFFCBD5E1))),
-                  const SizedBox(width: 6),
                   Text(
                     order.createdAt.toShortDateString(),
                     style: const TextStyle(
@@ -344,24 +390,23 @@ class OrderCard extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                  if (order.isPartialPayment || order.feeAmount > 0) ...[
-                    const SizedBox(width: 8),
+                  if (order.isPartialPayment || order.feeAmount > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEEF2FF),
+                        color: TuLojitaBrandColors.indigo50,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
                         'Cuotas',
                         style: TextStyle(
-                          color: Color(0xFF4F46E5),
+                          color: TuLojitaBrandColors.indigo600,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ],
@@ -371,19 +416,20 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  /// Información del cliente con avatar y pills de contexto
+  /// Información del cliente (protegida según permiso) y badge de método de pago
   Widget _buildCustomerAndPillsRow(
     String customerName,
     String? customerPhone,
     String? customerAvatar,
     String? paymentMethod,
   ) {
+    final hasPhone = customerPhone != null && customerPhone.isNotEmpty;
+
     return Row(
       children: [
-        // Avatar circular
         CircleAvatar(
           radius: 12,
-          backgroundColor: const Color(0xFFEEF2FF),
+          backgroundColor: TuLojitaBrandColors.indigo50,
           backgroundImage: (customerAvatar != null && customerAvatar.isNotEmpty)
               ? NetworkImage(OrderDetailHelpers.resolveImageUrl(customerAvatar))
               : null,
@@ -391,7 +437,7 @@ class OrderCard extends StatelessWidget {
               ? Text(
                   customerName.isNotEmpty ? customerName[0].toUpperCase() : 'C',
                   style: const TextStyle(
-                    color: Color(0xFF4F46E5),
+                    color: TuLojitaBrandColors.indigo600,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -400,57 +446,80 @@ class OrderCard extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Row(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 2,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Flexible(
-                child: Text(
-                  customerName,
-                  style: const TextStyle(
-                    color: Color(0xFF334155),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+              Text(
+                customerName,
+                style: const TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (hasPhone)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('•', style: TextStyle(color: Color(0xFFCBD5E1))),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.phone_rounded,
+                      size: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        customerPhone,
+                        style: const TextStyle(
+                          color: TuLojitaBrandColors.inkSecondary,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                )
+              else if (!canViewCustomerData)
+                const Text(
+                  '• Contacto protegido',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (customerPhone != null && customerPhone.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                const Text('•', style: TextStyle(color: Color(0xFFCBD5E1))),
-                const SizedBox(width: 6),
-                Icon(Icons.phone_rounded, size: 11, color: const Color(0xFF94A3B8)),
-                const SizedBox(width: 3),
-                Flexible(
-                  child: Text(
-                    customerPhone,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 11,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
-              ],
             ],
           ),
         ),
-        // Badge de método de pago si existe
         if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
           const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Text(
-              _formatPaymentMethod(paymentMethod),
-              style: const TextStyle(
-                color: Color(0xFF475569),
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 116),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: TuLojitaBrandColors.canvas,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: TuLojitaBrandColors.borderMuted),
+              ),
+              child: Text(
+                OrderDetailHelpers.formatPaymentMethod(paymentMethod),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF475569),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -468,7 +537,7 @@ class OrderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isAwaitingMerchant
             ? const Color(0xFFFFF1F2)
-            : const Color(0xFFF0FDF4),
+            : TuLojitaBrandColors.positiveBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isAwaitingMerchant
@@ -479,11 +548,13 @@ class OrderCard extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isAwaitingMerchant ? Icons.error_outline_rounded : Icons.check_circle_outline,
+            isAwaitingMerchant
+                ? Icons.error_outline_rounded
+                : Icons.check_circle_outline,
             size: 16,
             color: isAwaitingMerchant
                 ? const Color(0xFFE11D48)
-                : const Color(0xFF16A34A),
+                : TuLojitaBrandColors.positive,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -507,115 +578,151 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  /// Barra inferior con Monto total y botones de acción rápida
+  /// Barra inferior con montos duales (Total, Base y Saldo) y acciones rápidas
   Widget _buildFooterActionsRow(BuildContext context, bool isDisputed) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Monto Total
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '\$${order.finalAmount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF4F46E5),
-                fontSize: 17,
-                letterSpacing: -0.2,
-              ),
-            ),
-            if (order.feeAmount > 0)
-              Text(
-                'Base: \$${order.totalAmount.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF94A3B8),
-                  fontWeight: FontWeight.w500,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DualPriceText(
+                amountInUsd: order.finalAmount,
+                useScaleDown: true,
+                usdStyle: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: TuLojitaBrandColors.indigo600,
+                  fontSize: 17,
+                  letterSpacing: -0.2,
+                ),
+                bsStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: TuLojitaBrandColors.inkSecondary,
                 ),
               ),
-          ],
+              if (order.feeAmount > 0) ...[
+                const SizedBox(height: 4),
+                DualPriceText(
+                  amountInUsd: order.totalAmount,
+                  prefix: 'Base: ',
+                  isInline: true,
+                  useScaleDown: true,
+                  usdStyle: const TextStyle(
+                    fontSize: 10.5,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  bsStyle: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              if (order.balance > 0 && !order.isCancelled) ...[
+                const SizedBox(height: 3),
+                DualPriceText(
+                  amountInUsd: order.balance,
+                  prefix: 'Saldo: ',
+                  isInline: true,
+                  useScaleDown: true,
+                  usdStyle: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFFC2410C),
+                    fontWeight: FontWeight.w700,
+                  ),
+                  bsStyle: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFFEA580C),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-        // Botones de acción rápida
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Botón de Chat rápido
-            if (onChatTap != null) ...[
-              InkWell(
-                onTap: onChatTap,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEF2FF),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (onChatTap != null)
+                Material(
+                  color: TuLojitaBrandColors.indigo50,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: onChatTap,
                     borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    children: [
-                      HugeIcon(
-                        icon: HugeIcons.strokeRoundedChat01,
-                        color: Color(0xFF4F46E5),
-                        size: 14,
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          HugeIcon(
+                            icon: HugeIcons.strokeRoundedChat01,
+                            color: TuLojitaBrandColors.indigo600,
+                            size: 14,
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'Chat',
+                            style: TextStyle(
+                              color: TuLojitaBrandColors.indigo600,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: 5),
-                      Text(
-                        'Chat',
-                        style: TextStyle(
-                          color: Color(0xFF4F46E5),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            // Botón de Gestionar Reclamo destacado
-            if (isDisputed && onDisputeTap != null) ...[
-              InkWell(
-                onTap: onDisputeTap,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
+              if (isDisputed && onDisputeTap != null)
+                Material(
+                  color: const Color(0xFFEF4444),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: onDisputeTap,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.25),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.gavel_rounded,
+                            color: Colors.white,
+                            size: 13,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Gestionar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.gavel_rounded, color: Colors.white, size: 13),
-                      SizedBox(width: 4),
-                      Text(
-                        'Gestionar',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                )
+              else
+                const HugeIcon(
+                  icon: HugeIcons.strokeRoundedArrowRight01,
+                  color: Color(0xFF94A3B8),
+                  size: 16,
                 ),
-              ),
-            ] else ...[
-              // Flecha para ver detalles
-              const HugeIcon(
-                icon: HugeIcons.strokeRoundedArrowRight01,
-                color: Color(0xFF94A3B8),
-                size: 16,
-              ),
             ],
-          ],
+          ),
         ),
       ],
     );
@@ -623,7 +730,7 @@ class OrderCard extends StatelessWidget {
 
   Widget _buildPlaceholder() {
     return Container(
-      color: const Color(0xFFF1F5F9),
+      color: TuLojitaBrandColors.borderSubtle,
       child: const Center(
         child: HugeIcon(
           icon: HugeIcons.strokeRoundedPackage,
@@ -635,48 +742,8 @@ class OrderCard extends StatelessWidget {
   }
 
   Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    String label;
-    IconData icon;
-
-    switch (status.toUpperCase()) {
-      case 'PENDING':
-        bgColor = const Color(0xFFFFF7ED);
-        textColor = const Color(0xFFC2410C);
-        label = 'Pendiente';
-        icon = Icons.hourglass_empty_rounded;
-        break;
-      case 'FULLY_PAID':
-        bgColor = const Color(0xFFECFDF5);
-        textColor = const Color(0xFF047857);
-        label = 'Pagado';
-        icon = Icons.check_circle_outline_rounded;
-        break;
-      case 'CANCELLED':
-        bgColor = const Color(0xFFFEF2F2);
-        textColor = const Color(0xFFB91C1C);
-        label = 'Cancelada';
-        icon = Icons.cancel_outlined;
-        break;
-      case 'REJECTED':
-        bgColor = const Color(0xFFFEF2F2);
-        textColor = const Color(0xFFDC2626);
-        label = 'Rechazada';
-        icon = Icons.cancel_outlined;
-        break;
-      case 'PARTIALLY_PAID':
-        bgColor = const Color(0xFFEFF6FF);
-        textColor = const Color(0xFF1D4ED8);
-        label = 'Abonado';
-        icon = Icons.payments_outlined;
-        break;
-      default:
-        bgColor = const Color(0xFFF8FAFC);
-        textColor = const Color(0xFF64748B);
-        label = status;
-        icon = Icons.circle_outlined;
-    }
+    final (bgColor, textColor, icon, label) =
+        OrderDetailHelpers.getStatusStyle(status);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -702,21 +769,51 @@ class OrderCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _formatPaymentMethod(String method) {
-    switch (method.toUpperCase()) {
-      case 'PAGO_MOVIL':
-        return 'Pago Móvil';
-      case 'ZELLE':
-        return 'Zelle';
-      case 'TRANSFERENCIA':
-        return 'Transferencia';
-      case 'EFECTIVO':
-        return 'Efectivo';
-      case 'CARD':
-        return 'Tarjeta';
-      default:
-        return method;
-    }
+class _OperationalBadgeChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color bgColor;
+  final Color borderColor;
+  final Color textColor;
+
+  const _OperationalBadgeChip({
+    required this.icon,
+    required this.label,
+    required this.bgColor,
+    required this.borderColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: textColor),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

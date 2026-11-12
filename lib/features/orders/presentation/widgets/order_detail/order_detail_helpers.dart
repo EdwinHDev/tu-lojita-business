@@ -8,6 +8,35 @@ import 'package:tu_lojita_business/core/utils/notification_service.dart';
 
 /// Funciones puras de cálculo de cuotas, normalización y comunicación para el detalle de órdenes.
 class OrderDetailHelpers {
+  /// Mapeo uniforme de códigos de método de pago del backend a etiquetas legibles en español.
+  static String formatPaymentMethod(String? method) {
+    final normalized = (method ?? '').trim().toUpperCase();
+    switch (normalized) {
+      case 'PAGO_MOVIL':
+        return 'Pago Móvil';
+      case 'TRANSFER':
+      case 'TRANSFERENCIA':
+      case 'BANK_TRANSFER':
+        return 'Transferencia';
+      case 'BINANCE':
+      case 'BINANCE_PAY':
+        return 'Binance Pay';
+      case 'ZELLE':
+        return 'Zelle';
+      case 'EFECTIVO':
+      case 'CASH':
+        return 'Efectivo';
+      case 'CASH_USD':
+        return 'Efectivo USD';
+      case 'CASH_BS':
+        return 'Efectivo Bs.';
+      case 'CARD':
+        return 'Tarjeta';
+      default:
+        return (method ?? '').trim().isNotEmpty ? method!.trim() : 'Otro';
+    }
+  }
+
   /// Resuelve la URL pública para imágenes de productos y comprobantes.
   static String resolveImageUrl(String path) {
     if (path.isEmpty) return '';
