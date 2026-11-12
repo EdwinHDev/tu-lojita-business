@@ -232,7 +232,8 @@ class StoreSuspensionBannerCard extends StatelessWidget {
                 SizedBox(height: 4),
                 _StepLine(
                   step: '2',
-                  text: 'Transfiere el monto en USD o Bs. y reporta tu comprobante.',
+                  text:
+                      'Paga en Bolívares según la tasa del día y reporta tu comprobante.',
                 ),
                 SizedBox(height: 4),
                 _StepLine(

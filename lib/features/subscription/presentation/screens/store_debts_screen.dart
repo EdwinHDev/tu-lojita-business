@@ -284,7 +284,7 @@ class _StoreDebtsScreenState extends ConsumerState<StoreDebtsScreen> {
             const _SectionHeader(
               title: '¿Cómo y dónde pagar?',
               subtitle:
-                  'Copia los datos de una cuenta oficial, realiza el pago y adjunta tu comprobante.',
+                  'Copia los datos de una cuenta oficial, paga el monto en Bolívares según la tasa del día y adjunta tu comprobante.',
             ),
             const SizedBox(height: 10),
             if (methods.isEmpty)
@@ -446,7 +446,7 @@ class _ContextualStatusBanner extends StatelessWidget {
         accentColor: TuLojitaBrandColors.danger,
         title: 'TIENDA SUSPENDIDA POR MORA',
         body:
-            'Tu catálogo y productos están ocultos del público por facturas vencidas.\n1. Elige una cuenta oficial abajo y transfiere el total.\n2. Adjunta tu comprobante con el botón de pago.\n3. Al aprobarse el monto total, tu tienda se reactiva automáticamente.',
+            'Tu catálogo y productos están ocultos del público por facturas vencidas.\n1. Elige una cuenta oficial abajo y paga el monto en Bolívares según la tasa del día.\n2. Adjunta tu comprobante con el botón de pago.\n3. Al aprobarse el monto total, tu tienda se reactiva automáticamente.',
       );
     }
 
@@ -1524,6 +1524,15 @@ class _ReportCommissionPaymentModalState
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'El pago se realiza en Bolívares según la tasa vigente del día.',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: TuLojitaBrandColors.inkSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<PlatformPaymentMethod>(

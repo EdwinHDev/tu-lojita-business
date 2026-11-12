@@ -320,6 +320,13 @@ void main() {
         );
         expect(find.text('Pagar y reactivar'), findsOneWidget);
         expect(find.textContaining('33,00'), findsWidgets);
+        expect(
+          find.text(
+            'Paga en Bolívares según la tasa del día y reporta tu comprobante.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('en USD o Bs.'), findsNothing);
         // Strip keeps pending orders but avoids duplicate Deuda pill
         expect(find.text('1 orden pendiente'), findsOneWidget);
         expect(find.textContaining('Deuda:'), findsNothing);
