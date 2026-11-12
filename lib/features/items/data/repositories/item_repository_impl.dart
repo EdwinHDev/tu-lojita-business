@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../domain/entities/item.dart';
+import '../../domain/entities/item_owner_stats.dart';
 import '../../domain/entities/property_template.dart';
 import '../../domain/repositories/item_repository.dart';
 import '../models/item_model.dart';
@@ -33,6 +34,19 @@ class ItemRepositoryImpl implements ItemRepository {
           ? response.data
           : Map<String, dynamic>.from(response.data as Map);
       return ItemModel.fromJson(data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
+  Future<ItemOwnerStats> getItemOwnerStats(String id) async {
+    try {
+      final response = await _dio.get('/items/$id/owner-stats');
+      final data = response.data is Map<String, dynamic>
+          ? response.data
+          : Map<String, dynamic>.from(response.data as Map);
+      return ItemOwnerStats.fromJson(data);
     } catch (e) {
       rethrow;
     }
@@ -95,13 +109,32 @@ class ItemRepositoryImpl implements ItemRepository {
   }) async {
     List<String> uploadedIds = [];
     try {
-      // 1. Upload images to images-processor in bulk
-      final uploadResults = await _uploadImagesBulk(images, mainImageIndex);
-      uploadedIds = uploadResults.map((e) => e['id'] as String).toList();
-      final imageUrls = uploadResults.map((e) => e['url'] as String).toList();
-      
+      final existingUrls = (itemData.remove('existingImages') as List?)
+              ?.map((e) => e.toString())
+              .where((u) => u.isNotEmpty)
+              .toList() ??
+          [];
+
+      // 1. Upload new images to images-processor in bulk if provided
+      List<String> newImageUrls = [];
+      if (images.isNotEmpty) {
+        final uploadResults = await _uploadImagesBulk(images, 0);
+        uploadedIds = uploadResults.map((e) => e['id'] as String).toList();
+        newImageUrls = uploadResults.map((e) => e['url'] as String).toList();
+      }
+
+      final imageUrls = [...existingUrls, ...newImageUrls];
+      if (imageUrls.isEmpty) {
+        throw Exception('Debes tener al menos una imagen');
+      }
+
+      final safeMainIdx =
+          mainImageIndex >= 0 && mainImageIndex < imageUrls.length
+              ? mainImageIndex
+              : 0;
+
       // 2. Add URLs and Main Image to itemData
-      itemData['mainImage'] = imageUrls[mainImageIndex];
+      itemData['mainImage'] = imageUrls[safeMainIdx];
       itemData['images'] = imageUrls;
 
       _replaceImageIndices(itemData, imageUrls);

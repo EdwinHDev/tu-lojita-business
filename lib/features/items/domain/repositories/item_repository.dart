@@ -1,10 +1,12 @@
 import '../entities/item.dart';
+import '../entities/item_owner_stats.dart';
 import '../entities/property_template.dart';
 import 'dart:io';
 
 abstract class ItemRepository {
   Future<List<Item>> getItemsByStore(String storeId);
   Future<Item> getItemById(String id);
+  Future<ItemOwnerStats> getItemOwnerStats(String id);
   
   Future<({List<Item> items, int total})> getItemsPaginated({
     required String storeId,

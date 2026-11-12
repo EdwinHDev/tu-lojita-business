@@ -18,6 +18,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/providers/sto
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_settings_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/store_settings_screen.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item_owner_stats.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 import 'package:tu_lojita_business/features/items/domain/repositories/item_repository.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_form_provider.dart';
@@ -701,6 +702,10 @@ class _StubItemRepository implements ItemRepository {
 
   @override
   Future<Item> getItemById(String id) => throw UnimplementedError();
+
+  @override
+  Future<ItemOwnerStats> getItemOwnerStats(String id) async =>
+      const ItemOwnerStats();
 
   @override
   Future<List<Item>> getItemsByStore(String storeId) async => [];

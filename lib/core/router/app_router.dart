@@ -263,8 +263,23 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'new',
                     builder: (context, state) {
                       final storeId = state.pathParameters['storeId']!;
-                      final item = state.extra is Item ? state.extra as Item : null;
-                      return ItemFormScreen(storeId: storeId, item: item);
+                      final extra = state.extra;
+                      Item? item;
+                      Item? duplicateFrom;
+                      if (extra is Item) {
+                        item = extra;
+                      } else if (extra is Map<String, dynamic>) {
+                        if (extra['duplicateFrom'] is Item) {
+                          duplicateFrom = extra['duplicateFrom'] as Item;
+                        } else if (extra['item'] is Item) {
+                          item = extra['item'] as Item;
+                        }
+                      }
+                      return ItemFormScreen(
+                        storeId: storeId,
+                        item: item,
+                        duplicateFrom: duplicateFrom,
+                      );
                     },
                   ),
                   GoRoute(

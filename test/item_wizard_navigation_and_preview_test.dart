@@ -8,6 +8,7 @@ import 'package:tu_lojita_business/features/dashboard/domain/entities/store_cate
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item_owner_stats.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 import 'package:tu_lojita_business/features/items/domain/repositories/item_repository.dart';
 import 'package:tu_lojita_business/features/items/presentation/screens/item_form_screen.dart';
@@ -180,6 +181,10 @@ class _MockItemRepository implements ItemRepository {
 
   @override
   Future<void> deleteItem(String id) async {}
+
+  @override
+  Future<ItemOwnerStats> getItemOwnerStats(String id) async =>
+      const ItemOwnerStats();
 
   @override
   Future<List<Item>> getItemsByStore(String storeId) async => [];

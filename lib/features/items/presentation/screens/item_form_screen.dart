@@ -20,8 +20,14 @@ import '../widgets/promote_item_sheet.dart';
 class ItemFormScreen extends ConsumerStatefulWidget {
   final String storeId;
   final Item? item;
+  final Item? duplicateFrom;
 
-  const ItemFormScreen({super.key, required this.storeId, this.item});
+  const ItemFormScreen({
+    super.key,
+    required this.storeId,
+    this.item,
+    this.duplicateFrom,
+  });
 
   @override
   ConsumerState<ItemFormScreen> createState() => _ItemFormScreenState();
@@ -62,6 +68,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
       if (widget.item != null) {
         ref.read(itemFormProvider.notifier).initForEditing(widget.item!);
         // In editing mode, allow jumping freely between all steps
+        setState(() => _maxVisitedStep = 3);
+      } else if (widget.duplicateFrom != null) {
+        ref.read(itemFormProvider.notifier).initForDuplicating(widget.duplicateFrom!);
+        // Prefilled duplicate allows jumping between steps right away
         setState(() => _maxVisitedStep = 3);
       }
       ref.read(storeDetailsProvider.notifier).loadData(widget.storeId);
@@ -299,7 +309,7 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
           title: Text(
-            '${widget.item != null ? 'Editar' : 'Nuevo'} ${state.itemType == ItemType.product ? 'Producto' : 'Servicio'}',
+            '${widget.item != null ? 'Editar' : (widget.duplicateFrom != null ? 'Duplicar' : 'Nuevo')} ${state.itemType == ItemType.product ? 'Producto' : 'Servicio'}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
           backgroundColor: Colors.white,

@@ -186,9 +186,10 @@ class ItemFormState {
     bool? isLoading,
     bool? isLoadingTemplates,
     String? errorMessage,
-    bool? isSuccess,
+    bool isSuccess = false,
     Item? createdItem,
     String? itemId,
+    bool clearItemId = false,
     String? title,
     String? description,
     double? price,
@@ -222,9 +223,9 @@ class ItemFormState {
       isLoading: isLoading ?? this.isLoading,
       isLoadingTemplates: isLoadingTemplates ?? this.isLoadingTemplates,
       errorMessage: errorMessage,
-      isSuccess: isSuccess ?? this.isSuccess,
+      isSuccess: isSuccess,
       createdItem: createdItem ?? this.createdItem,
-      itemId: itemId ?? this.itemId,
+      itemId: clearItemId ? null : (itemId ?? this.itemId),
       title: title ?? this.title,
       description: description ?? this.description,
       price: price ?? this.price,
@@ -276,6 +277,40 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void initForEditing(Item item) {
     initFromItem(item);
     loadFullItem(item.id);
+  }
+
+  /// Prefills the creation wizard as a brand-new item (`itemId == null`) based
+  /// on an existing source item.
+  void initForDuplicating(Item item) {
+    initFromItem(item);
+    final rawTitle = item.title.trim();
+    const suffix = ' (Copia)';
+    final maxBaseLength = 60 - suffix.length;
+    final baseTitle = rawTitle.length > maxBaseLength
+        ? rawTitle.substring(0, maxBaseLength).trimRight()
+        : rawTitle;
+    final clonedVariants = state.variants
+        .map(
+          (v) => ItemVariant(
+            basePrice: v.basePrice,
+            commissionRate: v.commissionRate,
+            commissionAmount: v.commissionAmount,
+            price: v.price,
+            discountPrice: v.discountPrice,
+            stockQuantity: v.stockQuantity,
+            isActive: v.isActive,
+            axisValues: Map<String, String>.from(v.axisValues),
+            imageUrl: v.imageUrl,
+          ),
+        )
+        .toList();
+    state = state.copyWith(
+      clearItemId: true,
+      title: '$baseTitle$suffix',
+      variants: clonedVariants,
+      selectedImages: const [],
+      deletedImages: const [],
+    );
   }
 
   Future<void> loadFullItem(String itemId) async {

@@ -97,6 +97,22 @@ final itemPromotionProvider =
   () => ItemPromotionNotifier(),
 );
 
+/// Isolated per-item live promotion status provider for detail cards.
+final itemPromotionByItemProvider =
+    FutureProvider.autoDispose.family<ItemPromotionInfo?, String>(
+  (ref, itemId) async {
+    if (itemId.isEmpty) return null;
+    final dio = ref.watch(dioProvider);
+    final res = await dio.get('/items/$itemId/promotion-status');
+    if (res.data == null) return null;
+    final data = res.data is Map<String, dynamic>
+        ? res.data as Map<String, dynamic>
+        : Map<String, dynamic>.from(res.data as Map);
+    return ItemPromotionInfo.fromJson(data);
+  },
+  retry: (retryCount, error) => null,
+);
+
 class ItemPromotionNotifier extends Notifier<ItemPromotionState> {
   @override
   ItemPromotionState build() {
