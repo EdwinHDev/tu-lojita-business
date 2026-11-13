@@ -17,11 +17,16 @@ abstract final class TuLojitaBrandColors {
   static const Color amber50 = Color(0xFFFFFBEB);
 
   static const Color canvas = Color(0xFFF8FAFC);
+  static const Color background = canvas;
   static const Color surface = Color(0xFFFFFFFF);
   static const Color borderSubtle = Color(0xFFF1F5F9);
   static const Color borderMuted = Color(0xFFE2E8F0);
   static const Color inkPrimary = Color(0xFF0F172A);
   static const Color inkSecondary = Color(0xFF64748B);
+  static const Color inkMuted = inkSecondary;
+
+  static const Color primary = indigo600;
+  static const Color primarySoft = indigo50;
 
   static const Color positive = Color(0xFF047857);
   static const Color positiveBg = Color(0xFFECFDF5);

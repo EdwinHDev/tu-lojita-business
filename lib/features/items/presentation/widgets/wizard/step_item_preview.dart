@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/config/envs.dart';
+import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_form_provider.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/wizard/wizard_contextual_help.dart';
 
 class StepItemPreview extends ConsumerStatefulWidget {
   final String storeId;
+  final ValueChanged<int>? onJumpToStep;
 
   const StepItemPreview({
     super.key,
     required this.storeId,
+    this.onJumpToStep,
   });
 
   @override
@@ -507,12 +512,23 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
     final double totalSimulatedPrice = state.hasVariants
         ? (totalVariantsPrice > 0 ? (totalVariantsPrice + extraPrice) : (activePrice + extraPrice))
         : ((activePrice * _quantity) + extraPrice);
+    final exchangeConfig = ref.watch(exchangeRateProvider).asData?.value;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Resumen del Propietario y Diagnóstico de Publicación
+          _buildOwnerReadinessCard(
+            state: state,
+            activeBasePrice: activeBasePrice,
+            activePrice: activePrice,
+            isServiceWithSlots: isServiceWithSlots,
+            isPreOrderProduct: isPreOrderProduct,
+          ),
+          const SizedBox(height: 16),
+
           // Banner de aviso de previsualización
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -623,9 +639,10 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                       const SizedBox(height: 12),
 
                       // Precios y Descuentos
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           Text(
                             state.priceType == PriceType.free
@@ -640,7 +657,6 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                             ),
                           ),
                           if (originalPrice != null && originalPrice > activePrice) ...[
-                            const SizedBox(width: 10),
                             Text(
                               '\$${originalPrice.toStringAsFixed(2)}',
                               style: const TextStyle(
@@ -650,7 +666,6 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
@@ -669,6 +684,11 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                           ],
                         ],
                       ),
+                      if (state.priceType != PriceType.free && activePrice > 0)
+                        WizardLiveBcvHelper(
+                          key: const Key('wizard_preview_main_price_bcv_helper'),
+                          amountInUsd: activePrice,
+                        ),
 
                       // Pagos en cuotas
                       if (state.allowInstallments && activePrice > 0) ...[
@@ -689,12 +709,14 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                 color: Color(0xFF16A34A),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                'Disponible en cuotas flexibles (+multa por retraso: ${state.lateFeePercentage.toStringAsFixed(0)}%)',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF15803D),
+                              Flexible(
+                                child: Text(
+                                  'Disponible en cuotas flexibles (+multa por retraso: ${state.lateFeePercentage.toStringAsFixed(0)}%)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF15803D),
+                                  ),
                                 ),
                               ),
                             ],
@@ -814,7 +836,11 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                     ),
                                     subtitle: Text(
                                       opt.price > 0
-                                          ? '+ \$${opt.price.toStringAsFixed(2)}'
+                                          ? formatWizardDualInline(
+                                              exchangeConfig,
+                                              opt.price,
+                                              usdPrefix: '+ \$',
+                                            )
                                           : 'Incluido',
                                       style: TextStyle(
                                         fontSize: 12,
@@ -1084,12 +1110,32 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                                 ],
                               ),
                             ),
-                            Text(
-                              '\$${totalSimulatedPrice.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '\$${totalSimulatedPrice.toStringAsFixed(2)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  if (totalSimulatedPrice > 0)
+                                    WizardLiveBcvHelper(
+                                      key: const Key('wizard_preview_total_bcv'),
+                                      amountInUsd: totalSimulatedPrice,
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF4F46E5),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
@@ -1179,6 +1225,274 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // --- RESUMEN DEL PROPIETARIO Y DIAGNÓSTICO DE PUBLICACIÓN ---
+  Widget _buildOwnerReadinessCard({
+    required ItemFormState state,
+    required double activeBasePrice,
+    required double activePrice,
+    required bool isServiceWithSlots,
+    required bool isPreOrderProduct,
+  }) {
+    final isService = state.itemType == ItemType.service;
+    final configuredSlotsCount = (state.slotConfig['slots'] as List?)?.length ?? 0;
+    final activeVariantsCount = state.variants.where((v) => v.isActive).length;
+    final String availabilitySummary;
+    if (isServiceWithSlots) {
+      availabilitySummary = '$configuredSlotsCount turno(s) configurado(s)';
+    } else if (isPreOrderProduct) {
+      availabilitySummary = 'Preventa (${state.preorderConfig['maxPreOrderUnits'] ?? 0} cupos)';
+    } else if (!state.trackInventory) {
+      availabilitySummary = 'Stock ilimitado';
+    } else if (state.hasVariants) {
+      availabilitySummary = '$activeVariantsCount variante(s) activa(s)';
+    } else {
+      availabilitySummary = '${state.stockQuantity?.toInt() ?? 0} unidades en stock';
+    }
+
+    return Container(
+      key: const Key('wizard_owner_readiness_card'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC7D2FE), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  size: 17,
+                  color: Color(0xFF4F46E5),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Resumen del Propietario y Diagnóstico de Publicación',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              const WizardContextualHelpButton(
+                title: 'Resumen del Propietario',
+                explanation:
+                    'Este panel es exclusivo para ti (no lo ve el cliente). Resume cuánto recibes neto, el precio público con comisión y permite saltar directo a cualquier paso si deseas corregir algo antes de publicar.',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Tu Ganancia Neta:',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: state.priceType == PriceType.free
+                          ? const Text(
+                              'GRATIS',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF047857),
+                              ),
+                            )
+                          : DualPriceText(
+                              amountInUsd: activeBasePrice,
+                              isInline: true,
+                              usdStyle: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF047857),
+                              ),
+                              bsStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Precio Público (Contado):',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: state.priceType == PriceType.free
+                          ? const Text(
+                              'GRATIS',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1E293B),
+                              ),
+                            )
+                          : DualPriceText(
+                              amountInUsd: activePrice,
+                              isInline: true,
+                              usdStyle: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1E293B),
+                              ),
+                              bsStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4F46E5),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Disponibilidad:',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        availabilitySummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (widget.onJumpToStep != null) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _buildQuickJumpChip(
+                  key: const Key('wizard_jump_step_0'),
+                  label: 'Editar Básico',
+                  icon: Icons.edit_note_rounded,
+                  onTap: () => widget.onJumpToStep!(0),
+                ),
+                _buildQuickJumpChip(
+                  key: const Key('wizard_jump_step_1'),
+                  label: 'Editar Precios',
+                  icon: Icons.sell_outlined,
+                  onTap: () => widget.onJumpToStep!(1),
+                ),
+                _buildQuickJumpChip(
+                  key: const Key('wizard_jump_step_2'),
+                  label: isService ? 'Editar Agenda' : 'Editar Opciones',
+                  icon: isService ? Icons.calendar_month_outlined : Icons.tune_rounded,
+                  onTap: () => widget.onJumpToStep!(2),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickJumpChip({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEF2FF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFC7D2FE)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: const Color(0xFF4F46E5)),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4F46E5),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2226,20 +2540,40 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Pago Inicial / Seña Requerida:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF4B5563),
+                    const Expanded(
+                      child: Text(
+                        'Pago Inicial / Seña Requerida:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF4B5563),
+                        ),
                       ),
                     ),
-                    Text(
-                      depositLabel,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF059669),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            depositLabel,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
+                          if (depositAmount > 0)
+                            DualPriceText(
+                              amountInUsd: depositAmount,
+                              isInline: true,
+                              usdStyle: const TextStyle(fontSize: 0, color: Colors.transparent),
+                              bsStyle: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF059669),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -2249,20 +2583,30 @@ class _StepItemPreviewState extends ConsumerState<StepItemPreview>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Saldo restante contra entrega:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4B5563),
+                      const Expanded(
+                        child: Text(
+                          'Saldo restante contra entrega:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF4B5563),
+                          ),
                         ),
                       ),
-                      Text(
-                        '\$${remainingBalance.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFFD97706),
+                      Flexible(
+                        child: DualPriceText(
+                          amountInUsd: remainingBalance,
+                          isInline: true,
+                          usdStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFD97706),
+                          ),
+                          bsStyle: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFB45309),
+                          ),
                         ),
                       ),
                     ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'item_wizard_stepper.dart';
 
 class ItemWizardBottomBar extends StatelessWidget {
@@ -7,6 +9,7 @@ class ItemWizardBottomBar extends StatelessWidget {
   final int totalSteps;
   final bool isLoading;
   final bool isEditing;
+  final ItemType itemType;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onSubmit;
@@ -17,6 +20,7 @@ class ItemWizardBottomBar extends StatelessWidget {
     this.totalSteps = 4,
     required this.isLoading,
     this.isEditing = false,
+    this.itemType = ItemType.product,
     required this.onPrevious,
     required this.onNext,
     required this.onSubmit,
@@ -25,8 +29,9 @@ class ItemWizardBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isLastStep = currentStep == totalSteps - 1;
+    final activeSteps = ItemWizardStepper.stepsForType(itemType);
     final nextStepName = currentStep < totalSteps - 1
-        ? ItemWizardStepper.steps[currentStep + 1].shortTitle
+        ? activeSteps[currentStep + 1].shortTitle
         : '';
 
     return Container(
@@ -56,7 +61,10 @@ class ItemWizardBottomBar extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
                   ),
                   child: const Text(
                     'Cancelar',
@@ -77,7 +85,10 @@ class ItemWizardBottomBar extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
                   ),
                 ),
               const SizedBox(width: 12),
@@ -104,7 +115,11 @@ class ItemWizardBottomBar extends StatelessWidget {
                         label: Text(
                           isLoading
                               ? 'PROCESANDO...'
-                              : (isEditing ? 'GUARDAR CAMBIOS' : 'PUBLICAR ARTÍCULO'),
+                              : (isEditing
+                                  ? 'GUARDAR CAMBIOS'
+                                  : 'PUBLICAR ARTÍCULO'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -124,7 +139,7 @@ class ItemWizardBottomBar extends StatelessWidget {
                     : ElevatedButton(
                         onPressed: isLoading ? null : onNext,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F46E5),
+                          backgroundColor: TuLojitaBrandColors.primary,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -135,12 +150,16 @@ class ItemWizardBottomBar extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              'Siguiente: $nextStepName',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                letterSpacing: 0.3,
+                            Flexible(
+                              child: Text(
+                                'Siguiente: $nextStepName',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  letterSpacing: 0.3,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),

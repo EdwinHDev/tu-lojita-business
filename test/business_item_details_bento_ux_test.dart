@@ -19,6 +19,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/providers/das
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/data/repositories/item_repository_impl.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item_catalog_summary.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item_owner_stats.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 import 'package:tu_lojita_business/features/items/domain/repositories/item_repository.dart';
@@ -187,6 +188,10 @@ class _SpyItemRepository implements ItemRepository {
   }
 
   @override
+  Future<ItemCatalogSummary> getStoreCatalogSummary(String storeId) async =>
+      ItemCatalogSummary.fromItems([currentItem]);
+
+  @override
   Future<List<Item>> getItemsByStore(String storeId) async => [currentItem];
 
   @override
@@ -199,6 +204,10 @@ class _SpyItemRepository implements ItemRepository {
     String? sortBy,
     String? order,
     bool? onlyInStock,
+    bool? isActive,
+    bool? onlyOutOfStock,
+    bool? hasDiscount,
+    ItemType? itemType,
   }) async =>
       (items: [currentItem], total: 1);
 

@@ -710,6 +710,41 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                     ),
                   ],
                 ),
+              ] else if (order.isPartialPayment || order.isAwaitingStock) ...[
+                const SizedBox(height: 16),
+                _buildSectionTitle('Comprobantes de Pago'),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: Color(0xFF15803D),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          order.isAwaitingStock
+                              ? 'Reserva gratuita (\$0.00 inicial). No requiere comprobante previo al ingreso de stock.'
+                              : 'Compra en cuotas con inicial diferida (\$0.00). El cliente reportará comprobantes a partir de su próxima cuota.',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF166534),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
               const SizedBox(height: 80),
             ],

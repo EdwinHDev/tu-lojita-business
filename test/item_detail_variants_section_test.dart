@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item_owner_stats.dart';
+import 'package:tu_lojita_business/features/items/presentation/providers/item_owner_stats_provider.dart';
+import 'package:tu_lojita_business/features/items/presentation/providers/item_promotion_provider.dart';
 import 'package:tu_lojita_business/features/items/presentation/screens/item_detail_screen.dart';
 import 'widget_test.dart';
 
@@ -72,6 +75,18 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          itemOwnerStatsProvider(variantItem.id).overrideWith(
+            (ref) async => const ItemOwnerStats(
+              unitsSold: 0,
+              ordersCount: 0,
+              favoritesCount: 0,
+            ),
+          ),
+          itemPromotionByItemProvider(variantItem.id).overrideWith(
+            (ref) async => null,
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
           home: const ItemDetailScreen(
@@ -85,28 +100,23 @@ void main() {
     await tester.pumpAndSettle();
 
     // 1. Verify Price section reflects range
-    expect(find.text('RANGO DE PRECIOS'), findsOneWidget);
-    expect(find.text('\$20.00 - \$25.00'), findsOneWidget);
+    expect(find.text('Rango según variante'), findsOneWidget);
+    expect(find.textContaining('20,00'), findsWidgets);
 
     // 2. Verify Stock Card shows aggregate stock and NOT 'Agotado'
-    expect(find.text('Stock (2 var.)'), findsOneWidget);
-    expect(find.text('25 unidades'), findsOneWidget);
+    expect(find.text('Inventario'), findsOneWidget);
+    expect(find.text('25 uds'), findsOneWidget);
     expect(find.text('Agotado'), findsNothing);
 
     // 3. Verify Variants section is visible
-    expect(find.text('VARIANTES DEL PRODUCTO'), findsOneWidget);
-    expect(find.text('2 de 2 activas'), findsOneWidget);
+    expect(find.text('Variantes (2)'), findsOneWidget);
 
-    // 4. Verify axes chips
-    expect(find.text('Color: Negro, Blanco'), findsOneWidget);
-    expect(find.text('Talla: M, L'), findsOneWidget);
-
-    // 5. Verify individual variant details
-    expect(find.text('Negro / M'), findsOneWidget);
+    // 4. Verify individual variant details
+    expect(find.text('Negro · M'), findsOneWidget);
     expect(find.text('SKU: POLO-BLK-M'), findsOneWidget);
     expect(find.text('15 en stock'), findsOneWidget);
 
-    expect(find.text('Blanco / L'), findsOneWidget);
+    expect(find.text('Blanco · L'), findsOneWidget);
     expect(find.text('SKU: POLO-WHT-L'), findsOneWidget);
     expect(find.text('10 en stock'), findsOneWidget);
   });
@@ -136,6 +146,18 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          itemOwnerStatsProvider(normalItem.id).overrideWith(
+            (ref) async => const ItemOwnerStats(
+              unitsSold: 0,
+              ordersCount: 0,
+              favoritesCount: 0,
+            ),
+          ),
+          itemPromotionByItemProvider(normalItem.id).overrideWith(
+            (ref) async => null,
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
           home: const ItemDetailScreen(
@@ -148,9 +170,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('VARIANTES DEL PRODUCTO'), findsNothing);
-    expect(find.text('Stock Disponible'), findsOneWidget);
-    expect(find.text('40 unidades'), findsOneWidget);
-    expect(find.text('\$8.00'), findsOneWidget);
+    expect(find.textContaining('Variantes'), findsNothing);
+    expect(find.text('Inventario'), findsOneWidget);
+    expect(find.text('40 en stock'), findsOneWidget);
+    expect(find.textContaining('8,00'), findsOneWidget);
   });
 }

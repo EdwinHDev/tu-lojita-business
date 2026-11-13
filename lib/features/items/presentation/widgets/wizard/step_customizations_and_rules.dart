@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/property_template.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_form_provider.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/wizard/wizard_contextual_help.dart';
 
 class StepCustomizationsAndRules extends ConsumerStatefulWidget {
   final String storeId;
@@ -67,9 +70,15 @@ class _StepCustomizationsAndRulesState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 1. Personalización y Extras
-            _buildSectionHeader(
+            const WizardSectionHeader(
               title: 'Opciones de Personalización y Extras',
               subtitle: 'Permite a los clientes elegir aderezos, ingredientes, empaques o complementos.',
+              helpTitle: 'Opciones de Personalización vs. Variantes',
+              helpExplanation:
+                  '• Grupos de Personalización: Son extras, ingredientes o complementos (ej: Queso extra, Envoltura de regalo) que suman al precio base y no llevan stock separado.\n'
+                  '• Mín / Máx Selecciones: Si colocas Mínimo 1, el cliente estará obligado a elegir al menos una opción de este grupo antes de comprar.',
+              helpExample: 'Ejemplo: Grupo "Salsas" (Mín: 0, Máx: 3) con opciones gratis o con costo adicional.',
+              helpIcon: Icons.checklist_rtl_rounded,
             ),
             const SizedBox(height: 12),
             _buildCustomizationsCard(state, notifier),
@@ -77,9 +86,14 @@ class _StepCustomizationsAndRulesState
             const SizedBox(height: 24),
 
             // 2. Propiedades de Categoría y Ficha Técnica
-            _buildSectionHeader(
+            const WizardSectionHeader(
               title: 'Propiedades y Ficha Técnica',
               subtitle: 'Atributos específicos como marca, material, garantía o características técnicas.',
+              helpTitle: 'Propiedades y Ficha Técnica',
+              helpExplanation:
+                  'Las propiedades son datos informativos que aparecen en la ficha técnica del artículo (ej: Marca, Material, Garantía, Voltaje). El comprador no las elige, solo las consulta.',
+              helpExample: 'Ejemplo: Marca: Sony · Garantía: 6 meses · Material: Acero inoxidable.',
+              helpIcon: Icons.fact_check_outlined,
             ),
             const SizedBox(height: 12),
             _buildAttributesCard(state, notifier),
@@ -87,9 +101,14 @@ class _StepCustomizationsAndRulesState
             const SizedBox(height: 24),
 
             // 3. Condiciones Comerciales y Financiación
-            _buildSectionHeader(
+            const WizardSectionHeader(
               title: 'Pagos Parcelados y Cuotas',
               subtitle: 'Habilita a los compradores pagar este producto en cuotas semanales o mensuales.',
+              helpTitle: 'Pagos en Cuotas',
+              helpExplanation:
+                  'Permite a tus clientes adquirir el artículo pagando una inicial y cuotas programadas. Puedes definir un porcentaje de recargo en caso de retraso en las cuotas.',
+              helpExample: 'Ejemplo: Disponible en cuotas con 5% de multa por mora.',
+              helpIcon: Icons.calendar_month_rounded,
             ),
             const SizedBox(height: 12),
             _buildInstallmentsCard(state, notifier, storeState),
@@ -97,39 +116,21 @@ class _StepCustomizationsAndRulesState
             const SizedBox(height: 24),
 
             // 4. Reglas de Publicación y Visibilidad
-            _buildSectionHeader(
+            const WizardSectionHeader(
               title: 'Reglas y Visibilidad de Negocio',
               subtitle: 'Controla si el producto está publicado, destacado o requiere reserva.',
+              helpTitle: 'Reglas y Visibilidad de Negocio',
+              helpExplanation:
+                  '• Artículo Activo: Si lo desactivas, se guarda como borrador oculto al público.\n'
+                  '• Destacar en Tienda: Aparece primero en la vitrina de tu tienda.\n'
+                  '• Agenda / Preventa: Actívalo si es un servicio por cita o un producto bajo encargo.',
+              helpIcon: Icons.tune_rounded,
             ),
             const SizedBox(height: 12),
             _buildBusinessFlagsCard(state, notifier),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionHeader({required String title, required String subtitle}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E293B),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      ],
     );
   }
 
@@ -156,6 +157,7 @@ class _StepCustomizationsAndRulesState
 
   // --- CUSTOMIZATION GROUPS ---
   Widget _buildCustomizationsCard(ItemFormState state, ItemFormNotifier notifier) {
+    final exchangeConfig = ref.watch(exchangeRateProvider).asData?.value;
     return _buildCard([
       if (state.customizationGroups.isEmpty) ...[
         const Center(
@@ -248,11 +250,14 @@ class _StepCustomizationsAndRulesState
                         children: [
                           const HugeIcon(icon: HugeIcons.strokeRoundedStar, size: 18, color: Color(0xFF4F46E5)),
                           const SizedBox(width: 8),
-                          const Text(
-                            '¿Es obligatorio?',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          const Expanded(
+                            child: Text(
+                              '¿Es obligatorio?',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            ),
                           ),
-                          const Spacer(),
                           Switch.adaptive(
                             value: group.minSelect > 0,
                             activeThumbColor: const Color(0xFF4F46E5),
@@ -411,20 +416,30 @@ class _StepCustomizationsAndRulesState
                                         ],
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: opt.price > 0
-                                            ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                                            : const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        opt.price > 0 ? '+\$${opt.price.toStringAsFixed(2)}' : 'Incluido',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: opt.price > 0 ? const Color(0xFF047857) : const Color(0xFF475569),
+                                    Flexible(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: opt.price > 0
+                                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                                              : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          opt.price > 0
+                                              ? formatWizardDualInline(
+                                                  exchangeConfig,
+                                                  opt.price,
+                                                  usdPrefix: '+\$',
+                                                )
+                                              : 'Incluido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: opt.price > 0 ? const Color(0xFF047857) : const Color(0xFF475569),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -676,8 +691,16 @@ class _StepCustomizationsAndRulesState
         final List<String> options = List<String>.from(template.config?['options'] ?? []);
         return DropdownButtonFormField<String>(
           initialValue: value,
+          isExpanded: true,
           decoration: _inputDecoration(template.name),
-          items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+          items: options
+              .map(
+                (opt) => DropdownMenuItem(
+                  value: opt,
+                  child: Text(opt, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
           onChanged: (v) => notifier.onAttributeChanged(template.name, v),
         );
 
@@ -727,6 +750,52 @@ class _StepCustomizationsAndRulesState
           style: const TextStyle(fontSize: 14),
           onChanged: (v) => notifier.onLateFeePercentageChanged(double.tryParse(v) ?? 0),
         ),
+        if (state.effectivePrice > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            key: const Key('wizard_installments_bcv_preview'),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.payments_outlined, size: 18, color: Color(0xFF047857)),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Precio total en cuotas al cliente:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF065F46),
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: DualPriceText(
+                    amountInUsd: state.customerInstallmentFinalPrice > 0
+                        ? state.customerInstallmentFinalPrice
+                        : state.effectivePrice,
+                    isInline: true,
+                    usdStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF047857),
+                    ),
+                    bsStyle: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF065F46),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     ]);
   }
@@ -1324,14 +1393,53 @@ class _StepCustomizationsAndRulesState
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFEDE9FE)),
               ),
-              child: const Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Color(0xFF8B5CF6)),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'No hay turnos registrados. Agrega horarios habituales para que tus clientes puedan reservar con selector de hora interactivo.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Color(0xFF8B5CF6)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'No hay turnos registrados. Agrega horarios habituales para que tus clientes puedan reservar con selector de hora interactivo.',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const Key('wizard_quick_weekday_slots_button'),
+                      onPressed: () {
+                        final weekdaySlots = [1, 2, 3, 4, 5].map((d) => {
+                              'label': 'Jornada Habitual',
+                              'startTime': '08:00',
+                              'endTime': '17:00',
+                              'dayOfWeek': d,
+                              'specificDate': null,
+                              'isActive': true,
+                            }).toList();
+                        config['slots'] = weekdaySlots;
+                        notifier.onSlotConfigChanged(config);
+                      },
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFF7C3AED)),
+                      label: const Text(
+                        'Crear horario Lun-Vie (8am - 5pm)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6D28D9),
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF5F3FF),
+                        side: const BorderSide(color: Color(0xFFDDD6FE)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
                     ),
                   ),
                 ],
@@ -1490,6 +1598,7 @@ class _StepCustomizationsAndRulesState
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: depositType,
+            isExpanded: true,
             decoration: _inputDecoration(
               'Modalidad de Abono Inicial',
               suffix: _buildHelpButton(
@@ -1500,10 +1609,22 @@ class _StepCustomizationsAndRulesState
               ),
             ),
             items: const [
-              DropdownMenuItem(value: 'PERCENTAGE', child: Text('Porcentaje del Total (%)')),
-              DropdownMenuItem(value: 'FIXED_AMOUNT', child: Text('Monto Fijo en Dólares (\$ USD)')),
-              DropdownMenuItem(value: 'FULL_PAYMENT', child: Text('Pago Completo Anticipado (100%)')),
-              DropdownMenuItem(value: 'FREE', child: Text('Reserva Gratuita (\$0)')),
+              DropdownMenuItem(
+                value: 'PERCENTAGE',
+                child: Text('Porcentaje del Total (%)', overflow: TextOverflow.ellipsis),
+              ),
+              DropdownMenuItem(
+                value: 'FIXED_AMOUNT',
+                child: Text('Monto Fijo en Dólares (\$ USD)', overflow: TextOverflow.ellipsis),
+              ),
+              DropdownMenuItem(
+                value: 'FULL_PAYMENT',
+                child: Text('Pago Completo Anticipado (100%)', overflow: TextOverflow.ellipsis),
+              ),
+              DropdownMenuItem(
+                value: 'FREE',
+                child: Text('Reserva Gratuita (\$0)', overflow: TextOverflow.ellipsis),
+              ),
             ],
             onChanged: (val) {
               if (val != null) {
@@ -1534,6 +1655,118 @@ class _StepCustomizationsAndRulesState
                 final dVal = double.tryParse(val) ?? 0.0;
                 config['depositValue'] = dVal;
                 notifier.onPreorderConfigChanged(config);
+              },
+            ),
+          ],
+          if (state.effectivePrice > 0) ...[
+            const SizedBox(height: 12),
+            Builder(
+              builder: (context) {
+                final publicTotal = state.customerSingleFinalPrice > 0
+                    ? state.customerSingleFinalPrice
+                    : state.effectivePrice;
+                final rawDepositVal = (depositValue is num)
+                    ? depositValue.toDouble()
+                    : (double.tryParse(depositValue.toString()) ?? 50.0);
+                final double upfrontUsd;
+                if (depositType == 'FULL_PAYMENT') {
+                  upfrontUsd = publicTotal;
+                } else if (depositType == 'FREE') {
+                  upfrontUsd = 0.0;
+                } else if (depositType == 'FIXED_AMOUNT') {
+                  upfrontUsd = rawDepositVal.clamp(0.0, publicTotal);
+                } else {
+                  upfrontUsd = ((publicTotal * rawDepositVal) / 100.0).clamp(0.0, publicTotal);
+                }
+                final double remainingUsd = (publicTotal - upfrontUsd).clamp(0.0, double.infinity);
+
+                return Container(
+                  key: const Key('wizard_preorder_financial_summary'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'RESUMEN FINANCIERO DE LA PREVENTA (PÚBLICO)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E40AF),
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Abono al reservar:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: DualPriceText(
+                              amountInUsd: upfrontUsd,
+                              isInline: true,
+                              usdStyle: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF047857),
+                              ),
+                              bsStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Saldo contra entrega:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: DualPriceText(
+                              amountInUsd: remainingUsd,
+                              isInline: true,
+                              usdStyle: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFD97706),
+                              ),
+                              bsStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
           ],
@@ -2399,20 +2632,35 @@ class _OptionFormBottomSheetState extends State<_OptionFormBottomSheet> {
                 ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(fontSize: 14),
+                onChanged: (_) => setState(() {}),
+              ),
+              WizardLiveBcvHelper(
+                key: const Key('wizard_option_price_bcv_helper'),
+                amountInUsd: double.tryParse(_priceCtrl.text),
               ),
               const SizedBox(height: 20),
               const Row(
                 children: [
                   Icon(Icons.tune, size: 16, color: Color(0xFF4F46E5)),
                   SizedBox(width: 8),
-                  Text(
-                    'LÍMITES DE CANTIDAD POR ARTÍCULO',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF475569),
-                      letterSpacing: 0.5,
+                  Expanded(
+                    child: Text(
+                      'LÍMITES DE CANTIDAD POR ARTÍCULO',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF475569),
+                        letterSpacing: 0.5,
+                      ),
                     ),
+                  ),
+                  WizardContextualHelpButton(
+                    title: 'Límites de Cantidad por Opción',
+                    explanation:
+                        '• Cantidad Mínima: Si es mayor a 0, el cliente debe llevar al menos esa cantidad.\n'
+                        '• Cantidad Máxima: Tope de unidades de esta opción que puede pedir por artículo.\n'
+                        '• Cantidad por Defecto: Unidades que ya vienen incluidas sin costo extra en el artículo base.',
+                    example: 'Ejemplo: Hamburguesa con 1 queso incluido por defecto (Defecto: 1, Máx: 3).',
                   ),
                 ],
               ),

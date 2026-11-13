@@ -7,6 +7,7 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_not
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import '../../domain/entities/item.dart';
 import '../providers/item_form_provider.dart';
+import 'wizard/wizard_contextual_help.dart';
 
 class VariantManagementSection extends ConsumerStatefulWidget {
   const VariantManagementSection({super.key});
@@ -380,7 +381,22 @@ class _VariantManagementSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Variantes del Artículo'),
+        const WizardSectionHeader(
+          title: 'Variantes del Artículo',
+          subtitle:
+              'Tallas, colores o presentaciones con precio y stock individual.',
+          helpButton: WizardContextualHelpButton(
+            title: '¿Cuándo usar Variantes vs. Personalización?',
+            explanation:
+                'Es muy importante elegir la herramienta adecuada según cómo vendas tu artículo:',
+            bulletPoints: [
+              'Variantes (Paso 2): Úsalas para Tallas (S, M, L), Colores o Capacidades que tienen su propio stock en almacén y reemplazan el precio base.',
+              'Opciones de Personalización (Paso 3): Úsalas para extras, toppings, salsas o envoltorios que suman un recargo (+\$) al pedido.',
+            ],
+            example:
+                'Una franela en talla S, M y L es una Variante. Un bordado personalizado por +\$3.00 es una Opción de Personalización.',
+          ),
+        ),
         const SizedBox(height: 12),
         _buildCard([
           SwitchListTile.adaptive(
@@ -460,17 +476,6 @@ class _VariantManagementSectionState
           ],
         ]),
       ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF1E293B),
-      ),
     );
   }
 
@@ -1152,6 +1157,7 @@ class _VariantManagementSectionState
                         children: [
                           // Botón Menos
                           InkWell(
+                            key: ValueKey('stock_decrement_btn_$variantIndex'),
                             onTap: variant.stockQuantity > 0
                                 ? () {
                                     final current = variant!.stockQuantity;
@@ -1222,6 +1228,7 @@ class _VariantManagementSectionState
                           ),
                           // Botón Más
                           InkWell(
+                            key: ValueKey('stock_increment_btn_$variantIndex'),
                             onTap: () {
                               final current = variant!.stockQuantity;
                               notifier.updateVariant(
@@ -1256,6 +1263,9 @@ class _VariantManagementSectionState
                   ),
                 ),
               ],
+            ),
+            WizardLiveBcvHelper(
+              amountInUsd: variant.price ?? parentPrice,
             ),
           ],
         ],
@@ -1697,6 +1707,9 @@ class _VariantManagementSectionState
                 ),
               ),
             ],
+          ),
+          WizardLiveBcvHelper(
+            amountInUsd: variant.price ?? parentPrice,
           ),
         ],
       ),
@@ -2823,22 +2836,33 @@ class _VariantManagementSectionState
       title: 'Aplicar Precio Masivo',
       subtitle: 'Se aplicará a todas las opciones activas',
       builder: (ctx, setSheetState) {
-        return TextField(
-          controller: ctrl,
-          autofocus: true,
-          selectAllOnFocus: false,
-          decoration: InputDecoration(
-            labelText: 'Precio para variantes activas',
-            hintText: 'Ej. 25.00',
-            prefixText: '\$ ',
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              selectAllOnFocus: false,
+              onChanged: (_) => setSheetState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Precio para variantes activas',
+                hintText: 'Ej. 25.00',
+                prefixText: '\$ ',
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            WizardLiveBcvHelper(
+              key: const Key('wizard_batch_price_bcv_helper'),
+              amountInUsd: double.tryParse(ctrl.text),
+            ),
+          ],
         );
       },
       bottomAction: SizedBox(

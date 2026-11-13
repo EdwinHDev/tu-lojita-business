@@ -500,7 +500,9 @@ class OrderCard extends StatelessWidget {
             ],
           ),
         ),
-        if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
+        if ((paymentMethod != null && paymentMethod.isNotEmpty) ||
+            (order.payments.isEmpty &&
+                (order.isPartialPayment || order.isAwaitingStock))) ...[
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 116),
@@ -512,7 +514,11 @@ class OrderCard extends StatelessWidget {
                 border: Border.all(color: TuLojitaBrandColors.borderMuted),
               ),
               child: Text(
-                OrderDetailHelpers.formatPaymentMethod(paymentMethod),
+                (paymentMethod != null && paymentMethod.isNotEmpty)
+                    ? OrderDetailHelpers.formatPaymentMethod(paymentMethod)
+                    : (order.isAwaitingStock
+                        ? 'Reserva \$0.00'
+                        : 'Inicial \$0.00'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

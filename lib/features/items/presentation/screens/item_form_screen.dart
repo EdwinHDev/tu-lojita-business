@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import '../../../../core/utils/notification_service.dart';
 import '../../../dashboard/presentation/providers/store_details_notifier.dart';
 import '../../../auth/presentation/providers/auth_notifier.dart';
@@ -9,6 +10,7 @@ import '../../../auth/presentation/providers/auth_state.dart';
 import '../../domain/entities/item.dart';
 import '../providers/item_form_provider.dart';
 import '../providers/item_list_notifier.dart';
+import '../widgets/list/items_bento_filter_bar.dart';
 import '../widgets/wizard/item_wizard_bottom_bar.dart';
 import '../widgets/wizard/item_wizard_stepper.dart';
 import '../widgets/wizard/step_basic_info.dart';
@@ -36,7 +38,7 @@ class ItemFormScreen extends ConsumerStatefulWidget {
 class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
-  int _maxVisitedStep = 0;
+  late int _maxVisitedStep;
 
   final _step1FormKey = GlobalKey<FormState>();
   final _step2FormKey = GlobalKey<FormState>();
@@ -45,7 +47,11 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   @override
   void initState() {
     super.initState();
+    _maxVisitedStep =
+        (widget.item != null || widget.duplicateFrom != null) ? 3 : 0;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final authState = ref.read(authProvider);
       final user = authState is Authenticated ? authState.user : null;
       if (widget.item == null && user != null && !user.canEditProducts) {
@@ -67,12 +73,14 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
 
       if (widget.item != null) {
         ref.read(itemFormProvider.notifier).initForEditing(widget.item!);
-        // In editing mode, allow jumping freely between all steps
         setState(() => _maxVisitedStep = 3);
       } else if (widget.duplicateFrom != null) {
-        ref.read(itemFormProvider.notifier).initForDuplicating(widget.duplicateFrom!);
-        // Prefilled duplicate allows jumping between steps right away
+        ref
+            .read(itemFormProvider.notifier)
+            .initForDuplicating(widget.duplicateFrom!);
         setState(() => _maxVisitedStep = 3);
+      } else {
+        ref.read(itemFormProvider.notifier).loadCommissionSettings();
       }
       ref.read(storeDetailsProvider.notifier).loadData(widget.storeId);
     });
@@ -84,12 +92,69 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     super.dispose();
   }
 
+  bool _hasUnsavedProgress(ItemFormState state) {
+    return state.title.trim().isNotEmpty ||
+        state.description.trim().isNotEmpty ||
+        state.price > 0 ||
+        state.selectedImages.isNotEmpty ||
+        widget.item != null;
+  }
+
+  Future<void> _handleCloseOrCancel() async {
+    final state = ref.read(itemFormProvider);
+    if (!_hasUnsavedProgress(state)) {
+      if (mounted && Navigator.of(context).canPop()) {
+        context.pop(false);
+      }
+      return;
+    }
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          '¿Salir sin guardar?',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        content: const Text(
+          'Tienes información en este formulario. Si sales ahora, se descartarán los cambios no guardados.',
+          style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Seguir editando'),
+          ),
+          ElevatedButton(
+            key: const Key('confirm_discard_wizard_button'),
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: TuLojitaBrandColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Descartar y salir'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDiscard == true && mounted) {
+      if (Navigator.of(context).canPop()) {
+        context.pop(false);
+      }
+    }
+  }
+
   bool _validateCurrentStep() {
     final state = ref.read(itemFormProvider);
 
     switch (_currentStep) {
       case 0: // Básico & Multimedia
-        if (!_step1FormKey.currentState!.validate()) return false;
+        if (_step1FormKey.currentState != null &&
+            !_step1FormKey.currentState!.validate()) {
+          return false;
+        }
         if (state.categoryId == null || state.categoryId!.isEmpty) {
           NotificationService.showWarning(
             context,
@@ -100,7 +165,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         return true;
 
       case 1: // Precios, Variantes & Stock
-        if (!_step2FormKey.currentState!.validate()) return false;
+        if (_step2FormKey.currentState != null &&
+            !_step2FormKey.currentState!.validate()) {
+          return false;
+        }
         if (state.hasVariants) {
           if (state.variantAxes.isEmpty) {
             NotificationService.showWarning(
@@ -122,7 +190,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         return true;
 
       case 2: // Personalizaciones & Reglas
-        if (!_step3FormKey.currentState!.validate()) return false;
+        if (_step3FormKey.currentState != null &&
+            !_step3FormKey.currentState!.validate()) {
+          return false;
+        }
         return true;
 
       case 3: // Vista Previa
@@ -160,22 +231,57 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      context.pop(false);
+      _handleCloseOrCancel();
     }
   }
 
   void _onStepTapped(int index) {
     if (index > _maxVisitedStep) return;
 
-    // If moving forward, ensure current step is valid
-    if (index > _currentStep && !_validateCurrentStep()) return;
+    // If moving forward in creation mode, ensure current step is valid
+    if (widget.item == null &&
+        widget.duplicateFrom == null &&
+        index > _currentStep &&
+        !_validateCurrentStep()) {
+      return;
+    }
 
     setState(() => _currentStep = index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _onQuickSaveInEditMode() {
+    final state = ref.read(itemFormProvider);
+    if (!_validateCurrentStep()) return;
+
+    if (state.title.trim().length < 3 ||
+        state.description.trim().length < 10 ||
+        state.categoryId == null ||
+        state.categoryId!.isEmpty) {
+      _onStepTapped(0);
+      NotificationService.showWarning(
+        context,
+        'Revisa el título, descripción (mín. 10 caracteres) y categoría en el Paso 1.',
+      );
+      return;
+    }
+
+    if (state.priceType != PriceType.free && state.price < 0) {
+      _onStepTapped(1);
+      NotificationService.showWarning(
+        context,
+        'Revisa el precio base configurado en el Paso 2.',
+      );
+      return;
+    }
+
+    _onSubmit();
   }
 
   void _onSubmit() {
@@ -191,7 +297,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     ref.read(itemFormProvider.notifier).submit(widget.storeId);
   }
 
-  Future<void> _showPromotionUpsellDialog(BuildContext context, Item createdItem) async {
+  Future<void> _showPromotionUpsellDialog(
+    BuildContext context,
+    Item createdItem,
+  ) async {
     final shouldPromote = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -227,12 +336,20 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.local_fire_department_rounded, color: Color(0xFFD97706), size: 22),
+                  Icon(
+                    Icons.local_fire_department_rounded,
+                    color: Color(0xFFD97706),
+                    size: 22,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '¿Deseas promocionarlo en el Home de Tu Lojita para multiplicar sus visitas y ventas?',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF92400E),
+                      ),
                     ),
                   ),
                 ],
@@ -243,16 +360,24 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Ahora no', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text(
+              'Ahora no',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF59E0B),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Promocionar ⭐', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Promocionar ⭐',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -276,6 +401,7 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(itemFormProvider);
+    final isEditing = widget.item != null;
 
     ref.listen(itemFormProvider, (previous, next) {
       if (next.isSuccess) {
@@ -300,26 +426,59 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     });
 
     return PopScope(
-      canPop: _currentStep == 0,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _onPrevious();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: TuLojitaBrandColors.canvas,
         appBar: AppBar(
-          title: Text(
-            '${widget.item != null ? 'Editar' : (widget.duplicateFrom != null ? 'Duplicar' : 'Nuevo')} ${state.itemType == ItemType.product ? 'Producto' : 'Servicio'}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          toolbarHeight: 64,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${isEditing ? 'Editar' : (widget.duplicateFrom != null ? 'Duplicar' : 'Nuevo')} ${state.itemType == ItemType.product ? 'Producto' : 'Servicio'}',
+                  maxLines: 1,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 2),
+              const BcvRateHeaderPill(compactSubtitle: true),
+            ],
           ),
           backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1E293B),
+          foregroundColor: TuLojitaBrandColors.inkPrimary,
           elevation: 0,
-          centerTitle: true,
+          centerTitle: false,
           leading: IconButton(
+            key: const Key('wizard_close_button'),
             icon: const Icon(Icons.close),
-            onPressed: () => context.pop(false),
+            onPressed: _handleCloseOrCancel,
           ),
+          actions: [
+            if (isEditing)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 8),
+                child: IconButton(
+                  key: const Key('wizard_quick_save_button'),
+                  tooltip: 'Guardar cambios ahora',
+                  onPressed: state.isLoading ? null : _onQuickSaveInEditMode,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    foregroundColor: const Color(0xFF047857),
+                  ),
+                  icon: const Icon(Icons.check_rounded, size: 20),
+                ),
+              )
+            else
+              const SizedBox(width: 8),
+          ],
         ),
         body: Column(
           children: [
@@ -327,6 +486,7 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
             ItemWizardStepper(
               currentStep: _currentStep,
               maxVisitedStep: _maxVisitedStep,
+              itemType: state.itemType,
               onStepTapped: _onStepTapped,
             ),
             const Divider(height: 1, color: Color(0xFFE2E8F0)),
@@ -356,6 +516,7 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   ),
                   StepItemPreview(
                     storeId: widget.storeId,
+                    onJumpToStep: _onStepTapped,
                   ),
                 ],
               ),
@@ -366,7 +527,8 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
           currentStep: _currentStep,
           totalSteps: 4,
           isLoading: state.isLoading,
-          isEditing: widget.item != null,
+          isEditing: isEditing,
+          itemType: state.itemType,
           onPrevious: _onPrevious,
           onNext: _onNext,
           onSubmit: _onSubmit,

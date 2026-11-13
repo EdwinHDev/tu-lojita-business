@@ -16,7 +16,9 @@ import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
 import 'package:tu_lojita_business/features/items/presentation/providers/item_form_provider.dart';
 import 'package:tu_lojita_business/features/store_ai/presentation/providers/store_ai_providers.dart';
 import 'package:tu_lojita_business/features/store_ai/presentation/widgets/ai_image_enhancer_sheet.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/features/items/presentation/widgets/wizard/gemini_photo_guidance_bottom_sheet.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/wizard/wizard_contextual_help.dart';
 
 class StepBasicInfo extends ConsumerStatefulWidget {
   final String storeId;
@@ -197,35 +199,89 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
             ? catalogAsync!.asData!.value.available
             : (storeState.store?.aiEnabled == true));
 
+    final int totalImages =
+        state.existingImages.length + state.selectedImages.length;
+    final int descLen = state.description.trim().length;
+    final bool isDescReady = descLen >= 10;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
       child: Form(
         key: widget.formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Multimedia Section
-            _buildSectionHeader(
-              title: 'Fotografías del Artículo',
-              subtitle: canEnhanceWithAi
-                  ? 'Selecciona la principal con la estrella o toca "Mejorar con IA" sobre una foto cargada.'
-                  : 'Añade fotos atractivas y selecciona la foto principal con la estrella.',
+            // 0. Selector Bento de Tipo de Publicación
+            const WizardSectionHeader(
+              title: '¿Qué vas a publicar?',
+              subtitle:
+                  'Elige el formato para adaptar precios, inventario o agenda de citas.',
+              helpButton: WizardContextualHelpButton(
+                title: 'Producto Físico vs. Servicio / Reserva',
+                explanation:
+                    'Tu Lojita adapta automáticamente el creador según lo que vendas:',
+                bulletPoints: [
+                  'Producto Físico: Controla existencias en almacén, tallas, colores, presentaciones o ventas bajo pedido (preventa).',
+                  'Servicio / Reserva: Ideal para citas, consultas, asesorías o atención por turnos. Desactiva el stock físico y habilita tu agenda de horarios y modalidad (En el local o A domicilio).',
+                ],
+                example:
+                    'Si tienes una barbería, selecciona "Servicio / Reserva" para cortes de cabello (por turnos) y "Producto Físico" para vender ceras o shampoos.',
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            _buildItemTypeBentoSelector(state, notifier),
+
+            const SizedBox(height: 14),
+
+            // 1. Multimedia Section
+            WizardSectionHeader(
+              title: 'Fotografías del Artículo',
+              subtitle: totalImages > 0
+                  ? '$totalImages foto(s) cargadas · Toca una foto para marcarla como Principal.'
+                  : (canEnhanceWithAi
+                        ? 'Sube fotos, elige la Principal con la estrella o usa "Mejorar con IA".'
+                        : 'Añade fotos atractivas y toca la mejor para marcarla como Principal.'),
+              helpButton: const WizardContextualHelpButton(
+                title: 'Consejos para Fotos que Venden',
+                explanation:
+                    'La foto principal es la portada de tu artículo en el catálogo y en el buscador.',
+                bulletPoints: [
+                  'Usa buena iluminación natural y evita fondos desordenados.',
+                  'Toca cualquier foto cargada para asignarle la insignia "Principal".',
+                  'Sube varios ángulos o detalles para generar mayor confianza.',
+                ],
+                example:
+                    'Los artículos con al menos 2 fotos claras reciben hasta el doble de clics en la vitrina.',
+              ),
+            ),
+            const SizedBox(height: 8),
             _buildImagePicker(state, notifier, canEnhanceWithAi: canEnhanceWithAi),
             if (!canEnhanceWithAi) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _buildGeminiGuidanceChip(context),
             ],
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
 
-            // Identidad y Clasificación
-            _buildSectionHeader(
+            // 2. Identidad y Clasificación
+            const WizardSectionHeader(
               title: 'Información General',
-              subtitle: 'Nombre, descripción y categoría donde se mostrará a los clientes.',
+              subtitle:
+                  'Nombre, descripción y categoría donde se mostrará a los clientes.',
+              helpButton: WizardContextualHelpButton(
+                title: 'Título, Descripción y Categoría',
+                explanation:
+                    'Un buen título y una descripción clara ayudan a que los clientes encuentren tu publicación rápidamente en el buscador.',
+                bulletPoints: [
+                  'Título (3 a 60 caracteres): Incluye qué es, marca o rasgo clave.',
+                  'Descripción (mínimo 10 caracteres): Explica materiales, medidas, qué incluye o condiciones del servicio.',
+                  'Categoría: Organiza tu tienda para que el comprador filtre sin perderse.',
+                ],
+                example:
+                    'Título: "Camiseta Oversize Algodón Pima" · Descripción: "100% algodón peruano, corte relajado, no encoge al lavar."',
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildCard([
               // Title
               TextFormField(
@@ -233,7 +289,12 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 selectAllOnFocus: false,
                 initialValue: state.title,
                 maxLength: 60,
-                decoration: _inputDecoration('Título del artículo', hint: 'Ej. Camiseta de algodón premium'),
+                decoration: _inputDecoration(
+                  'Título del artículo',
+                  hint: state.itemType == ItemType.service
+                      ? 'Ej. Corte de cabello + Barba'
+                      : 'Ej. Camiseta de algodón premium',
+                ),
                 style: const TextStyle(fontSize: 15),
                 onChanged: notifier.onTitleChanged,
                 validator: (v) {
@@ -250,17 +311,19 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
               // Description
               TextFormField(
                 key: ValueKey('desc_${state.itemId ?? "new"}'),
                 selectAllOnFocus: false,
                 initialValue: state.description,
-                maxLines: 4,
+                maxLines: 3,
                 decoration: _inputDecoration(
                   'Descripción detallada',
-                  hint: 'Describe materiales, características principales, uso recomendado...',
+                  hint: state.itemType == ItemType.service
+                      ? 'Describe qué incluye el servicio, duración aproximada, recomendaciones...'
+                      : 'Describe materiales, características principales, uso recomendado...',
                 ),
                 style: const TextStyle(fontSize: 15),
                 onChanged: notifier.onDescriptionChanged,
@@ -268,24 +331,37 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                     ? 'Escribe al menos 10 caracteres de descripción'
                     : null,
               ),
-              const SizedBox(height: 16),
-
-              // Item Type Dropdown
-              DropdownButtonFormField<ItemType>(
-                key: ValueKey('itemType_${state.itemId ?? "new"}'),
-                initialValue: state.itemType,
-                decoration: _inputDecoration('Tipo de artículo'),
-                items: [
-                  DropdownMenuItem(
-                    value: ItemType.product,
-                    child: _dropdownItem(HugeIcons.strokeRoundedShoppingBasket01, 'Producto Físico'),
+              const SizedBox(height: 6),
+              Row(
+                key: const Key('wizard_description_feedback'),
+                children: [
+                  Icon(
+                    isDescReady
+                        ? Icons.check_circle_rounded
+                        : Icons.info_outline_rounded,
+                    size: 14,
+                    color: isDescReady
+                        ? TuLojitaBrandColors.positive
+                        : TuLojitaBrandColors.inkSecondary,
                   ),
-                  DropdownMenuItem(
-                    value: ItemType.service,
-                    child: _dropdownItem(HugeIcons.strokeRoundedCustomerService, 'Servicio / Reserva'),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      isDescReady
+                          ? '✓ Descripción lista ($descLen caracteres)'
+                          : 'Mínimo 10 caracteres para publicar ($descLen/10)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDescReady
+                            ? TuLojitaBrandColors.positive
+                            : TuLojitaBrandColors.inkSecondary,
+                      ),
+                    ),
                   ),
                 ],
-                onChanged: (v) => notifier.onItemTypeChanged(v!),
               ),
               const SizedBox(height: 16),
 
@@ -357,24 +433,178 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     );
   }
 
-  Widget _buildSectionHeader({required String title, required String subtitle}) {
+  Widget _buildItemTypeBentoSelector(
+    ItemFormState state,
+    ItemFormNotifier notifier,
+  ) {
+    final isProduct = state.itemType == ItemType.product;
+    final isService = state.itemType == ItemType.service;
+
+    Widget buildOptionCard({
+      required Key cardKey,
+      required bool isSelected,
+      required dynamic icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Expanded(
+        child: InkWell(
+          key: cardKey,
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isSelected ? TuLojitaBrandColors.primarySoft : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? TuLojitaBrandColors.primary
+                    : TuLojitaBrandColors.borderMuted,
+                width: isSelected ? 2 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? TuLojitaBrandColors.primary
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: HugeIcon(
+                    icon: icon,
+                    size: 16,
+                    color: isSelected
+                        ? Colors.white
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected
+                              ? TuLojitaBrandColors.primary
+                              : TuLojitaBrandColors.inkPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 16,
+                  color: isSelected
+                      ? TuLojitaBrandColors.primary
+                      : const Color(0xFFCBD5E1),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E293B),
-          ),
+        Row(
+          children: [
+            buildOptionCard(
+              cardKey: const Key('wizard_type_product_card'),
+              isSelected: isProduct,
+              icon: HugeIcons.strokeRoundedShoppingBasket01,
+              title: 'Producto Físico',
+              subtitle: 'Stock, variantes y preventa',
+              onTap: () => notifier.onItemTypeChanged(ItemType.product),
+            ),
+            const SizedBox(width: 10),
+            buildOptionCard(
+              cardKey: const Key('wizard_type_service_card'),
+              isSelected: isService,
+              icon: HugeIcons.strokeRoundedCustomerService,
+              title: 'Servicio / Reserva',
+              subtitle: 'Agenda por turnos y citas',
+              onTap: () => notifier.onItemTypeChanged(ItemType.service),
+            ),
+          ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: isService
+                ? const Color(0xFFF5F3FF)
+                : TuLojitaBrandColors.primarySoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isService
+                  ? const Color(0xFFDDD6FE)
+                  : TuLojitaBrandColors.indigo100,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isService
+                    ? Icons.calendar_month_rounded
+                    : Icons.inventory_2_outlined,
+                size: 16,
+                color: isService
+                    ? const Color(0xFF7C3AED)
+                    : TuLojitaBrandColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isService
+                      ? 'Modo Servicio activo: Se desactiva el stock de almacén y se habilita la Agenda de Turnos y Modalidad de Atención en el Paso 3.'
+                      : 'Modo Producto activo: Habilita control de inventario, tallas/colores y preventa bajo demanda.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: isService
+                        ? const Color(0xFF5B21B6)
+                        : TuLojitaBrandColors.indigo700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -476,8 +706,8 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     required bool canEnhanceWithAi,
   }) {
     final int totalImages = state.existingImages.length + state.selectedImages.length;
-    final double cardHeight = canEnhanceWithAi ? 132 : 120;
-    final double cardWidth = canEnhanceWithAi ? 108 : 100;
+    final double cardHeight = canEnhanceWithAi ? 112 : 100;
+    final double cardWidth = canEnhanceWithAi ? 104 : 96;
 
     return SizedBox(
       height: cardHeight,
@@ -684,16 +914,6 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
         borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    );
-  }
-
-  Widget _dropdownItem(dynamic iconData, String text) {
-    return Row(
-      children: [
-        HugeIcon(icon: iconData, size: 20, color: const Color(0xFF4F46E5)),
-        const SizedBox(width: 12),
-        Text(text),
-      ],
     );
   }
 }

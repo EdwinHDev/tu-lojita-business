@@ -32,6 +32,8 @@ class OrderDetailHelpers {
         return 'Efectivo Bs.';
       case 'CARD':
         return 'Tarjeta';
+      case 'DEFERRED_ZERO_INITIAL':
+        return 'Inicial \$0.00 Diferida';
       default:
         return (method ?? '').trim().isNotEmpty ? method!.trim() : 'Otro';
     }

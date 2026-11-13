@@ -1,4 +1,5 @@
 import '../entities/item.dart';
+import '../entities/item_catalog_summary.dart';
 import '../entities/item_owner_stats.dart';
 import '../entities/property_template.dart';
 import 'dart:io';
@@ -7,6 +8,7 @@ abstract class ItemRepository {
   Future<List<Item>> getItemsByStore(String storeId);
   Future<Item> getItemById(String id);
   Future<ItemOwnerStats> getItemOwnerStats(String id);
+  Future<ItemCatalogSummary> getStoreCatalogSummary(String storeId);
   
   Future<({List<Item> items, int total})> getItemsPaginated({
     required String storeId,
@@ -17,6 +19,10 @@ abstract class ItemRepository {
     String? sortBy,
     String? order,
     bool? onlyInStock,
+    bool? isActive,
+    bool? onlyOutOfStock,
+    bool? hasDiscount,
+    ItemType? itemType,
   });
 
   Future<Item> createItem(

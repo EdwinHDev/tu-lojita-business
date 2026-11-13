@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item_owner_stats.dart';
+import 'package:tu_lojita_business/features/items/presentation/providers/item_owner_stats_provider.dart';
+import 'package:tu_lojita_business/features/items/presentation/providers/item_promotion_provider.dart';
 import 'package:tu_lojita_business/features/items/presentation/screens/item_detail_screen.dart';
 import 'widget_test.dart';
 
@@ -44,6 +47,18 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          itemOwnerStatsProvider(testItem.id).overrideWith(
+            (ref) async => const ItemOwnerStats(
+              unitsSold: 0,
+              ordersCount: 0,
+              favoritesCount: 0,
+            ),
+          ),
+          itemPromotionByItemProvider(testItem.id).overrideWith(
+            (ref) async => null,
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
           home: const ItemDetailScreen(

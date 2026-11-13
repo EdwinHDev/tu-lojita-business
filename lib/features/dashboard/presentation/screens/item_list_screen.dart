@@ -1,19 +1,21 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:tu_lojita_business/core/config/envs.dart';
-import 'package:tu_lojita_business/core/widgets/dual_price_text.dart';
-import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
-import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
-import 'package:tu_lojita_business/core/utils/notification_service.dart';
-import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
 import 'package:tu_lojita_business/core/repositories/payment_methods_repository.dart';
+import 'package:tu_lojita_business/core/theme/app_theme.dart';
+import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
 import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/providers/store_details_notifier.dart';
+import 'package:tu_lojita_business/features/items/domain/entities/item.dart';
+import 'package:tu_lojita_business/features/items/presentation/providers/item_list_notifier.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/list/item_bento_grid_card.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/list/item_list_quick_actions_sheet.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/list/items_bento_filter_bar.dart';
+import 'package:tu_lojita_business/features/items/presentation/widgets/list/items_bento_shimmer.dart';
 import '../widgets/item_creation_prerequisites_modal.dart';
-import '../../../items/presentation/widgets/promote_item_sheet.dart';
-import 'dart:async';
 
 class ItemListScreen extends ConsumerStatefulWidget {
   final String storeId;
@@ -45,16 +47,18 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
     setState(() => _isCheckingPrerequisites = true);
 
     try {
-      // 1. Verificar categorías
       var storeData = ref.read(storeDetailsProvider).forStore(widget.storeId);
       if (storeData.categories.isEmpty && !storeData.isLoading) {
-        await ref.read(storeDetailsProvider.notifier).loadData(widget.storeId, force: true);
+        await ref
+            .read(storeDetailsProvider.notifier)
+            .loadData(widget.storeId, force: true);
         storeData = ref.read(storeDetailsProvider).forStore(widget.storeId);
       }
       final bool hasCategories = storeData.categories.isNotEmpty;
 
-      // 2. Verificar métodos de pago activos
-      final methods = await ref.read(paymentMethodsRepositoryProvider).getStoreMethods(widget.storeId);
+      final methods = await ref
+          .read(paymentMethodsRepositoryProvider)
+          .getStoreMethods(widget.storeId);
       final bool hasActivePaymentMethods = methods.any((m) => m.isActive);
 
       if (!mounted) return;
@@ -86,7 +90,10 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isCheckingPrerequisites = false);
-        NotificationService.showError(context, 'Error al verificar requisitos: $e');
+        NotificationService.showError(
+          context,
+          'Error al verificar requisitos: $e',
+        );
       }
     }
   }
@@ -110,7 +117,9 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       ref.read(itemListProvider.notifier).loadNextPage(widget.storeId);
     }
   }
@@ -120,9 +129,11 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
       _isSearchingLocal = true;
     });
     if (_debounce?.isActive ?? false) _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
+    _debounce = Timer(const Duration(milliseconds: 450), () {
       if (mounted) {
-        ref.read(itemListProvider.notifier).setSearchQuery(widget.storeId, query);
+        ref
+            .read(itemListProvider.notifier)
+            .setSearchQuery(widget.storeId, query);
         setState(() {
           _isSearchingLocal = false;
         });
@@ -130,1009 +141,326 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
     });
   }
 
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchController.clear();
+    setState(() => _isSearchingLocal = false);
+    ref.read(itemListProvider.notifier).setSearchQuery(widget.storeId, '');
+  }
+
+  Future<void> _openItemDetail(Item item) async {
+    final result = await context.push(
+      '/dashboard/stores/${widget.storeId}/items/detail',
+      extra: item,
+    );
+    if (!mounted) return;
+    if (result is Item) {
+      ref.read(itemListProvider.notifier).upsertItem(widget.storeId, result);
+    } else {
+      await ref
+          .read(itemListProvider.notifier)
+          .refreshSingleItem(widget.storeId, item.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final user = authState is Authenticated ? authState.user : null;
     final canEditProducts = user?.canEditProducts ?? true;
+    final canChangePrices = user?.canChangePrices ?? true;
+    final canManageStock = user?.canManageStock ?? true;
+    final canShowQuickActions =
+        canEditProducts || canChangePrices || canManageStock;
+
     final storeData = ref.watch(storeDetailsProvider).forStore(widget.storeId);
     final listState = ref.watch(itemListProvider).forStore(widget.storeId);
+    final notifier = ref.read(itemListProvider.notifier);
     final items = listState.items;
+    final rowCount = (items.length / 2).ceil();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: TuLojitaBrandColors.background,
       appBar: AppBar(
-        title: Column(
+        toolbarHeight: 64,
+        titleSpacing: 16,
+        title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Gestionar Artículos',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF111827)),
-            ),
-            if (listState.total > 0)
-              Text(
-                '${listState.total} artículos existentes',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.normal),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Gestionar Artículos',
+                maxLines: 1,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  color: TuLojitaBrandColors.inkPrimary,
+                ),
               ),
+            ),
+            SizedBox(height: 2),
+            BcvRateHeaderPill(compactSubtitle: true),
           ],
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF111827),
+        actions: const [],
+        backgroundColor: TuLojitaBrandColors.surface,
+        foregroundColor: TuLojitaBrandColors.inkPrimary,
         elevation: 0,
         centerTitle: false,
       ),
+      floatingActionButton: canEditProducts
+          ? FloatingActionButton.extended(
+              key: const Key('create_item_fab'),
+              onPressed: _isCheckingPrerequisites
+                  ? null
+                  : _checkPrerequisitesAndNavigate,
+              backgroundColor: TuLojitaBrandColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 2,
+              icon: _isCheckingPrerequisites
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.add_rounded, size: 20),
+              label: Text(
+                _isCheckingPrerequisites ? 'Verificando...' : 'Agregar artículo',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                ),
+              ),
+            )
+          : null,
       body: Column(
         children: [
-          _buildSearchAndFilters(storeData),
+          ItemsBentoFilterBar(
+            searchController: _searchController,
+            isSearching: _isSearchingLocal,
+            listState: listState,
+            categories: storeData.categories,
+            onSearchChanged: _onSearchChanged,
+            onClearSearch: _clearSearch,
+            onStatusFilterSelected: (filter) =>
+                notifier.setStatusFilter(widget.storeId, filter),
+            onItemTypeSelected: (type) =>
+                notifier.setItemTypeFilter(widget.storeId, type),
+            onCategorySelected: (catId) =>
+                notifier.setCategory(widget.storeId, catId),
+            onSortSelected: (sortBy, order) =>
+                notifier.setSort(widget.storeId, sortBy, order),
+            onResetFilters: () {
+              _debounce?.cancel();
+              _searchController.clear();
+              setState(() => _isSearchingLocal = false);
+              notifier.resetFilters(widget.storeId);
+            },
+          ),
           Expanded(
             child: listState.isLoading && items.isEmpty
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
-                : items.isEmpty
-                    ? RefreshIndicator(
-                        color: const Color(0xFF4F46E5),
-                        onRefresh: () => ref.read(itemListProvider.notifier).loadInitial(widget.storeId),
-                        child: _buildEmptyState(context),
-                      )
-                    : Column(
-                        children: [
-                          Expanded(
-                            child: RefreshIndicator(
-                              color: const Color(0xFF4F46E5),
-                              onRefresh: () => ref.read(itemListProvider.notifier).loadInitial(widget.storeId),
-                              child: ListView.separated(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.all(20),
-                                itemCount: items.length + (listState.isLoadMoreLoading ? 1 : 0),
-                                separatorBuilder: (context, index) => const SizedBox(height: 16),
-                                itemBuilder: (context, index) {
-                                  if (index == items.length) {
-                                    return const Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.all(16.0),
-                                        child: CircularProgressIndicator(color: Color(0xFF4F46E5), strokeWidth: 2),
+                ? const ItemsBentoGridShimmer()
+                : RefreshIndicator(
+                    color: TuLojitaBrandColors.primary,
+                    onRefresh: () => notifier.loadInitial(widget.storeId),
+                    child: CustomScrollView(
+                      key: const Key('catalog_bento_scroll_view'),
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        if (items.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _buildEmptyState(
+                              context,
+                              canEditProducts: canEditProducts,
+                              hasFilters: listState.hasActiveFilters ||
+                                  _searchController.text.isNotEmpty,
+                            ),
+                          )
+                        else ...[
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              14,
+                              16,
+                              canEditProducts ? 88 : 24,
+                            ),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, rowIndex) {
+                                  final leftIndex = rowIndex * 2;
+                                  final rightIndex = leftIndex + 1;
+                                  final leftItem = items[leftIndex];
+                                  final rightItem = rightIndex < items.length
+                                      ? items[rightIndex]
+                                      : null;
+
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom:
+                                          rowIndex < rowCount - 1 ? 12 : 0,
+                                    ),
+                                    child: IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: _buildGridCard(
+                                              leftItem,
+                                              canShowQuickActions:
+                                                  canShowQuickActions,
+                                              canEditProducts: canEditProducts,
+                                              canChangePrices: canChangePrices,
+                                              canManageStock: canManageStock,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: rightItem != null
+                                                ? _buildGridCard(
+                                                    rightItem,
+                                                    canShowQuickActions:
+                                                        canShowQuickActions,
+                                                    canEditProducts:
+                                                        canEditProducts,
+                                                    canChangePrices:
+                                                        canChangePrices,
+                                                    canManageStock:
+                                                        canManageStock,
+                                                  )
+                                                : const SizedBox.shrink(),
+                                          ),
+                                        ],
                                       ),
-                                    );
-                                  }
-                                  return _buildItemCard(items[index]);
+                                    ),
+                                  );
                                 },
+                                childCount: rowCount,
                               ),
                             ),
                           ),
-                          if (canEditProducts)
-                            SafeArea(
+                          if (listState.isLoadMoreLoading)
+                            const SliverToBoxAdapter(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  height: 52,
-                                  child: ElevatedButton.icon(
-                                    onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
-                                    icon: _isCheckingPrerequisites
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                          )
-                                        : const HugeIcon(
-                                            icon: HugeIcons.strokeRoundedAdd01,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                    label: Text(
-                                      _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF4F46E5),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      elevation: 0,
-                                    ),
+                                padding: EdgeInsets.only(bottom: 24),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: TuLojitaBrandColors.primary,
+                                    strokeWidth: 2,
                                   ),
                                 ),
                               ),
                             ),
                         ],
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchAndFilters(StoreDetailsData storeData) {
-    final listState = ref.watch(itemListProvider).forStore(widget.storeId);
-    final notifier = ref.read(itemListProvider.notifier);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: _onSearchChanged,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
-            decoration: InputDecoration(
-              hintText: 'Buscar productos...',
-              hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-              prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 20),
-              suffixIcon: (_isSearchingLocal || listState.isLoading) && _searchController.text.isNotEmpty
-                  ? const UnconstrainedBox(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF4F46E5),
-                        ),
-                      ),
-                    )
-                  : _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, color: Color(0xFF6B7280), size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            _onSearchChanged('');
-                          },
-                        )
-                      : null,
-              filled: true,
-              fillColor: const Color(0xFFF3F4F6),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE0E7FF), width: 1.5),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Row 1: Categories
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip(
-                  label: 'Todas',
-                  isSelected: listState.selectedCategoryId == null,
-                  onSelected: (_) => notifier.setCategory(widget.storeId, null),
-                ),
-                ...storeData.categories.map((cat) => _buildFilterChip(
-                      label: cat.name,
-                      isSelected: listState.selectedCategoryId == cat.id,
-                      onSelected: (_) => notifier.setCategory(widget.storeId, cat.id),
-                    )),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Row 2: Sort and Meta-Filters
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip(
-                  label: 'Recientes',
-                  isSelected: listState.sortBy == 'createdAt' && listState.order == 'DESC',
-                  onSelected: (_) => notifier.setSort(widget.storeId, 'createdAt', 'DESC'),
-                ),
-                _buildFilterChip(
-                  label: 'Precio: ↓',
-                  isSelected: listState.sortBy == 'price' && listState.order == 'ASC',
-                  onSelected: (_) => notifier.setSort(widget.storeId, 'price', 'ASC'),
-                ),
-                _buildFilterChip(
-                  label: 'Precio: ↑',
-                  isSelected: listState.sortBy == 'price' && listState.order == 'DESC',
-                  onSelected: (_) => notifier.setSort(widget.storeId, 'price', 'DESC'),
-                ),
-                _buildFilterChip(
-                  label: 'Solo Stock',
-                  isSelected: listState.onlyInStock,
-                  onSelected: (val) => notifier.setOnlyInStock(widget.storeId, val),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    _searchController.clear();
-                    notifier.resetFilters(widget.storeId);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.refresh, size: 14, color: Colors.red),
-                        SizedBox(width: 4),
-                        Text(
-                          'Limpiar',
-                          style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip({
-    required String label,
-    required bool isSelected,
-    required Function(bool) onSelected,
+  Widget _buildGridCard(
+    Item item, {
+    required bool canShowQuickActions,
+    required bool canEditProducts,
+    required bool canChangePrices,
+    required bool canManageStock,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF6B7280),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
-          ),
-        ),
-        selected: isSelected,
-        onSelected: onSelected,
-        backgroundColor: const Color(0xFFF3F4F6),
-        selectedColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: isSelected ? const Color(0xFF4F46E5) : Colors.transparent,
-          ),
-        ),
-        showCheckmark: false,
-      ),
+    return ItemBentoGridCard(
+      item: item,
+      canShowQuickActions: canShowQuickActions,
+      onTap: () => _openItemDetail(item),
+      onMoreTap: canShowQuickActions
+          ? () => showItemListQuickActionsSheet(
+                context: context,
+                ref: ref,
+                storeId: widget.storeId,
+                item: item,
+                canEditProducts: canEditProducts,
+                canChangePrices: canChangePrices,
+                canManageStock: canManageStock,
+              )
+          : null,
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    final user = authState is Authenticated ? authState.user : null;
-    final canEditProducts = user?.canEditProducts ?? true;
-    final listState = ref.watch(itemListProvider).forStore(widget.storeId);
-    final hasFilters = _searchController.text.isNotEmpty || listState.selectedCategoryId != null || listState.onlyInStock;
-
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool canEditProducts,
+    required bool hasFilters,
+  }) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4F46E5).withValues(alpha: 0.06),
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: TuLojitaBrandColors.primarySoft,
                 shape: BoxShape.circle,
               ),
               child: const HugeIcon(
                 icon: HugeIcons.strokeRoundedPackage01,
-                color: Color(0xFF4F46E5),
-                size: 44,
+                color: TuLojitaBrandColors.primary,
+                size: 40,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             Text(
-              hasFilters ? 'No se encontraron resultados' : 'No hay artículos aún',
+              hasFilters
+                  ? 'No se encontraron resultados'
+                  : 'No hay artículos aún',
+              textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF111827),
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: TuLojitaBrandColors.inkPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               hasFilters
-                  ? 'Prueba con una búsqueda diferente o restablece los filtros para ver tus artículos.'
+                  ? 'Prueba con una búsqueda diferente o restablece los filtros activos para explorar tu catálogo.'
                   : (canEditProducts
                       ? 'Agrega tu primer producto o servicio para organizar tu inventario y comenzar a vender.'
                       : 'Actualmente no hay artículos registrados en el catálogo de esta sucursal.'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF6B7280), height: 1.4, fontSize: 14),
+              style: const TextStyle(
+                color: TuLojitaBrandColors.inkSecondary,
+                height: 1.4,
+                fontSize: 13.5,
+              ),
             ),
-            if (!hasFilters && canEditProducts) ...[
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _isCheckingPrerequisites ? null : _checkPrerequisitesAndNavigate,
-                icon: _isCheckingPrerequisites
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add, color: Colors.white, size: 18),
-                label: Text(
-                  _isCheckingPrerequisites ? 'Verificando...' : 'Agregar Artículo',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+            if (hasFilters) ...[
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _debounce?.cancel();
+                  _searchController.clear();
+                  setState(() => _isSearchingLocal = false);
+                  ref
+                      .read(itemListProvider.notifier)
+                      .resetFilters(widget.storeId);
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Restablecer filtros'),
               ),
             ],
           ],
         ),
       ),
     );
-  }
-
-  String _resolveImageUrl(String path) {
-    if (path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
-    final cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    return '${Envs.apiBaseUrlImages}/$cleanPath';
-  }
-
-  Widget _buildItemCard(Item item) {
-    final authState = ref.watch(authProvider);
-    final user = authState is Authenticated ? authState.user : null;
-    final canEditProducts = user?.canEditProducts ?? true;
-    final imageUrl = _resolveImageUrl(item.mainImage);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => context.push('/dashboard/stores/${widget.storeId}/items/detail', extra: item),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.015),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(12),
-                  image: imageUrl.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(imageUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: imageUrl.isEmpty
-                    ? const Icon(Icons.image, color: Colors.grey)
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          item.itemType == ItemType.product ? 'Producto' : 'Servicio',
-                          style: const TextStyle(
-                            color: Color(0xFF4F46E5),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (!item.isActive)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFCA5A5)),
-                            ),
-                            child: const Text(
-                              '🔴 Despublicado',
-                              style: TextStyle(color: Color(0xFFDC2626), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        else if (item.isOutOfStock)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFFBEB),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFCD34D)),
-                            ),
-                            child: const Text(
-                              '⚠️ Agotado',
-                              style: TextStyle(color: Color(0xFFD97706), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF6EE7B7)),
-                            ),
-                            child: const Text(
-                              '🟢 Publicado',
-                              style: TextStyle(color: Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        if (item.hasVariants && item.variants.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEEF2FF),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFC7D2FE)),
-                            ),
-                            child: Text(
-                              '🟣 ${item.variants.length} var.',
-                              style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        DualPriceText(
-                          amountInUsd: item.hasDifferentVariantPrices
-                              ? item.variantPriceRange.min
-                              : item.price,
-                          prefix: item.hasDifferentVariantPrices ? 'Desde ' : null,
-                          usdStyle: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Color(0xFF111827),
-                          ),
-                          bsStyle: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                        if (item.favoritesCount > 0) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFFECACA)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.favorite, color: Color(0xFFEF4444), size: 12),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '${item.favoritesCount}',
-                                  style: const TextStyle(
-                                    color: Color(0xFFDC2626),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (canEditProducts)
-                IconButton(
-                  icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
-                  onPressed: () => _showItemActions(context, item),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showItemActions(BuildContext context, Item item) {
-    final authState = ref.read(authProvider);
-    final user = authState is Authenticated ? authState.user : null;
-    if (user != null && !user.canEditProducts) {
-      NotificationService.showWarning(
-        context,
-        'No tienes permisos requeridos para modificar artículos.',
-      );
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    DualPriceText(
-                      amountInUsd: item.price,
-                      usdStyle: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade600,
-                      ),
-                      bsStyle: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF9CA3AF),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(Icons.favorite, color: Colors.red.shade400, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${item.favoritesCount} favoritos',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: item.isActive
-                          ? const Color(0xFFFFFBEB)
-                          : const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      item.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: item.isActive ? const Color(0xFFD97706) : const Color(0xFF059669),
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    item.isActive ? 'Despublicar producto' : 'Publicar producto',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: item.isActive ? const Color(0xFFD97706) : const Color(0xFF059669),
-                    ),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _togglePublishItem(item);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.stars_rounded, color: Color(0xFFD97706), size: 20),
-                  ),
-                  title: const Text(
-                    'Promocionar en el Home',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Color(0xFF92400E),
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Destaca este producto en la vitrina principal',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    PromoteItemSheet.show(context, item, widget.storeId);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.edit_outlined, color: Color(0xFF4F46E5), size: 20),
-                  ),
-                  title: const Text(
-                    'Editar artículo',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _editItem(item);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
-                  ),
-                  title: Text(
-                    'Eliminar artículo',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Colors.red.shade600,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _confirmDeleteItem(item);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _togglePublishItem(Item item) async {
-    // Si está activo y se va a despublicar, pedir confirmación y explicar consecuencias
-    if (item.isActive) {
-      final confirm = await showGeneralDialog<bool>(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: 'Confirmar Despublicación',
-        barrierColor: Colors.black.withValues(alpha: 0.4),
-        transitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-        transitionBuilder: (context, anim1, anim2, child) {
-          return ScaleTransition(
-            scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
-            child: FadeTransition(
-              opacity: anim1,
-              child: AlertDialog(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                contentPadding: const EdgeInsets.all(24),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.visibility_off_outlined,
-                        color: Colors.amber.shade700,
-                        size: 36,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      '¿Despublicar Artículo?',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'El artículo "${item.title}" dejará de ser visible para los clientes y no podrán agregarlo a su carrito. ¿Deseas continuar?',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.grey.shade200),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              'Cancelar',
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber.shade700,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text(
-                              'Despublicar',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-
-      if (confirm != true || !mounted) return;
-    }
-
-    try {
-      await ref.read(itemListProvider.notifier).toggleItemActive(widget.storeId, item);
-      if (mounted) {
-        NotificationService.showSuccess(
-          context,
-          item.isActive ? 'Artículo despublicado' : 'Artículo publicado',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        NotificationService.showError(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-        );
-      }
-    }
-  }
-
-  Future<void> _editItem(Item item) async {
-    final result = await context.push('/dashboard/stores/${widget.storeId}/items/new', extra: item);
-    if (result == true && mounted) {
-      ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
-    }
-  }
-
-  Future<void> _confirmDeleteItem(Item item) async {
-    final confirm = await showGeneralDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Confirmar Eliminación',
-      barrierColor: Colors.black.withValues(alpha: 0.4),
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-      transitionBuilder: (context, anim1, anim2, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
-          child: FadeTransition(
-            opacity: anim1,
-            child: AlertDialog(
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              contentPadding: const EdgeInsets.all(24),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.red.shade600,
-                      size: 36,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '¿Eliminar Artículo?',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '¿Estás seguro de que deseas eliminar "${item.title}"? Esta acción no se puede deshacer.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.grey.shade200),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            'Cancelar',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade600,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text(
-                            'Eliminar',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    if (confirm == true && mounted) {
-      try {
-        await ref.read(itemListProvider.notifier).deleteItem(widget.storeId, item.id);
-        if (mounted) {
-          NotificationService.showSuccess(context, 'Artículo eliminado exitosamente');
-        }
-      } catch (e) {
-        if (mounted) {
-          NotificationService.showError(
-            context,
-            e.toString().replaceAll('Exception: ', ''),
-          );
-        }
-      }
-    }
   }
 }

@@ -158,7 +158,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
     if (updated != null && mounted) {
       final resolvedItem = updated;
       setState(() => _currentItem = resolvedItem);
-      ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+      ref
+          .read(itemListProvider.notifier)
+          .upsertItem(widget.storeId, resolvedItem);
     }
   }
 
@@ -181,7 +183,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
     if (updated != null && mounted) {
       final resolvedItem = updated;
       setState(() => _currentItem = resolvedItem);
-      ref.read(itemListProvider.notifier).loadInitial(widget.storeId);
+      ref
+          .read(itemListProvider.notifier)
+          .upsertItem(widget.storeId, resolvedItem);
     }
   }
 

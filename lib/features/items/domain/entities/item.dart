@@ -147,6 +147,7 @@ class Item extends Equatable {
     List<String>? images,
     bool? isFeatured,
     double? discountPrice,
+    bool clearDiscountPrice = false,
     ItemType? itemType,
     bool? trackInventory,
     double? stockQuantity,
@@ -178,7 +179,8 @@ class Item extends Equatable {
       mainImage: mainImage ?? this.mainImage,
       images: images ?? this.images,
       isFeatured: isFeatured ?? this.isFeatured,
-      discountPrice: discountPrice ?? this.discountPrice,
+      discountPrice:
+          clearDiscountPrice ? null : (discountPrice ?? this.discountPrice),
       itemType: itemType ?? this.itemType,
       trackInventory: trackInventory ?? this.trackInventory,
       stockQuantity: stockQuantity ?? this.stockQuantity,

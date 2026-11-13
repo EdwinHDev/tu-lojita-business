@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../domain/entities/item.dart';
+import '../../domain/entities/item_catalog_summary.dart';
 import '../../domain/entities/item_owner_stats.dart';
 import '../../domain/entities/property_template.dart';
 import '../../domain/repositories/item_repository.dart';
@@ -53,6 +54,19 @@ class ItemRepositoryImpl implements ItemRepository {
   }
 
   @override
+  Future<ItemCatalogSummary> getStoreCatalogSummary(String storeId) async {
+    try {
+      final response = await _dio.get('/items/store/$storeId/owner-summary');
+      final data = response.data is Map<String, dynamic>
+          ? response.data
+          : Map<String, dynamic>.from(response.data as Map);
+      return ItemCatalogSummary.fromJson(data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  @override
   Future<({List<Item> items, int total})> getItemsPaginated({
     required String storeId,
     int limit = 50,
@@ -62,6 +76,10 @@ class ItemRepositoryImpl implements ItemRepository {
     String? sortBy,
     String? order,
     bool? onlyInStock,
+    bool? isActive,
+    bool? onlyOutOfStock,
+    bool? hasDiscount,
+    ItemType? itemType,
   }) async {
     try {
       final Map<String, dynamic> queryParameters = {
@@ -85,6 +103,19 @@ class ItemRepositoryImpl implements ItemRepository {
       }
       if (onlyInStock == true) {
         queryParameters['onlyInStock'] = true;
+      }
+      if (isActive != null) {
+        queryParameters['isActive'] = isActive;
+      }
+      if (onlyOutOfStock == true) {
+        queryParameters['onlyOutOfStock'] = true;
+      }
+      if (hasDiscount == true) {
+        queryParameters['hasDiscount'] = true;
+      }
+      if (itemType != null) {
+        queryParameters['itemType'] =
+            itemType == ItemType.service ? 'SERVICE' : 'PRODUCT';
       }
 
       final response = await _dio.get('/items', queryParameters: queryParameters);
