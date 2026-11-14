@@ -19,6 +19,7 @@ import 'package:tu_lojita_business/features/dashboard/presentation/screens/store
 import 'package:tu_lojita_business/features/collaborators/presentation/screens/team_management_screen.dart';
 import 'package:tu_lojita_business/features/collaborators/presentation/screens/collaborator_profile_screen.dart';
 import 'package:tu_lojita_business/features/activity_log/presentation/screens/activity_log_screen.dart';
+import 'package:tu_lojita_business/features/crm/presentation/screens/customer_crm_detail_screen.dart';
 
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/category_list_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/create_category_screen.dart';
@@ -147,6 +148,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: 'crm/customer/:customerId',
+            builder: (context, state) {
+              final customerId = state.pathParameters['customerId']!;
+              return CustomerCrmDetailScreen(customerId: customerId);
+            },
           ),
           GoRoute(
             path: 'orders/:orderId',

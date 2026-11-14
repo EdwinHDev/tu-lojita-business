@@ -39,5 +39,29 @@ class ExchangeRateConfig {
     if (!enabled || rate <= 0) return 0.0;
     return amountInUsd * rate;
   }
+
+  /// Resuelve la configuración de tasa efectiva para una orden o pago histórico.
+  /// Si existe una tasa histórica (> 0) y la visualización BCV no está deshabilitada,
+  /// retorna un [ExchangeRateConfig] con la tasa histórica del día de la transacción.
+  static ExchangeRateConfig? resolveForOrder(
+    ExchangeRateConfig? liveConfig,
+    double? historicalRate,
+  ) {
+    if (liveConfig != null && !liveConfig.enabled) {
+      return liveConfig;
+    }
+    if (historicalRate != null && historicalRate > 0) {
+      return ExchangeRateConfig(
+        enabled: true,
+        rate: historicalRate,
+        currency: liveConfig?.currency ?? 'VES',
+        symbol: liveConfig?.symbol ?? 'Bs.',
+        source: liveConfig?.source ?? 'BCV',
+        mode: liveConfig?.mode ?? 'HISTORICAL',
+        updatedAt: liveConfig?.updatedAt,
+      );
+    }
+    return liveConfig;
+  }
 }
 

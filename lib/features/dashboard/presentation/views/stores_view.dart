@@ -156,6 +156,7 @@ class _StoresViewState extends ConsumerState<StoresView> {
               StoresHeaderBanner(
                 storeCount: 0,
                 canManageBranches: canManageBranches,
+                companyLogo: user?.company?.logo,
                 onCreateStore: () => context.go('/dashboard/stores/create'),
               ),
               const SizedBox(height: 12),
@@ -205,6 +206,7 @@ class _StoresViewState extends ConsumerState<StoresView> {
                     StoresHeaderBanner(
                       storeCount: stores.length,
                       canManageBranches: canManageBranches,
+                      companyLogo: user?.company?.logo,
                       onCreateStore: () =>
                           context.go('/dashboard/stores/create'),
                     ),
@@ -304,6 +306,7 @@ class _StoresViewState extends ConsumerState<StoresView> {
                         unreadDisputesCount:
                             unreadDisputesByStore[store.id] ?? 0,
                         canViewFinancials: canViewFinancials,
+                        fallbackLogo: user?.company?.logo,
                         onTap: () => context.go('/dashboard/stores/${store.id}'),
                       );
                     },

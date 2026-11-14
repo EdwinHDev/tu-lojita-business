@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -901,4 +902,263 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('StoreDetailsScreen Banner Logo Fallback Tests', () {
+    test('resolveStoreBannerUrls follows coverImage -> store.logo -> company.logo and deduplicates', () {
+      const fullStore = Store(
+        id: 's1',
+        name: 'Tienda A',
+        logo: '/store-logo.png',
+        coverImage: '/cover.png',
+        status: 'ACTIVE',
+      );
+      expect(
+        resolveStoreBannerUrls(fullStore, ownerUser),
+        [
+          'https://images.tulojita.com/cover.png',
+          'https://images.tulojita.com/store-logo.png',
+          'https://images.tulojita.com/company-logo.png',
+        ],
+      );
+
+      const noCoverStore = Store(
+        id: 's2',
+        name: 'Tienda B',
+        logo: '  ',
+        coverImage: null,
+        status: 'ACTIVE',
+      );
+      expect(
+        resolveStoreBannerUrls(noCoverStore, ownerUser),
+        ['https://images.tulojita.com/company-logo.png'],
+      );
+
+      const noBrandUser = User(
+        id: 'u-empty',
+        email: 'x@test.com',
+        firstName: 'X',
+        lastName: 'Y',
+        role: 'VENDOR',
+      );
+      expect(resolveStoreBannerUrls(noCoverStore, noBrandUser), isEmpty);
+    });
+
+    testWidgets('StoreDetailsScreen falls back to store.logo with darken tint when coverImage is null', (tester) async {
+      const storeWithoutCover = Store(
+        id: 'store-1',
+        name: 'Habla Cloro',
+        branchName: 'Centro',
+        logo: '/branch-logo.png',
+        coverImage: null,
+        status: 'ACTIVE',
+      );
+
+      await tester.pumpWidget(
+        wrapViewport(
+          width: 390,
+          user: ownerUser,
+          detailsData: StoreDetailsData(
+            store: storeWithoutCover,
+            dashboard: sampleDashboard,
+            isLoading: false,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final bannerImage = find.descendant(
+        of: find.byType(SliverAppBar),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is Image && widget.image is NetworkImage) {
+            final net = widget.image as NetworkImage;
+            return net.url == 'https://images.tulojita.com/branch-logo.png' &&
+                widget.fit == BoxFit.cover;
+          }
+          return false;
+        }),
+      );
+      expect(bannerImage, findsOneWidget);
+
+      final darkenedFilter = find.byWidgetPredicate((widget) {
+        if (widget is ColorFiltered) {
+          return widget.colorFilter ==
+              ColorFilter.mode(
+                Colors.black.withValues(alpha: 0.40),
+                BlendMode.darken,
+              );
+        }
+        return false;
+      });
+      expect(darkenedFilter, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('StoreDetailsScreen falls back to company.logo when coverImage and store.logo are empty', (tester) async {
+      const bareStore = Store(
+        id: 'store-1',
+        name: 'Sucursal Norte',
+        logo: '',
+        coverImage: '',
+        status: 'ACTIVE',
+      );
+
+      await tester.pumpWidget(
+        wrapViewport(
+          width: 390,
+          user: ownerUser,
+          detailsData: StoreDetailsData(
+            store: bareStore,
+            dashboard: sampleDashboard,
+            isLoading: false,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final companyBannerImage = find.byWidgetPredicate((widget) {
+        if (widget is Image && widget.image is NetworkImage) {
+          final net = widget.image as NetworkImage;
+          return net.url == 'https://images.tulojita.com/company-logo.png' &&
+              widget.fit == BoxFit.cover;
+        }
+        return false;
+      });
+      expect(companyBannerImage, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('StoreDetailsScreen recovers via errorBuilder to store.logo when coverImage fails over network', (tester) async {
+      const storeWithBrokenCover = Store(
+        id: 'store-1',
+        name: 'Habla Cloro',
+        logo: '/branch-logo.png',
+        coverImage: '/broken-cover.png',
+        status: 'ACTIVE',
+      );
+
+      await HttpOverrides.runZoned(
+        () async {
+          await tester.pumpWidget(
+            wrapViewport(
+              width: 390,
+              user: ownerUser,
+              detailsData: StoreDetailsData(
+                store: storeWithBrokenCover,
+                dashboard: sampleDashboard,
+                isLoading: false,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+          final fallbackImage = find.byWidgetPredicate((widget) {
+            if (widget is Image && widget.image is NetworkImage) {
+              final net = widget.image as NetworkImage;
+              return net.url == 'https://images.tulojita.com/branch-logo.png';
+            }
+            return false;
+          });
+          expect(fallbackImage, findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+        createHttpClient: (_) => _FailingCoverHttpClient(),
+      );
+    });
+  });
+}
+
+class _FailingCoverHttpClient implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    return _FailingCoverHttpClientRequest(url);
+  }
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    return _FailingCoverHttpClientRequest(url);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FailingCoverHttpClientRequest implements HttpClientRequest {
+  final Uri url;
+  _FailingCoverHttpClientRequest(this.url);
+
+  @override
+  final HttpHeaders headers = _FailingCoverHttpHeaders();
+
+  @override
+  Future<HttpClientResponse> close() async =>
+      _FailingCoverHttpClientResponse(is404: url.path.contains('broken-cover'));
+
+  @override
+  Future<HttpClientResponse> get done async => close();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FailingCoverHttpHeaders implements HttpHeaders {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FailingCoverHttpClientResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  static const List<int> _transparentPng = [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+    0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+    0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  ];
+
+  final bool is404;
+  _FailingCoverHttpClientResponse({required this.is404});
+
+  @override
+  int get statusCode => is404 ? 404 : 200;
+
+  @override
+  int get contentLength => is404 ? 0 : _transparentPng.length;
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  bool get persistentConnection => false;
+
+  @override
+  bool get isRedirect => false;
+
+  @override
+  List<RedirectInfo> get redirects => [];
+
+  @override
+  final HttpHeaders headers = _FailingCoverHttpHeaders();
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    final bytes = is404 ? <int>[] : _transparentPng;
+    return Stream<List<int>>.fromIterable([bytes]).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

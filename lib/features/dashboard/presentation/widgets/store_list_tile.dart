@@ -16,6 +16,7 @@ class StoreListTile extends StatelessWidget {
   final ExchangeRateConfig? exchangeConfig;
   final int unreadDisputesCount;
   final bool canViewFinancials;
+  final String? fallbackLogo;
 
   const StoreListTile({
     super.key,
@@ -24,14 +25,32 @@ class StoreListTile extends StatelessWidget {
     this.exchangeConfig,
     this.unreadDisputesCount = 0,
     this.canViewFinancials = true,
+    this.fallbackLogo,
   });
+
+  Widget _buildStoreFallbackIcon() {
+    return const Center(
+      child: HugeIcon(
+        icon: HugeIcons.strokeRoundedStore01,
+        color: TuLojitaBrandColors.indigo600,
+        size: 22,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDeleting = store.isScheduledForDeletion;
     final isSuspended = store.status.toUpperCase() == 'SUSPENDED' && !isDeleting;
     final isInactive = store.status.toUpperCase() == 'INACTIVE' && !isDeleting;
-    final logoUrl = resolveDashboardImageUrl(store.logo);
+    final primaryLogoUrl = resolveDashboardImageUrl(store.logo);
+    final fallbackLogoUrl = resolveDashboardImageUrl(fallbackLogo);
+    final logoUrl =
+        primaryLogoUrl.isNotEmpty ? primaryLogoUrl : fallbackLogoUrl;
+    final hasDistinctFallback =
+        primaryLogoUrl.isNotEmpty &&
+        fallbackLogoUrl.isNotEmpty &&
+        fallbackLogoUrl != primaryLogoUrl;
 
     final String chipLabel;
     final Color chipBgColor;
@@ -175,22 +194,21 @@ class StoreListTile extends StatelessWidget {
                         child: logoUrl.isNotEmpty
                             ? Image.network(
                                 logoUrl,
+                                width: 48,
+                                height: 48,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const Center(
-                                  child: HugeIcon(
-                                    icon: HugeIcons.strokeRoundedStore01,
-                                    color: TuLojitaBrandColors.indigo600,
-                                    size: 22,
-                                  ),
-                                ),
+                                errorBuilder: (_, _, _) => hasDistinctFallback
+                                    ? Image.network(
+                                        fallbackLogoUrl,
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            _buildStoreFallbackIcon(),
+                                      )
+                                    : _buildStoreFallbackIcon(),
                               )
-                            : const Center(
-                                child: HugeIcon(
-                                  icon: HugeIcons.strokeRoundedStore01,
-                                  color: TuLojitaBrandColors.indigo600,
-                                  size: 22,
-                                ),
-                              ),
+                            : _buildStoreFallbackIcon(),
                       ),
                     ),
                     const SizedBox(width: 12),

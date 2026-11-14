@@ -89,7 +89,7 @@ class BranchPreflightBlockersDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Para $actionTitle esta sucursal, primero debes resolver los siguientes asuntos operativos pendientes:',
+              'Para $actionTitle esta sucursal, primero debes resolver los siguientes requisitos y obligaciones pendientes:',
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFF334155),

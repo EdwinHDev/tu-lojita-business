@@ -129,6 +129,11 @@ class User {
       hasPermission('roles:manage') ||
       hasPermission('team:manage');
 
+  bool get canAccessCrm =>
+      hasPermission('crm:access') || hasPermission('crm:manage');
+
+  bool get canManageCrm => hasPermission('crm:manage');
+
   bool get isAccountSuspended {
     if (!isActive) return true;
     if (accountSuspendedUntil != null) {

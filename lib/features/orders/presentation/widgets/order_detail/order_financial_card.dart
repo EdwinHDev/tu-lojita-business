@@ -129,6 +129,7 @@ class OrderFinancialCard extends StatelessWidget {
                       children: [
                         DualPriceText(
                           amountInUsd: paidAmount,
+                          customRate: order.exchangeRate,
                           isInline: true,
                           useScaleDown: true,
                           usdStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF475569)),
@@ -140,6 +141,7 @@ class OrderFinancialCard extends StatelessWidget {
                         ),
                         DualPriceText(
                           amountInUsd: order.finalAmount,
+                          customRate: order.exchangeRate,
                           isInline: true,
                           useScaleDown: true,
                           usdStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
@@ -331,6 +333,7 @@ class OrderFinancialCard extends StatelessWidget {
             const SizedBox(height: 4),
             DualPriceText(
               amountInUsd: amountInUsd,
+              customRate: order.exchangeRate,
               useScaleDown: true,
               usdStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
               bsStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.78)),
@@ -373,6 +376,7 @@ class OrderFinancialCard extends StatelessWidget {
         Flexible(
           child: DualPriceText(
             amountInUsd: amountInUsd,
+            customRate: order.exchangeRate,
             prefix: prefix,
             crossAxisAlignment: CrossAxisAlignment.end,
             useScaleDown: true,

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/core/services/order_sync_service.dart';
 import 'package:tu_lojita_business/core/services/app_lifecycle_sync_observer.dart';
+import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
 import 'package:tu_lojita_business/core/utils/error_parser.dart';
 import 'package:tu_lojita_business/core/utils/notification_helper.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import 'package:tu_lojita_business/features/orders/domain/entities/order.dart';
+import '../utils/order_pdf_helpers.dart';
+import '../utils/order_sales_control_downloader.dart';
 import '../providers/orders_provider.dart';
 import '../providers/dispute_providers.dart';
 
@@ -51,6 +54,7 @@ class OrderDetailsScreen extends ConsumerStatefulWidget {
 class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   Order? currentOrder;
   bool _isUpdating = false;
+  bool _isExportingPdf = false;
   bool _autoDisputeHandled = false;
   StreamSubscription<OrderSyncEvent>? _orderSyncSub;
   late final String _screenSyncKey;
@@ -568,6 +572,79 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     }
   }
 
+  Future<void> _downloadSalesControlPdf(
+    Order order, {
+    required bool canViewSensitiveFinances,
+    required bool canViewSensitiveCustomerData,
+    String? exportedBy,
+  }) async {
+    if (_isExportingPdf) return;
+    setState(() => _isExportingPdf = true);
+
+    try {
+      final exchangeRate = ref.read(exchangeRateProvider).asData?.value;
+      final result = await OrderSalesControlDownloader.saveSalesControlLocally(
+        order,
+        exchangeRate: exchangeRate,
+        canViewSensitiveFinances: canViewSensitiveFinances,
+        canViewSensitiveCustomerData: canViewSensitiveCustomerData,
+        exportedBy: exportedBy,
+      );
+
+      if (!mounted) return;
+      NotificationService.showSuccess(
+        context,
+        'PDF guardado en ${result.displayLocation}: ${result.fileName}',
+      );
+      await OrderSalesControlDownloader.openOrSharePdf(context, result);
+    } catch (e) {
+      if (mounted) {
+        final cleanMsg = ErrorParser.parse(e).replaceAll('Exception: ', '');
+        NotificationService.showError(
+          context,
+          'No se pudo generar el PDF: $cleanMsg',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingPdf = false);
+      }
+    }
+  }
+
+  Future<void> _shareSalesControlPdf(
+    Order order, {
+    required bool canViewSensitiveFinances,
+    required bool canViewSensitiveCustomerData,
+    String? exportedBy,
+  }) async {
+    if (_isExportingPdf) return;
+    setState(() => _isExportingPdf = true);
+
+    try {
+      final exchangeRate = ref.read(exchangeRateProvider).asData?.value;
+      await OrderSalesControlDownloader.sharePdfDirectly(
+        order,
+        exchangeRate: exchangeRate,
+        canViewSensitiveFinances: canViewSensitiveFinances,
+        canViewSensitiveCustomerData: canViewSensitiveCustomerData,
+        exportedBy: exportedBy,
+      );
+    } catch (e) {
+      if (mounted) {
+        final cleanMsg = ErrorParser.parse(e).replaceAll('Exception: ', '');
+        NotificationService.showError(
+          context,
+          'No se pudo compartir el PDF: $cleanMsg',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingPdf = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final effectiveOrderId = widget.orderId ?? widget.order?.id ?? currentOrder?.id;
@@ -596,12 +673,32 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     final canApproveInstallments = user?.canApproveInstallments ?? true;
     final canRejectInstallments = user?.canRejectInstallments ?? true;
     final canViewSensitiveFinances = user?.canViewSensitiveFinances ?? true;
+    final canViewSensitiveCustomerData = user?.canViewSensitiveCustomerData ?? true;
+    final exportedBy = user != null && user.fullName.isNotEmpty ? user.fullName : null;
+    final isCompletedForPdf = OrderPdfHelpers.isOrderCompleted(order);
+
+    void handleDownloadPdf() => _downloadSalesControlPdf(
+          order,
+          canViewSensitiveFinances: canViewSensitiveFinances,
+          canViewSensitiveCustomerData: canViewSensitiveCustomerData,
+          exportedBy: exportedBy,
+        );
+
+    void handleSharePdf() => _shareSalesControlPdf(
+          order,
+          canViewSensitiveFinances: canViewSensitiveFinances,
+          canViewSensitiveCustomerData: canViewSensitiveCustomerData,
+          exportedBy: exportedBy,
+        );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: OrderDetailAppBar(
         order: order,
         storeId: widget.storeId,
+        isExportingPdf: _isExportingPdf,
+        onDownloadPdf: isCompletedForPdf ? handleDownloadPdf : null,
+        onSharePdf: isCompletedForPdf ? handleSharePdf : null,
       ),
       body: RefreshIndicator(
         color: const Color(0xFF4F46E5),
@@ -623,7 +720,12 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              OrderStatusCard(order: order),
+              OrderStatusCard(
+                order: order,
+                isExportingPdf: _isExportingPdf,
+                onDownloadPdf: isCompletedForPdf ? handleDownloadPdf : null,
+                onSharePdf: isCompletedForPdf ? handleSharePdf : null,
+              ),
               if (OrderUrgentActionCard.hasUrgentActions(order)) ...[
                 const SizedBox(height: 16),
                 OrderUrgentActionCard(

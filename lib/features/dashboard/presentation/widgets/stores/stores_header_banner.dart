@@ -5,7 +5,10 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/theme/app_theme.dart';
 import 'package:tu_lojita_business/core/utils/price_formatter.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_notifier.dart';
+import 'package:tu_lojita_business/features/auth/presentation/providers/auth_state.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
+import 'package:tu_lojita_business/features/dashboard/presentation/widgets/home/home_image_resolver.dart';
 
 /// Integrated Bento header for the `Tiendas` tab replacing the legacy
 /// `"Dashboard"` shell `AppBar` and floating action button.
@@ -13,18 +16,24 @@ class StoresHeaderBanner extends ConsumerWidget {
   final int storeCount;
   final bool canManageBranches;
   final VoidCallback onCreateStore;
+  final String? companyLogo;
 
   const StoresHeaderBanner({
     super.key,
     required this.storeCount,
     required this.canManageBranches,
     required this.onCreateStore,
+    this.companyLogo,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unreadCount = ref.watch(unreadNotificationsCountProvider);
     final config = ref.watch(exchangeRateProvider).asData?.value;
+    final authState = ref.watch(authProvider);
+    final resolvedCompanyLogo = companyLogo ??
+        (authState is Authenticated ? authState.user.company?.logo : null);
+    final companyLogoUrl = resolveDashboardImageUrl(resolvedCompanyLogo);
     final showBcvPill = config != null && PriceFormatter.isDualEnabled(config);
 
     final title = storeCount == 1 ? 'Mi Tienda' : 'Mis Tiendas';
@@ -40,6 +49,28 @@ class StoresHeaderBanner extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            if (companyLogoUrl.isNotEmpty) ...[
+              ClipOval(
+                child: Image.network(
+                  companyLogoUrl,
+                  width: 38,
+                  height: 38,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 38,
+                    height: 38,
+                    color: TuLojitaBrandColors.indigo50,
+                    alignment: Alignment.center,
+                    child: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedStore01,
+                      color: TuLojitaBrandColors.indigo600,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

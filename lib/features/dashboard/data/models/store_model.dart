@@ -69,7 +69,7 @@ class StoreModel extends Store {
       name: json['name'] as String,
       branchName: json['branchName'] as String?,
       address: json['address'] as String?,
-      logo: json['logo'] as String,
+      logo: (json['logo'] as String?) ?? '',
       coverImage: json['coverImage'] as String?,
       description: json['description'] as String? ?? '',
       phone: json['phone'] as String? ?? '',

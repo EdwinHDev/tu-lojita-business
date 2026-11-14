@@ -411,9 +411,15 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   }
 
   Widget _buildLifecycleCard(BuildContext context, Store store) {
+    final normalizedStatus = store.status.toUpperCase();
+    final isSuspended = normalizedStatus == 'SUSPENDED';
+    final hasDebtOrPendingReports =
+        store.commissionDebt > 0 || store.pendingCommissionReportsCount > 0;
+    final hasLifecycleLock = isSuspended || hasDebtOrPendingReports;
     final isDeleting = store.isScheduledForDeletion;
-    final isInactive = store.status == 'INACTIVE' && !isDeleting;
-    final isActive = store.status == 'ACTIVE' && !isDeleting;
+    final isInactive =
+        normalizedStatus == 'INACTIVE' && !isDeleting && !isSuspended;
+    final isActive = normalizedStatus == 'ACTIVE' && !isDeleting && !isSuspended;
 
     Color badgeBg;
     Color badgeText;
@@ -425,6 +431,11 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
       badgeText = const Color(0xFFDC2626);
       badgeLabel = 'Baja programada (${store.remainingGraceDays}d)';
       badgeIcon = Icons.delete_forever_rounded;
+    } else if (isSuspended) {
+      badgeBg = const Color(0xFFFEF2F2);
+      badgeText = const Color(0xFFDC2626);
+      badgeLabel = 'Suspendida';
+      badgeIcon = Icons.block_rounded;
     } else if (isInactive) {
       badgeBg = const Color(0xFFFEF3C7);
       badgeText = const Color(0xFF92400E);
@@ -437,13 +448,18 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
       badgeIcon = Icons.check_circle_outline_rounded;
     }
 
+    final isAlertCard = isDeleting || isSuspended;
+    final subjectLabel = store.hasMultipleBranches ? 'sucursal' : 'tienda';
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDeleting ? const Color(0xFFFEF2F2).withValues(alpha: 0.5) : const Color(0xFFF9FAFB),
+        color: isAlertCard
+            ? const Color(0xFFFEF2F2).withValues(alpha: 0.5)
+            : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDeleting ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+          color: isAlertCard ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
           width: 1.2,
         ),
       ),
@@ -459,16 +475,18 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isDeleting
+                        color: isAlertCard
                             ? const Color(0xFFDC2626).withValues(alpha: 0.1)
                             : const Color(0xFF4F46E5).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: HugeIcon(
-                        icon: isDeleting
+                        icon: isAlertCard
                             ? HugeIcons.strokeRoundedAlertCircle
                             : HugeIcons.strokeRoundedStore01,
-                        color: isDeleting ? const Color(0xFFDC2626) : const Color(0xFF4F46E5),
+                        color: isAlertCard
+                            ? const Color(0xFFDC2626)
+                            : const Color(0xFF4F46E5),
                         size: 20,
                       ),
                     ),
@@ -540,19 +558,30 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Esta sucursal está oculta para compras. Si cambias de opinión, puedes cancelar la eliminación ahora y restaurar sus operaciones sin perder ningún dato.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.35),
+                  Text(
+                    hasLifecycleLock
+                        ? 'Esta $subjectLabel tiene una suspensión o deuda pendiente con la plataforma. Si cancelas la eliminación programada, permanecerá en estado Suspendida y no se reactivará hasta regularizar pagos o apelaciones.'
+                        : 'Esta $subjectLabel está oculta para compras. Si cambias de opinión, puedes cancelar la eliminación ahora y restaurar sus operaciones sin perder ningún dato.',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.35),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () => _handleCancelDeletion(store),
-                      icon: const Icon(Icons.restore_rounded, size: 18),
-                      label: const Text('Cancelar Eliminación y Reactivar'),
+                      icon: Icon(
+                        hasLifecycleLock ? Icons.cancel_outlined : Icons.restore_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        hasLifecycleLock
+                            ? 'Cancelar Eliminación'
+                            : 'Cancelar Eliminación y Reactivar',
+                      ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: hasLifecycleLock
+                            ? const Color(0xFF475569)
+                            : const Color(0xFF10B981),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 11),
@@ -564,56 +593,125 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
               ),
             ),
           ] else ...[
-            Text(
-              isActive
-                  ? (store.hasMultipleBranches
-                      ? 'La sucursal está activa y visible para tus clientes en la app de compras.'
-                      : 'La tienda está activa y visible para tus clientes en la app de compras.')
-                  : (store.hasMultipleBranches
-                      ? 'La sucursal está desactivada y oculta para compras. Puedes reactivarla cuando desees.'
-                      : 'La tienda está desactivada y todos sus artículos están ocultos. Puedes reactivarla cuando desees.'),
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.35),
-            ),
-            const SizedBox(height: 14),
-            Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => isActive
-                        ? _handleDeactivateFlow(store)
-                        : _handleReactivateFlow(store),
-                    icon: Icon(
-                      isActive ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
-                      size: 18,
+            if (isSuspended) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECDD3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.gpp_bad_outlined, size: 16, color: Color(0xFFDC2626)),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Operaciones bloqueadas por suspensión',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF991B1B),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    label: Text(
-                      isActive
-                          ? (store.hasMultipleBranches ? 'Desactivar Sucursal' : 'Desactivar Tienda')
-                          : (store.hasMultipleBranches ? 'Reactivar Sucursal' : 'Reactivar Tienda'),
+                    const SizedBox(height: 6),
+                    Text(
+                      store.commissionDebt > 0
+                          ? 'Esta $subjectLabel está suspendida y mantiene una deuda pendiente de \$${store.commissionDebt.toStringAsFixed(2)}. No se permite desactivar, reactivar ni eliminar la $subjectLabel hasta saldar la deuda con la plataforma.'
+                          : 'Esta $subjectLabel se encuentra suspendida por la plataforma. No es posible reactivarla, desactivarla ni eliminarla hasta regularizar su situación con administración.',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF7F1D1D), height: 1.35),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: isActive ? const Color(0xFFD97706) : const Color(0xFF10B981),
-                      side: BorderSide(
-                        color: isActive ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              Text(
+                isActive
+                    ? (store.hasMultipleBranches
+                        ? 'La sucursal está activa y visible para tus clientes en la app de compras.'
+                        : 'La tienda está activa y visible para tus clientes en la app de compras.')
+                    : (store.hasMultipleBranches
+                        ? 'La sucursal está desactivada y oculta para compras. Puedes reactivarla cuando desees.'
+                        : 'La tienda está desactivada y todos sus artículos están ocultos. Puedes reactivarla cuando desees.'),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.35),
+              ),
+              if (hasDebtOrPendingReports) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Text(
+                    store.commissionDebt > 0
+                        ? 'Deuda pendiente de \$${store.commissionDebt.toStringAsFixed(2)}. Salda las comisiones pendientes para poder desactivar o eliminar esta $subjectLabel.'
+                        : 'Tienes reporte(s) de pago de comisiones en revisión. Espera su aprobación antes de desactivar o eliminar esta $subjectLabel.',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.35),
                   ),
                 ),
-                const SizedBox(height: 10),
+              ],
+              const SizedBox(height: 14),
+            ],
+            Column(
+              children: [
+                if (!isSuspended) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: hasLifecycleLock
+                          ? null
+                          : () => isActive
+                              ? _handleDeactivateFlow(store)
+                              : _handleReactivateFlow(store),
+                      icon: Icon(
+                        isActive ? Icons.pause_circle_outline_rounded : Icons.play_circle_outline_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        isActive
+                            ? (store.hasMultipleBranches ? 'Desactivar Sucursal' : 'Desactivar Tienda')
+                            : (store.hasMultipleBranches ? 'Reactivar Sucursal' : 'Reactivar Tienda'),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isActive ? const Color(0xFFD97706) : const Color(0xFF10B981),
+                        disabledForegroundColor: const Color(0xFF9CA3AF),
+                        side: BorderSide(
+                          color: hasLifecycleLock
+                              ? const Color(0xFFE5E7EB)
+                              : (isActive ? const Color(0xFFFDE68A) : const Color(0xFFA7F3D0)),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => _handleDeleteFlow(store),
+                    onPressed: hasLifecycleLock ? null : () => _handleDeleteFlow(store),
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
                     label: Text(
                       store.hasMultipleBranches ? 'Eliminar Sucursal' : 'Eliminar Tienda',
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFDC2626),
-                      side: const BorderSide(color: Color(0xFFFECACA)),
+                      disabledForegroundColor: const Color(0xFF9CA3AF),
+                      side: BorderSide(
+                        color: hasLifecycleLock
+                            ? const Color(0xFFE5E7EB)
+                            : const Color(0xFFFECACA),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -627,7 +725,38 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
     );
   }
 
+  List<String> _localLifecycleBlockers(Store store) {
+    final blockers = <String>[];
+    if (store.status.toUpperCase() == 'SUSPENDED') {
+      blockers.add(
+        'Esta sucursal se encuentra suspendida por la plataforma. Debe regularizar su situación con administración antes de continuar.',
+      );
+    }
+    if (store.commissionDebt > 0) {
+      blockers.add(
+        'Posee una deuda acumulada de comisiones de \$${store.commissionDebt.toStringAsFixed(2)} pendiente con la plataforma.',
+      );
+    }
+    if (store.pendingCommissionReportsCount > 0) {
+      blockers.add(
+        'Tiene ${store.pendingCommissionReportsCount} reporte(s) de pago de comisiones pendiente(s) de revisión.',
+      );
+    }
+    return blockers;
+  }
+
   Future<void> _handleDeactivateFlow(Store store) async {
+    final localBlockers = _localLifecycleBlockers(store);
+    if (localBlockers.isNotEmpty) {
+      BranchPreflightBlockersDialog.show(
+        context,
+        branchName: store.branchName ?? store.name,
+        actionTitle: 'desactivar',
+        blockers: localBlockers,
+      );
+      return;
+    }
+
     final repo = ref.read(storesRepositoryProvider);
     try {
       final preflight = await repo.validateLifecyclePreflight(store.id);
@@ -672,6 +801,17 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   }
 
   Future<void> _handleReactivateFlow(Store store) async {
+    final localBlockers = _localLifecycleBlockers(store);
+    if (localBlockers.isNotEmpty) {
+      BranchPreflightBlockersDialog.show(
+        context,
+        branchName: store.branchName ?? store.name,
+        actionTitle: 'reactivar',
+        blockers: localBlockers,
+      );
+      return;
+    }
+
     final repo = ref.read(storesRepositoryProvider);
     try {
       await repo.reactivateBranch(store.id);
@@ -693,6 +833,17 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   }
 
   Future<void> _handleDeleteFlow(Store store) async {
+    final localBlockers = _localLifecycleBlockers(store);
+    if (localBlockers.isNotEmpty) {
+      BranchPreflightBlockersDialog.show(
+        context,
+        branchName: store.branchName ?? store.name,
+        actionTitle: 'eliminar',
+        blockers: localBlockers,
+      );
+      return;
+    }
+
     final repo = ref.read(storesRepositoryProvider);
     try {
       final preflight = await repo.validateLifecyclePreflight(store.id);
@@ -739,13 +890,20 @@ class _StoreSettingsScreenState extends ConsumerState<StoreSettingsScreen> {
   Future<void> _handleCancelDeletion(Store store) async {
     final repo = ref.read(storesRepositoryProvider);
     try {
-      await repo.cancelScheduledDeletion(store.id);
+      final updated = await repo.cancelScheduledDeletion(store.id);
       if (!mounted) return;
 
-      NotificationService.showSuccess(
-        context,
-        'Eliminación cancelada. Sucursal reactivada.',
-      );
+      if (updated.status.toUpperCase() == 'SUSPENDED') {
+        NotificationService.showWarning(
+          context,
+          'Eliminación cancelada. La sucursal permanece suspendida hasta regularizar pagos o sanciones.',
+        );
+      } else {
+        NotificationService.showSuccess(
+          context,
+          'Eliminación cancelada. Sucursal reactivada.',
+        );
+      }
       ref.read(storeSettingsProvider.notifier).loadStore(widget.storeId);
       ref.read(storesProvider.notifier).loadData();
     } catch (e) {

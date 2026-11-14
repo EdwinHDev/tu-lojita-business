@@ -902,5 +902,138 @@ void main() {
       expect(find.byType(OrderInstallmentsCard), findsOneWidget);
       expect(find.byType(OrderPaymentsCard), findsOneWidget);
     });
+
+    testWidgets(
+        'OrderCustomerCard renders buyer avatarUrl when authorized and falls back cleanly on missing avatar or restricted collaborator',
+        (tester) async {
+      final orderWithAvatar = Order.fromJson({
+        'id': 'ord-avatar-1',
+        'storeId': 'store-1',
+        'storeName': 'Tu Lojita Centro',
+        'status': 'FULLY_PAID',
+        'totalAmount': 50.0,
+        'feeAmount': 0.0,
+        'finalAmount': 50.0,
+        'balance': 0.0,
+        'createdAt': '2026-11-11T15:30:00.000Z',
+        'user': {
+          'id': 'cust-avatar',
+          'firstName': 'Valeria',
+          'lastName': 'Mendoza',
+          'avatarUrl': '/img/buyer-valeria.webp',
+          'email': 'valeria@cliente.com',
+          'phone': '04141112233',
+        },
+        'orderItems': const [],
+        'payments': const [],
+        'installments': const [],
+      });
+
+      // Authorized user sees resolved buyer avatar image
+      await tester.pumpWidget(
+        wrapTestApp(
+          user: ownerUser,
+          rateConfig: activeRate,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: OrderCustomerCard(order: orderWithAvatar, storeId: 'store-1'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final avatarImages = tester.widgetList<Image>(
+        find.descendant(
+          of: find.byType(OrderCustomerCard),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        avatarImages.any(
+          (img) =>
+              img.image is NetworkImage &&
+              (img.image as NetworkImage).url ==
+                  'https://images.tulojita.com/img/buyer-valeria.webp',
+        ),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      // Missing avatar falls back to initial letter 'V'
+      final orderNoAvatar = Order.fromJson({
+        'id': 'ord-avatar-2',
+        'storeId': 'store-1',
+        'storeName': 'Tu Lojita Centro',
+        'status': 'FULLY_PAID',
+        'totalAmount': 50.0,
+        'feeAmount': 0.0,
+        'finalAmount': 50.0,
+        'balance': 0.0,
+        'createdAt': '2026-11-11T15:30:00.000Z',
+        'user': {
+          'id': 'cust-no-avatar',
+          'firstName': 'Valeria',
+          'lastName': 'Mendoza',
+        },
+        'orderItems': const [],
+        'payments': const [],
+        'installments': const [],
+      });
+      await tester.pumpWidget(
+        wrapTestApp(
+          user: ownerUser,
+          rateConfig: activeRate,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: OrderCustomerCard(order: orderNoAvatar, storeId: 'store-1'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(OrderCustomerCard),
+          matching: find.byType(Image),
+        ),
+        findsNothing,
+      );
+      expect(find.text('V'), findsOneWidget);
+
+      // Restricted collaborator without customers:view does not see buyer photo
+      const restrictedNoCustomerCollab = User(
+        id: 'collab-no-cust',
+        email: 'c@t.com',
+        firstName: 'Ana',
+        lastName: 'Restringida',
+        role: 'COMPANY',
+        hasCompany: true,
+        isCollaborator: true,
+        hasFullBranchAccess: true,
+        permissions: ['orders:view'],
+      );
+      await tester.pumpWidget(
+        wrapTestApp(
+          user: restrictedNoCustomerCollab,
+          rateConfig: activeRate,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: OrderCustomerCard(order: orderWithAvatar, storeId: 'store-1'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(OrderCustomerCard),
+          matching: find.byType(Image),
+        ),
+        findsNothing,
+      );
+      expect(find.text('V'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

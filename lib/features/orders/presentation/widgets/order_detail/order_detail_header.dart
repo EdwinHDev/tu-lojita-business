@@ -10,16 +10,23 @@ import 'package:tu_lojita_business/features/auth/presentation/providers/auth_sta
 import '../../providers/dispute_providers.dart';
 import 'order_detail_helpers.dart';
 import 'order_dispute_bottom_sheet.dart';
+import '../../utils/order_pdf_helpers.dart';
 
-/// AppBar especializada para el detalle de orden de la tienda con accesos directos (Chat y Reclamos con Badge).
+/// AppBar especializada para el detalle de orden de la tienda con accesos directos (Chat, Reclamos con Badge y PDF de Control).
 class OrderDetailAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final Order order;
   final String? storeId;
+  final bool isExportingPdf;
+  final VoidCallback? onDownloadPdf;
+  final VoidCallback? onSharePdf;
 
   const OrderDetailAppBar({
     super.key,
     required this.order,
     this.storeId,
+    this.isExportingPdf = false,
+    this.onDownloadPdf,
+    this.onSharePdf,
   });
 
   @override
@@ -92,6 +99,28 @@ class OrderDetailAppBar extends ConsumerWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        // Acceso rápido a descarga de Control de Venta (PDF) cuando la orden está completada
+        if (OrderPdfHelpers.isOrderCompleted(order) && onDownloadPdf != null) ...[
+          IconButton(
+            tooltip: 'Descargar Control de Venta (PDF)',
+            onPressed: isExportingPdf ? null : onDownloadPdf,
+            icon: isExportingPdf
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF15803D),
+                    ),
+                  )
+                : const Icon(
+                    Icons.picture_as_pdf_outlined,
+                    color: Color(0xFF15803D),
+                    size: 22,
+                  ),
+          ),
+        ],
+
         // Acceso rápido a Reclamo / Mediación si existe reporte
         if (activeDispute != null) ...[
           IconButton(
@@ -163,10 +192,16 @@ class OrderDetailAppBar extends ConsumerWidget implements PreferredSizeWidget {
 /// Tarjeta principal de estado con diseño visual enriquecido.
 class OrderStatusCard extends StatelessWidget {
   final Order order;
+  final bool isExportingPdf;
+  final VoidCallback? onDownloadPdf;
+  final VoidCallback? onSharePdf;
 
   const OrderStatusCard({
     super.key,
     required this.order,
+    this.isExportingPdf = false,
+    this.onDownloadPdf,
+    this.onSharePdf,
   });
 
   @override
@@ -261,6 +296,7 @@ class OrderStatusCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     DualPriceText(
                       amountInUsd: order.finalAmount,
+                      customRate: order.exchangeRate,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       useScaleDown: true,
                       usdStyle: TextStyle(
@@ -425,6 +461,76 @@ class OrderStatusCard extends StatelessWidget {
               ),
             ],
           ),
+          if (OrderPdfHelpers.isOrderCompleted(order) && onDownloadPdf != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isExportingPdf ? null : onDownloadPdf,
+                    icon: isExportingPdf
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.download_rounded, size: 18),
+                    label: Text(
+                      isExportingPdf
+                          ? 'Generando PDF...'
+                          : 'Descargar Control de Venta (PDF)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF15803D),
+                      disabledBackgroundColor: const Color(0xFF86EFAC),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 11,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                if (onSharePdf != null) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: isExportingPdf ? null : onSharePdf,
+                    icon: const Icon(Icons.share_outlined, size: 17),
+                    label: const Text(
+                      'Compartir',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF15803D),
+                      side: const BorderSide(color: Color(0xFF86EFAC)),
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 11,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -43,6 +43,7 @@ class ItemFormState {
   final List<ItemVariant> variants;
   final Map<String, dynamic> slotConfig;
   final Map<String, dynamic> preorderConfig;
+  final List<PriceType> enabledPriceTypes;
 
   const ItemFormState({
     this.selectedImages = const [],
@@ -93,7 +94,52 @@ class ItemFormState {
     this.hasVariants = false,
     this.variantAxes = const [],
     this.variants = const [],
+    this.enabledPriceTypes = const [
+      PriceType.fixed,
+      PriceType.startingAt,
+      PriceType.negotiable,
+      PriceType.onDemand,
+      PriceType.free,
+    ],
   });
+
+  bool isPriceTypeEnabled(PriceType pt) =>
+      pt == PriceType.fixed || enabledPriceTypes.contains(pt);
+
+  PriceType get effectiveSubmittedPriceType =>
+      (hasVariants && hasVaryingVariantPrices)
+          ? PriceType.startingAt
+          : priceType;
+
+  String? validatePriceTypeRules() {
+    final effective = effectiveSubmittedPriceType;
+    if (!isPriceTypeEnabled(effective)) {
+      return 'El tipo de precio seleccionado está deshabilitado en la plataforma. Cambia el tipo de precio para guardar o publicar el artículo.';
+    }
+
+    if (effective == PriceType.startingAt) {
+      final hasPaidCustomization = customizationGroups.any(
+        (g) => g.options.any((o) => o.price > 0),
+      );
+      final isServiceOrBooking = itemType == ItemType.service || requiresBooking;
+      if (!hasVaryingVariantPrices && !hasPaidCustomization && !isServiceOrBooking) {
+        return 'El precio "Desde" requiere variantes con distintos precios, personalizaciones con costo adicional o ser un servicio/reserva.';
+      }
+    }
+
+    if (effective == PriceType.free) {
+      final hasPaidCustomization = customizationGroups.any(
+        (g) => g.options.any((o) => o.price > 0),
+      );
+      final hasPaidVariant = hasVariants &&
+          variants.where((v) => v.isActive).any((v) => (v.price ?? 0) > 0);
+      if (hasPaidCustomization || hasPaidVariant) {
+        return 'Un artículo Gratis no puede incluir variantes ni opciones de personalización con costo adicional.';
+      }
+    }
+
+    return null;
+  }
 
   double get effectivePrice =>
       (discountPrice != null && discountPrice! > 0) ? discountPrice! : price;
@@ -196,6 +242,7 @@ class ItemFormState {
     PriceType? priceType,
     bool? isFeatured,
     double? discountPrice,
+    bool clearDiscountPrice = false,
     ItemType? itemType,
     bool? trackInventory,
     double? stockQuantity,
@@ -212,6 +259,7 @@ class ItemFormState {
     List<ItemVariant>? variants,
     Map<String, dynamic>? slotConfig,
     Map<String, dynamic>? preorderConfig,
+    List<PriceType>? enabledPriceTypes,
   }) {
     return ItemFormState(
       selectedImages: selectedImages ?? this.selectedImages,
@@ -231,7 +279,7 @@ class ItemFormState {
       price: price ?? this.price,
       priceType: priceType ?? this.priceType,
       isFeatured: isFeatured ?? this.isFeatured,
-      discountPrice: discountPrice ?? this.discountPrice,
+      discountPrice: clearDiscountPrice ? null : (discountPrice ?? this.discountPrice),
       itemType: itemType ?? this.itemType,
       trackInventory: trackInventory ?? this.trackInventory,
       stockQuantity: stockQuantity ?? this.stockQuantity,
@@ -248,6 +296,7 @@ class ItemFormState {
       hasVariants: hasVariants ?? this.hasVariants,
       variantAxes: variantAxes ?? this.variantAxes,
       variants: variants ?? this.variants,
+      enabledPriceTypes: enabledPriceTypes ?? this.enabledPriceTypes,
     );
   }
 }
@@ -259,10 +308,29 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
     return const ItemFormState();
   }
 
+  static PriceType? _parsePriceTypeFromApi(String? raw) {
+    switch (raw?.toUpperCase()) {
+      case 'FIXED':
+        return PriceType.fixed;
+      case 'STARTING_AT':
+        return PriceType.startingAt;
+      case 'NEGOTIABLE':
+        return PriceType.negotiable;
+      case 'ON_DEMAND':
+        return PriceType.onDemand;
+      case 'FREE':
+        return PriceType.free;
+      default:
+        return null;
+    }
+  }
+
   Future<void> loadCommissionSettings() async {
+    final dio = ref.read(dioProvider);
+
     try {
-      final dio = ref.read(dioProvider);
       final res = await dio.get('/commissions/active-ranges');
+      if (!ref.mounted) return;
       final isEnabled = res.data['isEnabled'] == true;
       final ranges = isEnabled
           ? ((res.data['ranges'] as List?)
@@ -271,6 +339,27 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
               [])
           : <Map<String, dynamic>>[];
       state = state.copyWith(commissionRanges: ranges);
+    } catch (_) {}
+
+    try {
+      final pubRes = await dio.get('/platform-settings/public');
+      if (!ref.mounted) return;
+      final rawEnabled = pubRes.data?['enabledPriceTypes'];
+      if (rawEnabled is List) {
+        final parsed = <PriceType>[PriceType.fixed];
+        for (final entry in rawEnabled) {
+          final mapped = _parsePriceTypeFromApi(entry?.toString());
+          if (mapped != null && !parsed.contains(mapped)) {
+            parsed.add(mapped);
+          }
+        }
+        final shouldResetToFixed =
+            state.itemId == null && !parsed.contains(state.priceType);
+        state = state.copyWith(
+          enabledPriceTypes: parsed,
+          priceType: shouldResetToFixed ? PriceType.fixed : state.priceType,
+        );
+      }
     } catch (_) {}
   }
 
@@ -393,6 +482,15 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   void onPriceChanged(double value) => state = state.copyWith(price: value);
   void onPriceTypeChanged(PriceType value) {
     if (state.hasVaryingVariantPrices && value == PriceType.fixed) {
+      return;
+    }
+    if (value == PriceType.onDemand || value == PriceType.free) {
+      state = state.copyWith(
+        priceType: value,
+        price: 0,
+        clearDiscountPrice: true,
+        allowInstallments: false,
+      );
       return;
     }
     state = state.copyWith(priceType: value);
@@ -704,13 +802,22 @@ class ItemFormNotifier extends Notifier<ItemFormState> {
   }
 
   Future<void> submit(String storeId) async {
+    final priceTypeValidationError = state.validatePriceTypeRules();
+    if (priceTypeValidationError != null) {
+      state = state.copyWith(errorMessage: priceTypeValidationError);
+      return;
+    }
+
     final validImages = state.selectedImages.where((f) => f.existsSync()).toList();
     if (validImages.isEmpty && state.existingImages.isEmpty) {
       state = state.copyWith(errorMessage: 'Debes tener al menos una imagen');
       return;
     }
 
-    if (state.discountPrice != null && state.discountPrice! >= state.price) {
+    if (state.discountPrice != null &&
+        state.priceType != PriceType.onDemand &&
+        state.priceType != PriceType.free &&
+        state.discountPrice! >= state.price) {
       state = state.copyWith(errorMessage: 'El precio de oferta debe ser menor al precio base');
       return;
     }

@@ -6,6 +6,7 @@ import '../../presentation/widgets/order_detail/order_detail_helpers.dart';
 class Payment {
   final String id;
   final double amount;
+  final double? exchangeRate;
   final String currency;
   final String status;
   final String paymentMethod;
@@ -19,6 +20,7 @@ class Payment {
   Payment({
     required this.id,
     required this.amount,
+    this.exchangeRate,
     required this.currency,
     required this.status,
     required this.paymentMethod,
@@ -34,6 +36,9 @@ class Payment {
     return Payment(
       id: json['id'] ?? '',
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+      exchangeRate: json['exchangeRate'] != null
+          ? double.tryParse(json['exchangeRate'].toString())
+          : null,
       currency: json['currency'] ?? '',
       status: json['status'] ?? 'PENDING',
       paymentMethod: json['paymentMethod'] ?? '',
@@ -127,6 +132,7 @@ class Order {
   final List<OrderDispute> disputes;
   final String? preOrderStatus;
   final DateTime? settlementDeadline;
+  final double? exchangeRate;
   final List<Map<String, dynamic>> slotBookings;
 
   bool get isPreOrder => preOrderStatus != null && preOrderStatus != 'NONE';
@@ -200,6 +206,7 @@ class Order {
     this.disputes = const [],
     this.preOrderStatus,
     this.settlementDeadline,
+    this.exchangeRate,
     this.slotBookings = const [],
   });
 
@@ -304,6 +311,9 @@ class Order {
       preOrderStatus: json['preOrderStatus'] as String?,
       settlementDeadline: json['settlementDeadline'] != null
           ? DateTime.tryParse(json['settlementDeadline'].toString())
+          : null,
+      exchangeRate: json['exchangeRate'] != null
+          ? double.tryParse(json['exchangeRate'].toString())
           : null,
       slotBookings: (json['slotBookings'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))

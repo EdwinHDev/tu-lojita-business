@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tu_lojita_business/core/models/exchange_rate_config.dart';
 import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/widgets/shimmer_widget.dart';
@@ -535,6 +536,498 @@ void main() {
       expect(result, isFalse);
       expect(fakeSubImgSource.deletedUrls, ['/img/sub-orphan-77']);
     });
+
+    testWidgets(
+      'paginates commission orders 20-by-20, renders order thumbnails and navigates to order details on tap',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(360, 780));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final recordedOrderOffsets = <int>[];
+        String? pushedRoute;
+
+        final pagedDio = Dio();
+        pagedDio.httpClientAdapter = _RoutingAdapter((options) async {
+          if (options.path.endsWith('/debt-hub')) {
+            return _MockHttpResp(200, {
+              'store': {
+                'id': 'store-1',
+                'name': 'Comercial Sol',
+                'status': 'ACTIVE',
+                'accumulatedCommissionDebt': 12.0,
+              },
+              'currentBilling': null,
+              'platformPaymentMethods': const [],
+              'paymentReports': const [],
+              'recentOrders': const [],
+            });
+          }
+          if (options.path.endsWith('/orders')) {
+            final offset =
+                int.tryParse(options.queryParameters['offset']?.toString() ?? '0') ??
+                    0;
+            recordedOrderOffsets.add(offset);
+            if (offset == 0) {
+              return _MockHttpResp(200, {
+                'items': List.generate(
+                  20,
+                  (i) => {
+                    'id': 'ord-${i + 1}-uuid',
+                    'totalAmount': 40.0,
+                    'finalAmount': 40.0,
+                    'platformCommissionRate': 5.0,
+                    'platformCommissionAmount': 2.0,
+                    'isPartialPayment': false,
+                    'status': 'FULLY_PAID',
+                    'createdAt': '2026-11-12T10:00:00.000Z',
+                    'itemImageUrl': i == 0 ? '/img/order-thumb-1.webp' : null,
+                    'firstItemTitle': i == 0 ? 'Taladro Brushless' : 'Producto ${i + 1}',
+                    'itemsCount': i == 0 ? 3 : 1,
+                  },
+                ),
+                'total': 22,
+                'limit': 20,
+                'offset': 0,
+                'hasMore': true,
+              });
+            }
+            return _MockHttpResp(200, {
+              'items': [
+                {
+                  'id': 'ord-21-uuid',
+                  'totalAmount': 60.0,
+                  'finalAmount': 60.0,
+                  'platformCommissionRate': 5.0,
+                  'platformCommissionAmount': 3.0,
+                  'isPartialPayment': true,
+                  'status': 'PARTIALLY_PAID',
+                  'createdAt': '2026-11-11T10:00:00.000Z',
+                  'itemImageUrl': null,
+                  'firstItemTitle': 'Lijadora Orbital',
+                  'itemsCount': 1,
+                },
+                {
+                  'id': 'ord-22-uuid',
+                  'totalAmount': 20.0,
+                  'finalAmount': 20.0,
+                  'platformCommissionRate': 5.0,
+                  'platformCommissionAmount': 1.0,
+                  'isPartialPayment': false,
+                  'status': 'FULLY_PAID',
+                  'createdAt': '2026-11-10T10:00:00.000Z',
+                  'itemImageUrl': null,
+                  'firstItemTitle': 'Cinta Métrica',
+                  'itemsCount': 1,
+                },
+              ],
+              'total': 22,
+              'limit': 20,
+              'offset': 20,
+              'hasMore': false,
+            });
+          }
+          return _MockHttpResp(200, {});
+        });
+
+        final router = GoRouter(
+          initialLocation: '/debts',
+          routes: [
+            GoRoute(
+              path: '/debts',
+              builder: (_, _) => const StoreDebtsScreen(storeId: 'store-1'),
+            ),
+            GoRoute(
+              path: '/dashboard/orders/:orderId',
+              builder: (_, state) {
+                pushedRoute = state.uri.toString();
+                return Scaffold(
+                  body: Text('Detalle ${state.pathParameters['orderId']}'),
+                );
+              },
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              dioProvider.overrideWithValue(pagedDio),
+              subscriptionProvider.overrideWith(() => _FakeSubscriptionNotifier()),
+              exchangeRateProvider
+                  .overrideWith(() => _FakeExchangeRateNotifier(enabledRate)),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(recordedOrderOffsets, [0]);
+        expect(
+          find.text('Mostrando 20 de 22 órdenes pagadas o abonadas.'),
+          findsOneWidget,
+        );
+        expect(find.text('Taladro Brushless'), findsOneWidget);
+        expect(find.text('+2'), findsOneWidget);
+
+        final thumbImages = tester.widgetList<Image>(find.byType(Image));
+        expect(
+          thumbImages.any(
+            (img) =>
+                img.image is NetworkImage &&
+                (img.image as NetworkImage).url ==
+                    'https://images.tulojita.com/img/order-thumb-1.webp',
+          ),
+          isTrue,
+        );
+
+        // Load next page via explicit button
+        final loadMoreFinder = find.text('Cargar más órdenes (2)');
+        await tester.ensureVisible(loadMoreFinder);
+        await tester.tap(loadMoreFinder);
+        await tester.pumpAndSettle();
+
+        expect(recordedOrderOffsets, [0, 20]);
+        expect(
+          find.text('Mostrando 22 de 22 órdenes pagadas o abonadas.'),
+          findsOneWidget,
+        );
+        expect(find.text('Lijadora Orbital'), findsOneWidget);
+        expect(find.text('Cargar más órdenes (2)'), findsNothing);
+
+        // Tap first order card -> navigates to /dashboard/orders/ord-1-uuid
+        final firstOrderFinder = find.text('Taladro Brushless');
+        await tester.ensureVisible(firstOrderFinder);
+        await tester.tap(firstOrderFinder);
+        await tester.pumpAndSettle();
+
+        expect(pushedRoute, '/dashboard/orders/ord-1-uuid');
+        expect(find.text('Detalle ord-1-uuid'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'renders segmented filter chips with counts, filters orders reactively, renders 56x56 thumbnails with multi-item breakdown and expands inline without ambiguous Pagada badge at 320px @ 1.35x',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(320, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final recordedFilters = <String>[];
+        final testDio = Dio();
+        testDio.httpClientAdapter = _RoutingAdapter((options) async {
+          final uri = options.uri.toString();
+          if (uri.contains('/debt-hub')) {
+            return const _MockHttpResp(200, {
+              'store': {
+                'id': 'store-1',
+                'name': 'Pastelería Dulce',
+                'status': 'ACTIVE',
+                'accumulatedCommissionDebt': 15.0,
+              },
+              'currentBilling': null,
+              'platformPaymentMethods': [],
+              'paymentReports': [],
+              'recentOrders': [],
+            });
+          }
+          if (uri.contains('/orders')) {
+            final filter =
+                options.queryParameters['filter']?.toString() ?? 'all';
+            recordedFilters.add(filter);
+
+            if (filter == 'pending') {
+              return const _MockHttpResp(200, {
+                'items': [
+                  {
+                    'id': 'ord-p1-uuid',
+                    'totalAmount': 50.0,
+                    'finalAmount': 50.0,
+                    'platformCommissionRate': 5.0,
+                    'platformCommissionAmount': 2.5,
+                    'isPartialPayment': false,
+                    'status': 'FULLY_PAID',
+                    'commissionStatus': 'PENDING',
+                    'itemImageUrl':
+                        'https://images.tulojita.com/img/torta.webp',
+                    'firstItemTitle': 'Torta Selva Negra',
+                    'itemsCount': 3,
+                    'items': [
+                      {
+                        'id': 'it-1',
+                        'title': 'Torta Selva Negra',
+                        'quantity': 2,
+                        'price': 20.0,
+                        'variantLabel': 'Grande / Chocolate',
+                        'imageUrl':
+                            'https://images.tulojita.com/img/torta.webp',
+                      },
+                      {
+                        'id': 'it-2',
+                        'title': 'Cupcake Vainilla',
+                        'quantity': 1,
+                        'price': 10.0,
+                        'variantLabel': '',
+                        'imageUrl': '',
+                      },
+                    ],
+                  },
+                ],
+                'total': 1,
+                'limit': 20,
+                'offset': 0,
+                'hasMore': false,
+                'summaryCounts': {
+                  'all': 3,
+                  'pending': 1,
+                  'collected': 1,
+                  'exempt': 1,
+                },
+              });
+            } else if (filter == 'collected') {
+              return const _MockHttpResp(200, {
+                'items': [
+                  {
+                    'id': 'ord-c1-uuid',
+                    'totalAmount': 100.0,
+                    'finalAmount': 100.0,
+                    'platformCommissionRate': 5.0,
+                    'platformCommissionAmount': 5.0,
+                    'isPartialPayment': false,
+                    'status': 'FULLY_PAID',
+                    'commissionStatus': 'COLLECTED',
+                    'settlementBillingId': 'bill-cut-999',
+                    'itemImageUrl': 'https://images.tulojita.com/img/pie.webp',
+                    'firstItemTitle': 'Pie de Limón',
+                    'itemsCount': 1,
+                    'items': [
+                      {
+                        'id': 'it-3',
+                        'title': 'Pie de Limón',
+                        'quantity': 1,
+                        'price': 100.0,
+                        'variantLabel': 'Familiar',
+                        'imageUrl':
+                            'https://images.tulojita.com/img/pie.webp',
+                      },
+                    ],
+                  },
+                ],
+                'total': 1,
+                'limit': 20,
+                'offset': 0,
+                'hasMore': false,
+                'summaryCounts': {
+                  'all': 3,
+                  'pending': 1,
+                  'collected': 1,
+                  'exempt': 1,
+                },
+              });
+            }
+
+            return const _MockHttpResp(200, {
+              'items': [
+                {
+                  'id': 'ord-p1-uuid',
+                  'totalAmount': 50.0,
+                  'finalAmount': 50.0,
+                  'platformCommissionRate': 5.0,
+                  'platformCommissionAmount': 2.5,
+                  'isPartialPayment': false,
+                  'status': 'FULLY_PAID',
+                  'commissionStatus': 'PENDING',
+                  'itemImageUrl':
+                      'https://images.tulojita.com/img/torta.webp',
+                  'firstItemTitle': 'Torta Selva Negra',
+                  'itemsCount': 3,
+                  'items': [
+                    {
+                      'id': 'it-1',
+                      'title': 'Torta Selva Negra',
+                      'quantity': 2,
+                      'price': 20.0,
+                      'variantLabel': 'Grande / Chocolate',
+                      'imageUrl':
+                          'https://images.tulojita.com/img/torta.webp',
+                    },
+                    {
+                      'id': 'it-2',
+                      'title': 'Cupcake Vainilla',
+                      'quantity': 1,
+                      'price': 10.0,
+                      'variantLabel': '',
+                      'imageUrl': '',
+                    },
+                  ],
+                },
+                {
+                  'id': 'ord-c1-uuid',
+                  'totalAmount': 100.0,
+                  'finalAmount': 100.0,
+                  'platformCommissionRate': 5.0,
+                  'platformCommissionAmount': 5.0,
+                  'isPartialPayment': false,
+                  'status': 'FULLY_PAID',
+                  'commissionStatus': 'COLLECTED',
+                  'settlementBillingId': 'bill-cut-999',
+                  'itemImageUrl': 'https://images.tulojita.com/img/pie.webp',
+                  'firstItemTitle': 'Pie de Limón',
+                  'itemsCount': 1,
+                  'items': [
+                    {
+                      'id': 'it-3',
+                      'title': 'Pie de Limón',
+                      'quantity': 1,
+                      'price': 100.0,
+                      'variantLabel': 'Familiar',
+                      'imageUrl':
+                          'https://images.tulojita.com/img/pie.webp',
+                    },
+                  ],
+                },
+                {
+                  'id': 'ord-e1-uuid',
+                  'totalAmount': 30.0,
+                  'finalAmount': 30.0,
+                  'platformCommissionRate': 0.0,
+                  'platformCommissionAmount': 0.0,
+                  'isPartialPayment': false,
+                  'status': 'FULLY_PAID',
+                  'commissionStatus': 'EXEMPT',
+                  'itemImageUrl': '',
+                  'firstItemTitle': 'Café Exento',
+                  'itemsCount': 1,
+                  'items': [
+                    {
+                      'id': 'it-4',
+                      'title': 'Café Exento',
+                      'quantity': 1,
+                      'price': 30.0,
+                      'variantLabel': '',
+                      'imageUrl': '',
+                    },
+                  ],
+                },
+              ],
+              'total': 3,
+              'limit': 20,
+              'offset': 0,
+              'hasMore': false,
+              'summaryCounts': {
+                'all': 3,
+                'pending': 1,
+                'collected': 1,
+                'exempt': 1,
+              },
+            });
+          }
+          return const _MockHttpResp(200, {});
+        });
+
+        await tester.pumpWidget(
+          MediaQuery(
+            data: const MediaQueryData(
+              size: Size(320, 800),
+              textScaler: TextScaler.linear(1.35),
+            ),
+            child: ProviderScope(
+              overrides: [
+                dioProvider.overrideWithValue(testDio),
+                subscriptionProvider
+                    .overrideWith(() => _FakeSubscriptionNotifier()),
+                exchangeRateProvider
+                    .overrideWith(() => _FakeExchangeRateNotifier(enabledRate)),
+              ],
+              child: const MaterialApp(
+                home: StoreDebtsScreen(storeId: 'store-1'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(recordedFilters, ['all']);
+
+        // Check filter tabs and their counts
+        expect(
+          find.byKey(const Key('commission_filter_all')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('commission_filter_pending')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('commission_filter_collected')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('commission_filter_exempt')),
+          findsOneWidget,
+        );
+
+        expect(find.text('Todas'), findsOneWidget);
+        expect(find.text('Por pagar'), findsWidgets);
+        expect(find.text('Liquidadas'), findsOneWidget);
+        expect(find.text('Exentas'), findsOneWidget);
+
+        // Ambiguous "Pagada" badge is NOT rendered anywhere
+        expect(find.text('Pagada'), findsNothing);
+
+        // Check commission badges
+        expect(find.text('Comisión saldada ✓'), findsOneWidget);
+        expect(find.text('Liquidada en corte #BILL'), findsOneWidget);
+        expect(find.text('Exenta 0%'), findsOneWidget);
+
+        // Check primary product formatted with quantity and variant
+        expect(
+          find.text('2 x Torta Selva Negra · Grande / Chocolate'),
+          findsOneWidget,
+        );
+        expect(find.text('+2'), findsOneWidget);
+        expect(find.text('Ver 1 producto más'), findsOneWidget);
+
+        // Expand inline basket
+        await tester.ensureVisible(find.text('Ver 1 producto más'));
+        await tester.tap(find.text('Ver 1 producto más'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Ocultar productos'), findsOneWidget);
+        expect(find.text('1x Cupcake Vainilla'), findsOneWidget);
+
+        // Tap filter chip "Por pagar"
+        await tester.ensureVisible(
+          find.byKey(const Key('commission_filter_pending')),
+        );
+        await tester.tap(find.byKey(const Key('commission_filter_pending')));
+        await tester.pumpAndSettle();
+
+        expect(recordedFilters, ['all', 'pending']);
+        expect(
+          find.text('2 x Torta Selva Negra · Grande / Chocolate'),
+          findsOneWidget,
+        );
+        expect(find.text('1 x Pie de Limón · Familiar'), findsNothing);
+        expect(find.text('1 x Café Exento'), findsNothing);
+
+        // Tap filter chip "Liquidadas"
+        await tester.ensureVisible(
+          find.byKey(const Key('commission_filter_collected')),
+        );
+        await tester.tap(
+          find.byKey(const Key('commission_filter_collected')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(recordedFilters, ['all', 'pending', 'collected']);
+        expect(find.text('1 x Pie de Limón · Familiar'), findsOneWidget);
+        expect(find.text('Torta Selva Negra'), findsNothing);
+        expect(find.text('Liquidada en corte #BILL'), findsOneWidget);
+
+        // Verify zero RenderFlex overflows at 320px
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
 

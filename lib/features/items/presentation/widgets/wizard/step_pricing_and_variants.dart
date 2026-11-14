@@ -33,13 +33,13 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
       case PriceType.fixed:
         return 'El cliente verá el precio exacto listo para compra inmediata.';
       case PriceType.startingAt:
-        return 'Ideal cuando el precio varía según tamaño, alcance o variante ("Desde \$X").';
+        return 'Muestra "Desde \$X". Requiere variantes con distintos precios, personalizaciones con costo o ser un servicio/reserva.';
       case PriceType.negotiable:
-        return 'Muestra un precio referencial e indica que acepta acuerdos.';
+        return 'Muestra un precio referencial comprable e indica al cliente que puede proponer acuerdos.';
       case PriceType.onDemand:
-        return 'Para cotizaciones personalizadas según requerimiento.';
+        return 'Bajo pedido / cotización: no tiene precio fijo en catálogo; el comprador solicitará cotización directa antes de ordenar.';
       case PriceType.free:
-        return 'Publicación sin costo (\$0.00) o cortesía promocional.';
+        return 'Publicación sin costo (\$0.00), limitada a 1 unidad por orden y sin variantes o extras con costo.';
     }
   }
 
@@ -140,11 +140,38 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                   ],
                 ),
               ),
+            if (!state.isPriceTypeEnabled(state.priceType))
+              Container(
+                key: const Key('wizard_disabled_price_type_banner'),
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Este tipo de precio fue deshabilitado por la plataforma. Cambia el tipo de precio para guardar o volver a publicar este artículo.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF991B1B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             _buildCard([
               // Price Type Dropdown
               DropdownButtonFormField<PriceType>(
                 key: ValueKey(
-                  'priceType_${state.itemId ?? "new"}_${state.priceType.name}',
+                  'priceType_${state.itemId ?? "new"}_${state.priceType.name}_${state.enabledPriceTypes.length}',
                 ),
                 initialValue: state.priceType,
                 isExpanded: true,
@@ -159,37 +186,65 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
                       isEnabled: !state.hasVaryingVariantPrices,
                     ),
                   ),
-                  DropdownMenuItem(
-                    value: PriceType.startingAt,
-                    child: _dropdownItem(
-                      HugeIcons.strokeRoundedCursorMagicSelection01,
-                      'Precio "Desde"',
+                  if (state.isPriceTypeEnabled(PriceType.startingAt) ||
+                      state.priceType == PriceType.startingAt)
+                    DropdownMenuItem(
+                      value: PriceType.startingAt,
+                      enabled: state.isPriceTypeEnabled(PriceType.startingAt),
+                      child: _dropdownItem(
+                        HugeIcons.strokeRoundedCursorMagicSelection01,
+                        state.isPriceTypeEnabled(PriceType.startingAt)
+                            ? 'Precio "Desde"'
+                            : 'Precio "Desde" (Deshabilitado)',
+                        isEnabled: state.isPriceTypeEnabled(PriceType.startingAt),
+                      ),
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: PriceType.negotiable,
-                    child: _dropdownItem(
-                      HugeIcons.strokeRoundedChat01,
-                      'Negociable',
+                  if (state.isPriceTypeEnabled(PriceType.negotiable) ||
+                      state.priceType == PriceType.negotiable)
+                    DropdownMenuItem(
+                      value: PriceType.negotiable,
+                      enabled: state.isPriceTypeEnabled(PriceType.negotiable),
+                      child: _dropdownItem(
+                        HugeIcons.strokeRoundedChat01,
+                        state.isPriceTypeEnabled(PriceType.negotiable)
+                            ? 'Negociable'
+                            : 'Negociable (Deshabilitado)',
+                        isEnabled: state.isPriceTypeEnabled(PriceType.negotiable),
+                      ),
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: PriceType.onDemand,
-                    child: _dropdownItem(
-                      HugeIcons.strokeRoundedCustomerService,
-                      'Bajo Pedido',
+                  if (state.isPriceTypeEnabled(PriceType.onDemand) ||
+                      state.priceType == PriceType.onDemand)
+                    DropdownMenuItem(
+                      value: PriceType.onDemand,
+                      enabled: state.isPriceTypeEnabled(PriceType.onDemand),
+                      child: _dropdownItem(
+                        HugeIcons.strokeRoundedCustomerService,
+                        state.isPriceTypeEnabled(PriceType.onDemand)
+                            ? 'Bajo Pedido'
+                            : 'Bajo Pedido (Deshabilitado)',
+                        isEnabled: state.isPriceTypeEnabled(PriceType.onDemand),
+                      ),
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: PriceType.free,
-                    child: _dropdownItem(
-                      HugeIcons.strokeRoundedStar,
-                      'Gratis',
+                  if (state.isPriceTypeEnabled(PriceType.free) ||
+                      state.priceType == PriceType.free)
+                    DropdownMenuItem(
+                      value: PriceType.free,
+                      enabled: state.isPriceTypeEnabled(PriceType.free),
+                      child: _dropdownItem(
+                        HugeIcons.strokeRoundedStar,
+                        state.isPriceTypeEnabled(PriceType.free)
+                            ? 'Gratis'
+                            : 'Gratis (Deshabilitado)',
+                        isEnabled: state.isPriceTypeEnabled(PriceType.free),
+                      ),
                     ),
-                  ),
                 ],
                 onChanged: canChangePrice && !state.hasVaryingVariantPrices
-                    ? (v) => notifier.onPriceTypeChanged(v!)
+                    ? (v) {
+                        if (v != null && state.isPriceTypeEnabled(v)) {
+                          notifier.onPriceTypeChanged(v);
+                        }
+                      }
                     : null,
               ),
               const SizedBox(height: 6),
@@ -202,8 +257,43 @@ class _StepPricingAndVariantsState extends ConsumerState<StepPricingAndVariants>
               ),
               const SizedBox(height: 14),
 
-              // Base Price & Discount Price
-              Row(
+              // Base Price & Discount Price (hidden for FREE and ON_DEMAND)
+              if (state.priceType == PriceType.onDemand ||
+                  state.priceType == PriceType.free)
+                Container(
+                  key: const Key('wizard_zero_price_mode_info'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: Color(0xFF4F46E5),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          state.priceType == PriceType.onDemand
+                              ? 'Los artículos Bajo Pedido no muestran un precio fijo. Los clientes solicitarán cotización directa antes de ordenar.'
+                              : 'Este artículo se publicará como Gratis (\$0.00), con límite de 1 unidad por orden y sin cuotas ni cobros adicionales.',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(

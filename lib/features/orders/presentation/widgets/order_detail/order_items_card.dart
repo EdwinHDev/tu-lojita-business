@@ -153,6 +153,7 @@ class OrderItemsCard extends StatelessWidget {
                         ),
                         DualPriceText(
                           amountInUsd: item.price,
+                          customRate: order.exchangeRate,
                           suffix: ' c/u',
                           isInline: true,
                           useScaleDown: true,
@@ -189,6 +190,7 @@ class OrderItemsCard extends StatelessWidget {
                                 Flexible(
                                   child: DualPriceText(
                                     amountInUsd: lineCommission,
+                                    customRate: order.exchangeRate,
                                     prefix: '-',
                                     isInline: true,
                                     useScaleDown: true,
@@ -229,6 +231,7 @@ class OrderItemsCard extends StatelessWidget {
                                 Flexible(
                                   child: DualPriceText(
                                     amountInUsd: lineNet,
+                                    customRate: order.exchangeRate,
                                     isInline: true,
                                     useScaleDown: true,
                                     usdStyle: const TextStyle(
@@ -256,6 +259,7 @@ class OrderItemsCard extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 112),
                 child: DualPriceText(
                   amountInUsd: lineTotal,
+                  customRate: order.exchangeRate,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   useScaleDown: true,
                   usdStyle: const TextStyle(
@@ -369,6 +373,7 @@ class OrderItemsCard extends StatelessWidget {
                                 flex: 0,
                                 child: DualPriceText(
                                   amountInUsd: opt.price * count,
+                                  customRate: order.exchangeRate,
                                   prefix: '+',
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   useScaleDown: true,

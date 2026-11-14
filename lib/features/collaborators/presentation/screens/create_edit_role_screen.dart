@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_lojita_business/core/utils/notification_service.dart';
+import 'package:tu_lojita_business/features/crm/presentation/widgets/crm_guides_catalog.dart';
 import '../../domain/entities/company_role.dart';
 import '../../domain/entities/permission_item.dart';
 import '../providers/collaborators_providers.dart';
@@ -71,6 +72,8 @@ class _CreateEditRoleScreenState extends ConsumerState<CreateEditRoleScreen> {
         'disputes:respond',
         'disputes:resolve',
         'team:view',
+        'crm:access',
+        'crm:manage',
       ],
     ),
     'Cajero / Ventas': (
@@ -86,6 +89,7 @@ class _CreateEditRoleScreenState extends ConsumerState<CreateEditRoleScreen> {
         'finances:view_summary',
         'installments:view',
         'installments:approve_payment',
+        'crm:access',
       ],
     ),
     'Almacén / Despacho': (
@@ -122,6 +126,8 @@ class _CreateEditRoleScreenState extends ConsumerState<CreateEditRoleScreen> {
       case 'branches':
       case 'sucursales':
         return 'Sucursales y Clientes';
+      case 'crm':
+        return 'CRM y Fidelización';
       case 'collaborators':
       case 'equipo':
         return 'Equipo y Colaboradores';
@@ -152,6 +158,8 @@ class _CreateEditRoleScreenState extends ConsumerState<CreateEditRoleScreen> {
       case 'branches':
       case 'sucursales':
         return Icons.store_outlined;
+      case 'crm':
+        return Icons.people_alt_outlined;
       case 'collaborators':
       case 'equipo':
         return Icons.people_outline;
@@ -471,13 +479,27 @@ class _CreateEditRoleScreenState extends ConsumerState<CreateEditRoleScreen> {
                                   size: 20,
                                 ),
                               ),
-                              title: Text(
-                                _getModuleTitle(moduleName),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E293B),
-                                ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _getModuleTitle(moduleName),
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ),
+                                  if (moduleName.toLowerCase() == 'crm') ...[
+                                    const SizedBox(width: 6),
+                                    const CrmGuideButton(
+                                      key: ValueKey('role_crm_guide_btn'),
+                                      guide: CrmGuidesCatalog.rolePermissions,
+                                      compact: true,
+                                    ),
+                                  ],
+                                ],
                               ),
                               subtitle: Text(
                                 '${moduleItems.where((i) => _selectedPermissions.contains(i.key)).length} de ${moduleItems.length} activos',

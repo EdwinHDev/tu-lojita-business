@@ -797,5 +797,61 @@ void main() {
       expect(find.text('+ Nueva'), findsNothing);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'StoreModel safely defaults null logo and StoreListTile/StoresHeaderBanner render company logo fallback',
+        (tester) async {
+      final parsedNullLogo = StoreModel.fromJson({
+        'id': 'store-null-logo',
+        'name': 'Sucursal Sin Logo',
+        'logo': null,
+        'status': 'ACTIVE',
+      });
+      expect(parsedNullLogo.logo, '');
+
+      await tester.pumpWidget(
+        wrapViewport(
+          storesState: StoresState(
+            stores: [parsedNullLogo],
+            stats: sampleStats(),
+          ),
+          child: const StoresView(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final headerImages = tester.widgetList<Image>(
+        find.descendant(
+          of: find.byType(StoresHeaderBanner),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        headerImages.any(
+          (img) =>
+              img.image is NetworkImage &&
+              (img.image as NetworkImage).url ==
+                  'https://images.tulojita.com/company-logo.png',
+        ),
+        isTrue,
+      );
+
+      final tileImages = tester.widgetList<Image>(
+        find.descendant(
+          of: find.byType(StoreListTile),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        tileImages.any(
+          (img) =>
+              img.image is NetworkImage &&
+              (img.image as NetworkImage).url ==
+                  'https://images.tulojita.com/company-logo.png',
+        ),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 }

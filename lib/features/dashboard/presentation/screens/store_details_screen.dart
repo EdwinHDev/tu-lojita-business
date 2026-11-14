@@ -99,7 +99,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
     });
 
     final store = state.store;
-    final coverUrl = resolveDashboardImageUrl(store?.coverImage);
+    final bannerUrls = resolveStoreBannerUrls(store, user);
 
     return Scaffold(
       backgroundColor: TuLojitaBrandColors.canvas,
@@ -128,7 +128,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                 user: user,
                 unreadDisputesCount: unreadDisputesCount,
                 isGlobalAiEnabled: isGlobalAiEnabled,
-                coverUrl: coverUrl,
+                bannerUrls: bannerUrls,
               ),
 
               // 1. Identity Card / Skeleton / Error Retry
@@ -329,7 +329,7 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
     required User? user,
     required int unreadDisputesCount,
     required bool isGlobalAiEnabled,
-    required String coverUrl,
+    required List<String> bannerUrls,
   }) {
     final titleText =
         store != null ? (store.shouldShowBranch ? store.branchLabel : store.name) : '';
@@ -478,13 +478,8 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
                 ),
               ),
             ),
-            if (coverUrl.isNotEmpty)
-              Image.network(
-                coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const SizedBox.shrink(),
-              ),
+            if (bannerUrls.isNotEmpty)
+              _StoreDetailsBannerImage(urls: bannerUrls),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -501,6 +496,65 @@ class _StoreDetailsScreenState extends ConsumerState<StoreDetailsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Resolves the ordered, deduplicated banner URL cascade for StoreDetailsScreen:
+/// 1. `store.coverImage`
+/// 2. `store.logo`
+/// 3. `user?.company?.logo`
+List<String> resolveStoreBannerUrls(Store? store, User? user) {
+  final candidates = <String>[
+    resolveDashboardImageUrl(store?.coverImage),
+    resolveDashboardImageUrl(store?.logo),
+    resolveDashboardImageUrl(user?.company?.logo),
+  ];
+  final resolved = <String>[];
+  for (final url in candidates) {
+    if (url.isNotEmpty && !resolved.contains(url)) {
+      resolved.add(url);
+    }
+  }
+  return resolved;
+}
+
+class _StoreDetailsBannerImage extends StatelessWidget {
+  final List<String> urls;
+  final int index;
+
+  const _StoreDetailsBannerImage({
+    required this.urls,
+    this.index = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (index >= urls.length) {
+      return const SizedBox.shrink();
+    }
+
+    return Image.network(
+      urls[index],
+      fit: BoxFit.cover,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        return ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            Colors.black.withValues(alpha: 0.40),
+            BlendMode.darken,
+          ),
+          child: child,
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        if (index + 1 < urls.length) {
+          return _StoreDetailsBannerImage(
+            urls: urls,
+            index: index + 1,
+          );
+        }
+        return const SizedBox.shrink();
+      },
     );
   }
 }

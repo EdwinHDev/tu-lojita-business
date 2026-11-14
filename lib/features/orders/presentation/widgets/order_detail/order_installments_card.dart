@@ -177,6 +177,7 @@ class OrderInstallmentsCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     DualPriceText(
                       amountInUsd: installment.amount,
+                      customRate: order.exchangeRate,
                       useScaleDown: true,
                       usdStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
                       bsStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11, color: Color(0xFF64748B)),

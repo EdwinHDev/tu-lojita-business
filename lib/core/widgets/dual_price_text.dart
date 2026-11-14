@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tu_lojita_business/core/models/exchange_rate_config.dart';
 import 'package:tu_lojita_business/core/providers/exchange_rate_provider.dart';
 import 'package:tu_lojita_business/core/utils/price_formatter.dart';
 
 /// Widget unificado para renderizar precios en USD con referencia secundaria en Bolívares (BCV) en la app Business.
 class DualPriceText extends ConsumerWidget {
   final double amountInUsd;
+  final double? customRate;
   final TextStyle? usdStyle;
   final TextStyle? bsStyle;
   final CrossAxisAlignment crossAxisAlignment;
@@ -18,6 +20,7 @@ class DualPriceText extends ConsumerWidget {
   const DualPriceText({
     super.key,
     required this.amountInUsd,
+    this.customRate,
     this.usdStyle,
     this.bsStyle,
     this.crossAxisAlignment = CrossAxisAlignment.start,
@@ -31,7 +34,8 @@ class DualPriceText extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final exchangeRateAsync = ref.watch(exchangeRateProvider);
-    final config = exchangeRateAsync.asData?.value;
+    final liveConfig = exchangeRateAsync.asData?.value;
+    final config = ExchangeRateConfig.resolveForOrder(liveConfig, customRate);
 
     final formattedUsd = PriceFormatter.formatNumeric(amountInUsd);
     final usdText = '${prefix ?? ''}$formattedUsd${suffix ?? ''}';

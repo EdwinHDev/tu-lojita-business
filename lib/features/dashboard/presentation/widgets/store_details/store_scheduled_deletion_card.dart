@@ -21,6 +21,11 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final graceDays = store.remainingGraceDays;
+    final isSuspended = store.status.toUpperCase() == 'SUSPENDED';
+    final hasDebtOrPendingReports =
+        store.commissionDebt > 0 || store.pendingCommissionReportsCount > 0;
+    final remainsSuspendedOnCancel = isSuspended || hasDebtOrPendingReports;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -79,9 +84,11 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Esta sucursal está oculta a los clientes. Si no cancelas la solicitud antes de que expire el plazo, la tienda se dará de baja automáticamente.',
-            style: TextStyle(
+          Text(
+            remainsSuspendedOnCancel
+                ? 'Esta sucursal tiene una suspensión o deuda pendiente. Cancelar la eliminación NO la reactivará: permanecerá Suspendida hasta regularizar el pago o sanción con administración.'
+                : 'Esta sucursal está oculta a los clientes. Si no cancelas la solicitud antes de que expire el plazo, la tienda se dará de baja automáticamente.',
+            style: const TextStyle(
               color: Color(0xFF7F1D1D),
               fontSize: 12,
               height: 1.35,
@@ -92,11 +99,26 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _handleReactivate(context, ref),
-                icon: const Icon(Icons.restore_rounded, size: 18),
-                label: const Text('Cancelar Eliminación y Reactivar'),
+                onPressed: () => _handleCancelDeletion(
+                  context,
+                  ref,
+                  remainsSuspendedOnCancel: remainsSuspendedOnCancel,
+                ),
+                icon: Icon(
+                  remainsSuspendedOnCancel
+                      ? Icons.cancel_outlined
+                      : Icons.restore_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  remainsSuspendedOnCancel
+                      ? 'Cancelar Eliminación'
+                      : 'Cancelar Eliminación y Reactivar',
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: remainsSuspendedOnCancel
+                      ? const Color(0xFF475569)
+                      : const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(
@@ -115,14 +137,21 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleReactivate(BuildContext context, WidgetRef ref) async {
+  Future<void> _handleCancelDeletion(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool remainsSuspendedOnCancel,
+  }) async {
+    final targetName = store.branchName ?? store.name;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('¿Cancelar eliminación?'),
         content: Text(
-          '¿Deseas cancelar la eliminación de "${store.branchName ?? store.name}" y reactivarla inmediatamente?',
+          remainsSuspendedOnCancel
+              ? '¿Deseas cancelar la eliminación programada de "$targetName"? Al mantener una suspensión o deuda pendiente, la sucursal permanecerá Suspendida y no se reactivará hasta regularizar el pago o sanción.'
+              : '¿Deseas cancelar la eliminación de "$targetName" y reactivarla inmediatamente?',
         ),
         actions: [
           TextButton(
@@ -132,10 +161,16 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: remainsSuspendedOnCancel
+                  ? const Color(0xFF475569)
+                  : const Color(0xFF10B981),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Sí, reactivar'),
+            child: Text(
+              remainsSuspendedOnCancel
+                  ? 'Sí, cancelar eliminación'
+                  : 'Sí, reactivar',
+            ),
           ),
         ],
       ),
@@ -144,12 +179,20 @@ class StoreScheduledDeletionCard extends ConsumerWidget {
     if (confirm == true && context.mounted) {
       try {
         final repo = ref.read(storesRepositoryProvider);
-        await repo.cancelScheduledDeletion(store.id);
+        final updated = await repo.cancelScheduledDeletion(store.id);
         if (context.mounted) {
-          NotificationService.showSuccess(
-            context,
-            'Eliminación programada cancelada con éxito.',
-          );
+          if (updated.status.toUpperCase() == 'SUSPENDED' ||
+              remainsSuspendedOnCancel) {
+            NotificationService.showWarning(
+              context,
+              'Eliminación cancelada. La sucursal permanece suspendida hasta regularizar pagos o sanciones.',
+            );
+          } else {
+            NotificationService.showSuccess(
+              context,
+              'Eliminación programada cancelada con éxito.',
+            );
+          }
           ref.read(storeDetailsProvider.notifier).refresh(store.id);
           ref.read(storesProvider.notifier).loadData();
         }

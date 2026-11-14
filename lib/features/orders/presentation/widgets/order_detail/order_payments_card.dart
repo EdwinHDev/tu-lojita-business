@@ -163,6 +163,7 @@ class OrderPaymentsCard extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 118),
                     child: DualPriceText(
                       amountInUsd: payment.amount,
+                      customRate: payment.exchangeRate ?? order.exchangeRate,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       useScaleDown: true,
                       usdStyle: const TextStyle(

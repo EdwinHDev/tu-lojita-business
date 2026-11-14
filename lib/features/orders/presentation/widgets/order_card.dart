@@ -595,6 +595,7 @@ class OrderCard extends StatelessWidget {
             children: [
               DualPriceText(
                 amountInUsd: order.finalAmount,
+                customRate: order.exchangeRate,
                 useScaleDown: true,
                 usdStyle: const TextStyle(
                   fontWeight: FontWeight.w900,
@@ -612,6 +613,7 @@ class OrderCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 DualPriceText(
                   amountInUsd: order.totalAmount,
+                  customRate: order.exchangeRate,
                   prefix: 'Base: ',
                   isInline: true,
                   useScaleDown: true,
@@ -631,6 +633,7 @@ class OrderCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 DualPriceText(
                   amountInUsd: order.balance,
+                  customRate: order.exchangeRate,
                   prefix: 'Saldo: ',
                   isInline: true,
                   useScaleDown: true,

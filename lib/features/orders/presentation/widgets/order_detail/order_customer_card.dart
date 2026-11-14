@@ -18,6 +18,17 @@ class OrderCustomerCard extends ConsumerWidget {
     this.storeId,
   });
 
+  Widget _buildInitialAvatar(String firstName) {
+    return Text(
+      firstName.isNotEmpty ? firstName[0].toUpperCase() : 'C',
+      style: const TextStyle(
+        color: Color(0xFF4F46E5),
+        fontWeight: FontWeight.bold,
+        fontSize: 18,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
@@ -30,6 +41,14 @@ class OrderCustomerCard extends ConsumerWidget {
     final firstName = user?['firstName'] as String? ?? 'Cliente';
     final lastName = user?['lastName'] as String? ?? '';
     final fullName = '$firstName $lastName'.trim();
+    final rawAvatar = user?['avatarUrl']?.toString() ??
+        user?['avatar']?.toString() ??
+        user?['profileImage']?.toString() ??
+        '';
+    final resolvedAvatarUrl =
+        canViewCustomerData && rawAvatar.trim().isNotEmpty
+            ? OrderDetailHelpers.resolveImageUrl(rawAvatar.trim())
+            : '';
     final rawEmail = user?['email'] as String?;
     final hasRawEmail = rawEmail != null &&
         rawEmail.trim().isNotEmpty &&
@@ -136,16 +155,22 @@ class OrderCustomerCard extends ConsumerWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                child: Text(
-                  firstName.isNotEmpty ? firstName[0].toUpperCase() : 'C',
-                  style: const TextStyle(
-                    color: Color(0xFF4F46E5),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+              ClipOval(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  alignment: Alignment.center,
+                  child: resolvedAvatarUrl.isNotEmpty
+                      ? Image.network(
+                          resolvedAvatarUrl,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              _buildInitialAvatar(firstName),
+                        )
+                      : _buildInitialAvatar(firstName),
                 ),
               ),
               const SizedBox(width: 14),

@@ -12,6 +12,8 @@ import 'package:tu_lojita_business/features/dashboard/presentation/views/stores_
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/notifications_provider.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/screens/settings_screen.dart';
 import 'package:tu_lojita_business/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:tu_lojita_business/features/crm/presentation/providers/crm_providers.dart';
+import 'package:tu_lojita_business/features/crm/presentation/screens/customers_crm_view.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -21,7 +23,11 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  final List<Widget> _views = const [HomeView(), StoresView(), SettingsScreen()];
+  static const List<Widget> _baseViews = [
+    HomeView(),
+    StoresView(),
+    SettingsScreen(),
+  ];
 
   @override
   void initState() {
@@ -71,11 +77,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     });
 
-    final currentIndex = ref.watch(dashboardIndexProvider);
+    final authState = ref.watch(authProvider);
+    final canAccessCrm = authState is Authenticated && authState.user.canAccessCrm;
+    final rawIndex = ref.watch(dashboardIndexProvider);
+    final viewsLength = canAccessCrm ? 4 : _baseViews.length;
+    final currentIndex = rawIndex.clamp(0, viewsLength - 1);
+    final List<Widget> views = canAccessCrm
+        ? [
+            _baseViews[0],
+            _baseViews[1],
+            CustomersCrmView(isActive: currentIndex == 2),
+            _baseViews[2],
+          ]
+        : _baseViews;
+    final crmSummary = canAccessCrm ? ref.watch(crmSummaryProvider).asData?.value : null;
+    final crmAlertsCount = (crmSummary?.overdueFollowUpsCount ?? 0) + (crmSummary?.withDebtCount ?? 0);
+
     final unreadDisputesCount = ref.watch(unreadBusinessDisputeOrdersCountProvider);
 
     return Scaffold(
-      body: SafeArea(child: IndexedStack(index: currentIndex, children: _views)),
+      body: SafeArea(child: IndexedStack(index: currentIndex, children: views)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         indicatorColor: TuLojitaBrandColors.indigo50,
@@ -113,6 +134,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             label: 'Tiendas',
           ),
+          if (canAccessCrm)
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: crmAlertsCount > 0,
+                backgroundColor: TuLojitaBrandColors.amber500,
+                child: const Icon(
+                  Icons.people_alt_outlined,
+                  color: Colors.grey,
+                ),
+              ),
+              selectedIcon: Badge(
+                isLabelVisible: crmAlertsCount > 0,
+                backgroundColor: TuLojitaBrandColors.amber500,
+                child: const Icon(
+                  Icons.people_alt_rounded,
+                  color: TuLojitaBrandColors.indigo600,
+                ),
+              ),
+              label: 'Clientes',
+            ),
           const NavigationDestination(
             icon: HugeIcon(
               icon: HugeIcons.strokeRoundedUserAccount,
