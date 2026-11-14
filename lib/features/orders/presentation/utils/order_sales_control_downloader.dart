@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:tu_lojita_business/core/models/exchange_rate_config.dart';
@@ -21,14 +21,24 @@ class SalesControlDownloadResult {
   });
 }
 
-/// Descarga local, apertura nativa y comparticion de la Hoja de Control de Venta en PDF.
+/// Descarga local, apertura nativa sin permisos y comparticion de la Hoja de Control de Venta en PDF.
 class OrderSalesControlDownloader {
+  static const MethodChannel _pdfOpenerChannel =
+      MethodChannel('com.tulojita/pdf_opener');
+
+  @visibleForTesting
+  static Future<bool> Function(Uint8List bytes, String filename)?
+      sharePdfHandlerForTest;
+
+  @visibleForTesting
+  static bool? isAndroidOverrideForTest;
+
   static String buildFileName(String orderId) {
     final code = OrderPdfHelpers.shortOrderCode(orderId);
     return 'control_venta_$code.pdf';
   }
 
-  /// Genera y guarda el PDF en Descargas (Android) o Documentos (iOS/fallback).
+  /// Genera y guarda el PDF en almacenamiento propio de la app (Descargas privadas o Documentos).
   static Future<SalesControlDownloadResult> saveSalesControlLocally(
     Order order, {
     ExchangeRateConfig? exchangeRate,
@@ -55,20 +65,27 @@ class OrderSalesControlDownloader {
     try {
       if (Platform.isAndroid) {
         targetDir = await getDownloadsDirectory();
-        if (targetDir == null || !targetDir.existsSync()) {
-          final publicDownload = Directory('/storage/emulated/0/Download');
-          if (publicDownload.existsSync()) {
-            targetDir = publicDownload;
-          }
-        }
       }
     } catch (_) {
       targetDir = null;
     }
 
     if (targetDir == null || !targetDir.existsSync()) {
-      targetDir = await getApplicationDocumentsDirectory();
+      try {
+        targetDir = await getApplicationDocumentsDirectory();
+        displayLocation = 'Documentos';
+      } catch (_) {
+        targetDir = null;
+      }
+    }
+
+    if (targetDir == null || !targetDir.existsSync()) {
+      targetDir = await getTemporaryDirectory();
       displayLocation = 'Documentos';
+    }
+
+    if (!targetDir.existsSync()) {
+      await targetDir.create(recursive: true);
     }
 
     final file = File('${targetDir.path}/$fileName');
@@ -81,21 +98,26 @@ class OrderSalesControlDownloader {
     );
   }
 
-  /// Intenta abrir el PDF con el visor nativo y ofrece fallback seguro a compartir.
+  /// Intenta abrir el PDF en Android vía FileProvider nativo y ofrece fallback seguro a compartir.
   static Future<void> openOrSharePdf(
     BuildContext context,
     SalesControlDownloadResult result,
   ) async {
-    try {
-      final openResult = await OpenFilex.open(result.file.path)
-          .timeout(const Duration(seconds: 4));
-
-      if (openResult.type == ResultType.noAppToOpen) {
-        await _fallbackShare(result);
+    final isAndroid = isAndroidOverrideForTest ?? Platform.isAndroid;
+    if (isAndroid) {
+      try {
+        final opened = await _pdfOpenerChannel
+            .invokeMethod<bool>('openPdf', {'path': result.file.path})
+            .timeout(const Duration(seconds: 4));
+        if (opened == true) {
+          return;
+        }
+      } catch (e) {
+        debugPrint('Native PDF opener failed ($e). Trying share fallback.');
       }
-    } catch (_) {
-      await _fallbackShare(result);
     }
+
+    await _fallbackShare(result);
   }
 
   /// Genera el PDF en memoria y abre la hoja nativa de comparticion del dispositivo.
@@ -118,21 +140,30 @@ class OrderSalesControlDownloader {
       exportedBy: exportedBy,
     );
 
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: buildFileName(order.id),
-    );
+    await _sharePdfBytes(pdfBytes, buildFileName(order.id));
   }
 
   static Future<void> _fallbackShare(SalesControlDownloadResult result) async {
     try {
       final bytes = await result.file.readAsBytes();
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: result.fileName,
-      );
+      await _sharePdfBytes(bytes, result.fileName);
     } catch (e) {
       debugPrint('Error sharing sales control PDF fallback: $e');
     }
+  }
+
+  static Future<void> _sharePdfBytes(
+    Uint8List bytes,
+    String filename,
+  ) async {
+    final testHandler = sharePdfHandlerForTest;
+    if (testHandler != null) {
+      await testHandler(bytes, filename).timeout(const Duration(seconds: 4));
+      return;
+    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: filename,
+    ).timeout(const Duration(seconds: 4));
   }
 }

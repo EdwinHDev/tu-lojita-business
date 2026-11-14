@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -521,5 +523,72 @@ void main() {
       expect(bytes, isNotEmpty);
       expect(ascii.decode(bytes.sublist(0, 5)), '%PDF-');
     });
+
+    testWidgets(
+      'OrderSalesControlDownloader opens via native MethodChannel and falls back to share when no viewer',
+      (tester) async {
+        OrderSalesControlDownloader.sharePdfHandlerForTest = null;
+        OrderSalesControlDownloader.isAndroidOverrideForTest = null;
+        addTearDown(() {
+          OrderSalesControlDownloader.sharePdfHandlerForTest = null;
+          OrderSalesControlDownloader.isAndroidOverrideForTest = null;
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+            const MethodChannel('com.tulojita/pdf_opener'),
+            null,
+          );
+        });
+
+        final tempFile = File(
+          '${Directory.systemTemp.path}/test_sales_control_native_open.pdf',
+        );
+        tempFile.writeAsBytesSync([0x25, 0x50, 0x44, 0x46, 0x2D]);
+        addTearDown(() {
+          if (tempFile.existsSync()) tempFile.deleteSync();
+        });
+
+        final openedPaths = <String?>[];
+        var shouldOpen = true;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          const MethodChannel('com.tulojita/pdf_opener'),
+          (call) async {
+            if (call.method == 'openPdf') {
+              final args = call.arguments as Map<dynamic, dynamic>?;
+              openedPaths.add(args?['path'] as String?);
+              return shouldOpen;
+            }
+            return false;
+          },
+        );
+
+        String? sharedFilename;
+        OrderSalesControlDownloader.isAndroidOverrideForTest = true;
+        OrderSalesControlDownloader.sharePdfHandlerForTest = (_, filename) async {
+          sharedFilename = filename;
+          return true;
+        };
+
+        await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+        final context = tester.element(find.byType(SizedBox));
+        final sampleResult = SalesControlDownloadResult(
+          file: tempFile,
+          fileName: 'control_venta_TEST.pdf',
+          displayLocation: 'Documentos',
+        );
+
+        await tester.runAsync(() async {
+          await OrderSalesControlDownloader.openOrSharePdf(context, sampleResult);
+        });
+        expect(openedPaths, [tempFile.path]);
+        expect(sharedFilename, isNull);
+
+        shouldOpen = false;
+        await tester.runAsync(() async {
+          await OrderSalesControlDownloader.openOrSharePdf(context, sampleResult);
+        });
+        expect(sharedFilename, 'control_venta_TEST.pdf');
+      },
+    );
   });
 }
